@@ -1,0 +1,28 @@
+---
+file_format: mystnb
+mystnb:
+    output_stderr: remove
+    render_text_lexer: myst-ansi
+    render_markdown_format: myst
+myst:
+    enable_extensions: ["colon_fence"]
+---
+
+# noob
+
+whats up everyone
+
+```{code-cell}
+from noob import Tube
+Tube()
+```
+
+
+```{toctree}
+:maxdepth: 2
+:caption: Contents:
+
+api/index
+```
+
+

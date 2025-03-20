@@ -1,0 +1,42 @@
+name: Docs
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test_docs:
+    name: test docs build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure tags if not run from main repo
+        if: github.repository != 'miniscope/noob'
+        run: |
+          git remote add upstream https://github.com/miniscope/noob
+          git fetch upstream --tags
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        id: setup-python
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -e ".[docs]"
+
+      - name: Build docs
+        working-directory: docs
+        env:
+          SPHINXOPTS: "-W --keep-going"
+        run: make html
