@@ -8,9 +8,9 @@
 
 import importlib.metadata as metadata
 
-project = 'noob'
-copyright = '2025, raymond, jonny'
-author = 'raymond, jonny'
+project = "noob"
+copyright = "2025, raymond, jonny"
+author = "raymond, jonny"
 release = metadata.version("noob")
 
 # -- General configuration ---------------------------------------------------
@@ -29,8 +29,8 @@ extensions = [
     "sphinx.ext.todo",
 ]
 
-templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
@@ -44,8 +44,8 @@ intersphinx_mapping = {
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'furo'
-html_static_path = ['_static']
+html_theme = "furo"
+html_static_path = ["_static"]
 html_css_files = [
     # make myst-nb code blocks not look like shit
     "css/notebooks.css"
