@@ -13,15 +13,15 @@ myst:
 whats up everyone
 
 ```{code-cell}
-from noob import Tube
-Tube()
-```
-
+from noob import TubeClassicEdition
+TubeClassicEdition()
+``` 
 
 ```{toctree}
 :maxdepth: 2
 :caption: Contents:
 
+examples/index
 api/index
 ```
 
