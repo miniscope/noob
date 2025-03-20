@@ -6,7 +6,13 @@ authors = [
     {name= "sneakers-the-rat", email = "sneakers-the-rat@protonmail.com"}
 ]
 dynamic=["version"]
-dependencies = []
+dependencies = [
+    "rich>=13.9.4",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.8.1",
+    "platformdirs>=4.3.7",
+    "PyYAML>=6.0.2",
+]
 requires-python = ">=3.11"
 readme = "README.md"
 repository = "https://github.com/miniscope/noob"
@@ -59,13 +65,15 @@ docs = [
     "sphinx-design>=0.6.1",
     "sphinxcontrib-mermaid>=1.0.0",
     "myst-nb>=1.2.0",
-    "rich>=13.9.4",
 ]
 dev = [
     "noob[tests,docs]",
     "sphinx-autobuild>=2024.10.3",
     "ruff>=0.11.0",
     "black>=25.1.0",
+]
+test = [
+    "tomli-w>=1.2.0",
 ]
 [build-system]
 requires = ["pdm-backend"]
@@ -145,19 +153,30 @@ select = [
     "S608", "S701",
 ]
 ignore = [
-    "ANN401", "ANN204",
+    # needing to annotate `self` is ridiculous
+    "ANN101",
+    #"special" methods like `__init__` don't need to be annotated
+    "ANN204",
+    # any types are semantically valid actually sometimes
+    "ANN401",
     # explicit strict arg for zip
     "B905",
-    # builtin type annotations
-    "UP006", "UP035",
     # docstrings for __init__
     "D107",
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"tests/conftest.py" = [
+    # allow unused imports - fixtures
+    "F401",
+    # allow star import of fixtures
+    "F403",
+]
 "tests/**/test_*" = [
     # don't require annotating fixture types in test functions
     "ANN001", "ANN201",
     # allow unused variables, also normal in tests
-    "F841"
+    "F841",
+    # allow unused imports, pytest is a common one
+    "F401"
 ]

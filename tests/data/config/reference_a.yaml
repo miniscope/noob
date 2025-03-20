@@ -1,0 +1,7 @@
+noob_id: reference-a
+noob_model: tests.test_yaml.A
+noob_version: 0.0.1
+value:
+- hey
+- sup
+config: reference-b

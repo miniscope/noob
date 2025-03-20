@@ -1,0 +1,7 @@
+noob_id: reference-b
+noob_model: tests.test_yaml.B
+noob_version: 0.0.1
+value:
+- 1
+- 2
+- 3
