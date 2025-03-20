@@ -1,0 +1,17 @@
+name: docs
+on:
+  pull_request_target:
+    types:
+      - opened
+
+permissions:
+  pull-requests: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: readthedocs/actions/preview@v1
+        if: false # re-enable when repository is public
+        with:
+          project-slug: "noob"

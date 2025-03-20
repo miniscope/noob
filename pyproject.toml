@@ -1,20 +1,163 @@
 [project]
 name = "noob"
-version = "0.0.9999999"
 description = "Default template for PDM package"
 authors = [
     {name = "raymondwjang", email = "ray0815@ucla.edu"},
     {name= "sneakers-the-rat", email = "sneakers-the-rat@protonmail.com"}
 ]
+dynamic=["version"]
 dependencies = []
 requires-python = ">=3.11"
 readme = "README.md"
+repository = "https://github.com/miniscope/noob"
 license = {text = "MIT"}
+keywords = [
+    "pipeline",
+    "pipelines",
+    "data-processing",
+    "tube-related-content",
+    "miniscope",
+    "pydantic",
+]
+classifiers = [
+    "Framework :: Pydantic",
+    "Framework :: Pydantic :: 2",
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Utilities",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Typing :: Typed"
+]
 
+[project.urls]
+homepage = "https://noob.readthedocs.io"
+documentation = "https://noob.readthedocs.io"
+repository = "https://github.com/miniscope/noob"
+changelog = "https://noob.readthedocs.io/en/latest/changelog.html"
+
+[project.optional-dependencies]
+tests = [
+    "pytest>=8.3.5",
+    "pytest-cov>=6.0.0",
+]
+docs = [
+    "sphinx>=8.2.3",
+    "furo>=2024.8.6",
+    "myst-parser>=4.0.1",
+    "autodoc-pydantic>=2.2.0",
+    "sphinx-design>=0.6.1",
+    "sphinxcontrib-mermaid>=1.0.0",
+    "myst-nb>=1.2.0",
+    "rich>=13.9.4",
+]
+dev = [
+    "noob[tests,docs]",
+    "sphinx-autobuild>=2024.10.3",
+    "ruff>=0.11.0",
+    "black>=25.1.0",
+]
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
-
 [tool.pdm]
 distribution = true
+
+[tool.pdm.version]
+# versions from tags like "v0.1.2"
+fallback_version = "0.0.0"
+source = "scm"
+tag_filter="v*"
+tag_regex = '^v(?:\D*)?(?P<version>([1-9][0-9]*!)?(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*((a|b|c|rc)(0|[1-9][0-9]*))?(\.post(0|[1-9][0-9]*))?(\.dev(0|[1-9][0-9]*))?$)$'
+
+[tool.pdm.scripts]
+lint.composite = [
+    "ruff check",
+    "black . --diff",
+]
+format.composite = [
+    "black .",
+    "ruff check --fix",
+]
+test = "pytest"
+docs = "sphinx-autobuild docs docs/_build/html"
+
+[tool.pytest.ini_options]
+addopts = [
+    "--cov=noob",
+    "--cov-append",
+]
+markers = []
+
+[tool.black]
+target-version = ["py311", "py312", "py313"]
+line-length = 100
+
+[tool.ruff]
+target-version = "py311"
+include = ["src/noob/**/*.py", "tests/**/*.py", "pyproject.toml"]
+exclude = ["docs"]
+line-length = 100
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # annotations
+    "ANN",
+    # no debugger
+    "T10",
+    ## ----------
+    # pydocstyle
+    # indentation
+    "D207", "D208",
+    # whitespace
+    "D210", "D211",
+    # emptiness
+    "D419",
+    # snake case function name
+    "N802",
+    # FastAPI
+    "FAST",
+    # SQLi and Autoescaping in templates
+    "S608", "S701",
+]
+ignore = [
+    "ANN401", "ANN204",
+    # explicit strict arg for zip
+    "B905",
+    # builtin type annotations
+    "UP006", "UP035",
+    # docstrings for __init__
+    "D107",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/test_*" = [
+    # don't require annotating fixture types in test functions
+    "ANN001", "ANN201",
+    # allow unused variables, also normal in tests
+    "F841"
+]
