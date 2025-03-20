@@ -1,21 +1,18 @@
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from graphlib import TopologicalSorter
 from typing import (
-    Callable,
     Any,
-    Dict,
     Literal,
-    List,
     get_type_hints,
 )
 
 import xarray as xr
-from river import compose
-
 from cala.streaming.composer.pipe_config import StreamingConfig
 from cala.streaming.core import Parameters
 from cala.streaming.core.distribution import Distributor
 from cala.streaming.util.buffer import Buffer
+from river import compose
 
 
 @dataclass
@@ -32,9 +29,9 @@ class Runner:
     """Internal frame buffer for multi-frame operations."""
     _state: Distributor = field(default_factory=lambda: Distributor())
     """Current state of the pipeline containing computed results."""
-    execution_order: List[str] = None
+    execution_order: list[str] = None
     """Ordered list of initialization steps."""
-    status: List[bool] = None
+    status: list[bool] = None
     """Completion status for each initialization step."""
     is_initialized: bool = False
     """Whether the pipeline initialization is complete."""
@@ -68,7 +65,7 @@ class Runner:
 
         return result
 
-    def initialize(self, frame: xr.DataArray):
+    def initialize(self, frame: xr.DataArray) -> None:
         """Initialize pipeline transformers in dependency order.
 
         Executes initialization steps that may require multiple frames. Steps are executed
@@ -80,9 +77,7 @@ class Runner:
         self._buffer.add_frame(frame)
 
         if not self.execution_order or not self.status:
-            self.execution_order = self._create_dependency_graph(
-                self.config["initialization"]
-            )
+            self.execution_order = self._create_dependency_graph(self.config["initialization"])
             self.status = [False] * len(self.execution_order)
 
         for idx, step in enumerate(self.execution_order):
@@ -100,15 +95,13 @@ class Runner:
             if result is not None:
                 self.status[idx] = True
 
-            result_type = get_type_hints(
-                transformer.transform_one, include_extras=True
-            )["return"]
+            result_type = get_type_hints(transformer.transform_one, include_extras=True)["return"]
             self._state.init(result, result_type)
 
         if all(self.status):
             self.is_initialized = True
 
-    def iterate(self, frame: xr.DataArray):
+    def iterate(self, frame: xr.DataArray) -> None:
         """Execute iterate steps on a single frame.
 
         Args:
@@ -121,15 +114,13 @@ class Runner:
             transformer = self._build_transformer(process="iteration", step=step)
             result = self._learn_transform(transformer=transformer, frame=frame)
 
-            result_type = get_type_hints(
-                transformer.transform_one, include_extras=True
-            )["return"]
+            result_type = get_type_hints(transformer.transform_one, include_extras=True)["return"]
 
             self._state.update(result, result_type)
 
     def _build_transformer(
         self, process: Literal["preprocess", "initialization", "iteration"], step: str
-    ):
+    ) -> Any:
         """Construct a transformer instance with configured parameters.
 
         Args:
@@ -159,7 +150,7 @@ class Runner:
 
         return transformer
 
-    def _learn_transform(self, transformer, frame: xr.DataArray):
+    def _learn_transform(self, transformer: Any, frame: xr.DataArray) -> xr.DataArray:
         """Execute learn and transform steps for a transformer.
 
         Args:
@@ -179,7 +170,7 @@ class Runner:
         return result
 
     @staticmethod
-    def _get_injects(state: Distributor, function: Callable) -> Dict[str, Any]:
+    def _get_injects(state: Distributor, function: Callable) -> dict[str, Any]:
         """Extract required dependencies from the current state based on function signature.
 
         Args:
@@ -190,9 +181,7 @@ class Runner:
             Dictionary mapping parameter names to matching state values.
         """
         matches = {}
-        for param_name, param_type in get_type_hints(
-            function, include_extras=True
-        ).items():
+        for param_name, param_type in get_type_hints(function, include_extras=True).items():
             if param_name == "return":
                 continue
 

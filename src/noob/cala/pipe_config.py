@@ -1,4 +1,5 @@
-from typing import TypedDict, Any, Sequence, NotRequired
+from collections.abc import Sequence
+from typing import Any, NotRequired, TypedDict
 
 
 class PreprocessStep(TypedDict):

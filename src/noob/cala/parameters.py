@@ -2,6 +2,7 @@ import json
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, replace
+from typing import Any
 
 
 @dataclass
@@ -36,20 +37,20 @@ class Parameters(ABC):
     @classmethod
     def load(cls, filename: str) -> "Parameters":
         """Load parameters from file"""
-        with open(filename, "r") as f:
+        with open(filename) as f:
             return cls.from_dict(json.load(f))
 
     def copy(self) -> "Parameters":
         """Create a deep copy of parameters"""
         return deepcopy(self)
 
-    def update(self, **kwargs) -> "Parameters":
+    def update(self, **kwargs: Any) -> "Parameters":
         """Create new parameters with updated values"""
         return replace(self, **kwargs)
 
     def __str__(self) -> str:
         """Human-readable string representation"""
-        lines = [f"Parameters:"]
+        lines = ["Parameters:"]
         for k, v in self.__dict__.items():
             lines.append(f"  {k}: {v}")
         return "\n".join(lines)

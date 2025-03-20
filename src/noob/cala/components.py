@@ -1,4 +1,6 @@
+from collections.abc import Iterable
 from enum import Enum
+from typing import Self
 
 
 class Component(Enum):
@@ -26,17 +28,17 @@ class ComponentTypes(list):
         ValueError: If attempting to add non-Component items to the list.
     """
 
-    def __init__(self, iterable=None):
+    def __init__(self, iterable: Iterable[Component] = None) -> None:
         """Initialize a new ComponentTypes list.
 
         Args:
             iterable: Optional iterable of Component values.
         """
-        super(ComponentTypes, self).__init__()
+        super().__init__()
         if iterable:
             self.extend(iterable)
 
-    def _check_element(self, item):
+    def _check_element(self, item: Component) -> Component:
         """Validate that an item is a Component enum value.
 
         Args:
@@ -52,7 +54,7 @@ class ComponentTypes(list):
             raise ValueError("Item must be an Component")
         return item
 
-    def append(self, item):
+    def append(self, item: Component) -> None:
         """Append a Component to the list.
 
         Args:
@@ -61,9 +63,9 @@ class ComponentTypes(list):
         Raises:
             ValueError: If item is not a Component enum value.
         """
-        super(ComponentTypes, self).append(self._check_element(item))
+        super().append(self._check_element(item))
 
-    def insert(self, index, item):
+    def insert(self, index: int | slice, item: Component) -> None:
         """Insert a Component at a specific index.
 
         Args:
@@ -73,9 +75,9 @@ class ComponentTypes(list):
         Raises:
             ValueError: If item is not a Component enum value.
         """
-        super(ComponentTypes, self).insert(index, self._check_element(item))
+        super().insert(index, self._check_element(item))
 
-    def extend(self, iterable):
+    def extend(self, iterable: Iterable[Component]) -> None:
         """Extend the list with an iterable of Components.
 
         Args:
@@ -87,7 +89,7 @@ class ComponentTypes(list):
         for item in iterable:
             self.append(item)
 
-    def __add__(self, other):
+    def __add__(self, other: Iterable[Component]) -> Self:
         """Create a new ComponentTypes list by concatenating with another iterable.
 
         Args:
@@ -100,7 +102,7 @@ class ComponentTypes(list):
         result.extend(other)
         return result
 
-    def __iadd__(self, other):
+    def __iadd__(self, other: Iterable[Component]) -> Self:
         """Implement in-place addition with another iterable.
 
         Args:
@@ -112,7 +114,7 @@ class ComponentTypes(list):
         self.extend(other)
         return self
 
-    def __setitem__(self, index, item):
+    def __setitem__(self, index: int | slice, item: Component | Iterable[Component]) -> None:
         """Set an item or slice of items in the list.
 
         Args:
@@ -126,6 +128,6 @@ class ComponentTypes(list):
             items = []
             for i in item:
                 items.append(self._check_element(i))
-            super(ComponentTypes, self).__setitem__(index, items)
+            super().__setitem__(index, items)
         else:
-            super(ComponentTypes, self).__setitem__(index, self._check_element(item))
+            super().__setitem__(index, self._check_element(item))

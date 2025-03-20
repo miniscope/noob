@@ -1,8 +1,7 @@
 from dataclasses import dataclass
-from typing import Type, Optional, get_origin, Annotated
+from typing import Annotated, get_origin
 
 import xarray as xr
-
 from cala.streaming.core import ObservableStore
 
 
@@ -16,7 +15,7 @@ class Distributor:
 
     _: int = 0
 
-    def get(self, type_: Type) -> Optional[ObservableStore]:
+    def get(self, type_: type) -> ObservableStore | None:
         """Retrieve a specific Observable instance based on its type.
 
         Args:
@@ -32,7 +31,7 @@ class Distributor:
             if attr_type == store_type:
                 return getattr(self, attr_name).warehouse
 
-    def init(self, result: xr.DataArray, type_: Type) -> None:
+    def init(self, result: xr.DataArray, type_: type) -> None:
         """Store a DataArray results in their appropriate Observable containers.
 
         This method automatically determines the correct storage location based on the
@@ -40,7 +39,8 @@ class Distributor:
 
         Args:
             result: A single xr.DataArray to be stored. Must correspond to a valid Observable type.
-            type_: type of the result. If an observable, should be an Annotated type that links to Store class.
+            type_: type of the result. If an observable, should be an Annotated type that links to
+                Store class.
         """
         target_store_type = self._get_store_type(type_)
         if target_store_type is None:
@@ -52,7 +52,7 @@ class Distributor:
         # Create and set the store
         setattr(self, store_name, target_store_type(result))
 
-    def update(self, result: xr.DataArray, type_: Type) -> None:
+    def update(self, result: xr.DataArray, type_: type) -> None:
         """Update an appropriate Observable containers with a result DataArray.
 
         This method automatically determines the correct storage location based on the
@@ -60,7 +60,8 @@ class Distributor:
 
         Args:
             result: A single xr.DataArray to be stored. Must correspond to a valid Observable type.
-            type_: type of the result. If an observable, should be an Annotated type that links to Store class.
+            type_: type of the result. If an observable, should be an Annotated type that links to
+                Store class.
         """
         target_store_type = self._get_store_type(type_)
         if target_store_type is None:
@@ -72,7 +73,6 @@ class Distributor:
         getattr(self, store_name).update(result)
 
     @staticmethod
-    def _get_store_type(type_: Type) -> type | None:
-        if get_origin(type_) is Annotated:
-            if issubclass(type_.__metadata__[0], ObservableStore):
-                return type_.__metadata__[0]
+    def _get_store_type(type_: type) -> type | None:
+        if (get_origin(type_) is Annotated) and issubclass(type_.__metadata__[0], ObservableStore):
+            return type_.__metadata__[0]

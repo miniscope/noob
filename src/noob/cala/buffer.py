@@ -4,7 +4,7 @@ import xarray as xr
 
 
 class Buffer:
-    def __init__(self, buffer_size):
+    def __init__(self, buffer_size: int):
         """
         Initialize the ring buffer with:
           - buffer_size: number of frames to store
@@ -15,7 +15,7 @@ class Buffer:
 
         self.buffer: deque[xr.DataArray] = deque()
 
-    def add_frame(self, frame: xr.DataArray):
+    def add_frame(self, frame: xr.DataArray) -> None:
         """
         Add a new frame to the ring buffer.
         """
