@@ -4,7 +4,7 @@ import xarray as xr
 
 
 class Buffer:
-    def __init__(self, buffer_size: int):
+    def __init__(self, buffer_size: int) -> None:
         """
         Initialize the ring buffer with:
           - buffer_size: number of frames to store
@@ -55,3 +55,7 @@ class Buffer:
     def is_ready(self, num_frames: int) -> bool:
         """Check if buffer has enough frames."""
         return len(self.buffer) >= num_frames
+
+    def cleanup(self) -> None:
+        self.buffer.clear()
+        return None

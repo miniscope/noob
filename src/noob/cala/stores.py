@@ -1,44 +1,33 @@
-from dataclasses import dataclass
-from typing import Annotated
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import ClassVar
 
 import xarray as xr
 
 
 @dataclass
-class ObservableStore:
-    """Base class for observable objects in calcium imaging data."""
+class ObservableStore(ABC):
+    """Base class for observable object storage."""
 
-    warehouse: xr.DataArray
+    _warehouse: xr.DataArray = field(init=False)
 
+    persistent: ClassVar[bool] = False
+    store_dir: str | Path | None = None
+    peek_size: int | None = None
 
-class FootprintStore(ObservableStore):
-    """Spatial footprints of identified components.
+    @property
+    def warehouse(self) -> xr.DataArray:
+        return self._warehouse
 
-    Represents the spatial distribution patterns of components (neurons or background)
-    in the field of view. Each footprint typically contains the spatial extent and
-    intensity weights of a component.
-    """
+    @warehouse.setter
+    def warehouse(self, value: xr.DataArray) -> None:
+        self._warehouse = value
 
-    pass
-
-
-Footprints = Annotated[xr.DataArray, FootprintStore]
-
-
-class TraceStore(ObservableStore):
-    """Temporal activity traces of identified components.
-
-    Contains the time-varying fluorescence signals of components across frames,
-    representing their activity patterns over time.
-    """
-
+    @abstractmethod
     def update(self, data: xr.DataArray) -> None:
-        # either has frames or components axis.
-        # are we making copies??
-        self.warehouse = xr.concat(
-            [self.warehouse, data],
-            dim=(set(self.warehouse.dims) - set(data.dims)).pop(),
-        )
+        pass
 
-
-Traces = Annotated[xr.DataArray, TraceStore]
+    @property
+    def store_path(self) -> Path:
+        return self.store_dir / self.__class__.__name__.lower()
