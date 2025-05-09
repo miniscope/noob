@@ -1,5 +1,6 @@
 import re
 import sys
+from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import Annotated, Any, TypeAlias
@@ -49,6 +50,18 @@ ConfigSource: TypeAlias = Path | PathLike[str] | ConfigID
 """
 Union of all types of config sources
 """
+
+
+@dataclass
+class Name:
+    """Name of some node output
+
+    Examples:
+        def my_function() -> Annotated[int, Name("charlie")]: ...
+
+    """
+
+    name: str
 
 
 def valid_config_id(val: Any) -> TypeIs[ConfigID]:

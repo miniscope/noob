@@ -1,6 +1,16 @@
 # YAML Tube Config
 
+See also: examples in tests.
+
+## Initial Example
+
 Example of the yaml syntax for tube configuration
+
+```{note}
+None of the examples in thie files are final!
+Don't use this as a reference for how the package works! we are drafting!
+```
+
 
 ```yaml
 noob_id: example-pipeline

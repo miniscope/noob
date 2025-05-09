@@ -1,0 +1,21 @@
+# example that needs to have fastapi start up and run on the side as a node
+
+# run_server()
+
+nodes:
+  reader:
+    type: pkg.read_data
+
+  transform:
+    type: pkg.some_operation
+    depends:
+      - value: reader.value
+
+  server:
+    type: pkg.start_fastapi
+    depends:
+      - width: reader.width
+        meta:
+          scope: pipeline
+      - height: reader.height
+      - video: transform.value

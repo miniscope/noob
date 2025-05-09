@@ -1,0 +1,32 @@
+defaults:
+  file:
+    scope: "global"
+    value: "./my_data.bin"
+
+nodes:
+  file_metadata:
+    type: pkg.get_meta
+
+  source:
+    type: pkg.data_iterator
+    depends:
+      - width: file_metadata.width
+      - height: file_metadata.height
+
+  compute:
+    type: pkg.frame_mean
+    depends:
+      - frame: source.frame
+
+  output:
+    type: pkg.write
+    depends:
+      - value: compute.value
+      # or, assume the "default" output of a node is "all its output"
+      # - value: compute
+      # output_path not provided in pipeline description, test that its provided explicitly
+
+    
+
+
+
