@@ -17,3 +17,7 @@ def multiply(left: int, right: int = 2) -> int:
     to be used as `{nodename}.value`
     """
     return left * right
+
+
+def divide(numerator: int = 3, denominator: int = 5) -> A[float, Name("ratio")]:
+    return numerator / denominator

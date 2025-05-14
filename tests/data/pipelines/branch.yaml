@@ -1,0 +1,15 @@
+nodes:
+  a:
+    type: noob.testing.source
+  b:
+    type: noob.testing.multiply
+    depends:
+      - left: a.index
+  c:
+    type: noob.testing.divide
+    depends:
+      - denominator: a.index
+  d:
+    type: return
+    depends:
+      - out: b.value

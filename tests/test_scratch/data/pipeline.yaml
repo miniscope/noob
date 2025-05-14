@@ -25,8 +25,3 @@ nodes:
       # or, assume the "default" output of a node is "all its output"
       # - value: compute
       # output_path not provided in pipeline description, test that its provided explicitly
-
-    
-
-
-
