@@ -1,0 +1,13 @@
+nodes:
+  a:
+    type: noob.testing.source
+  b:
+    type: noob.testing.multiply
+    depends:
+      - left: a.index
+  c:
+    type: return
+    depends:
+      - out: b.value
+
+

@@ -92,3 +92,35 @@ E.g. if a node is a "config-like" node that emits some output once,
 request that the same input is passed every call,
 or "keep passing the last value that was emitted"
 
+
+## Handling Config-like nodes
+
+- Pass the node
+- Pass the whole pipeline
+- Separate note that is a "config getter"
+- "init" hook and special event name
+
+```python
+from noob.hooks import init
+
+class MyNode(Node):
+    
+    def __init__(self):
+        self.special_init(5)
+    
+    @init
+    def special_init(self, var: int) -> int:
+        return var * 2
+
+```
+
+```yaml
+node1:
+  type: MyNode
+node2:
+  type: idk
+  depends:
+    - input: node1.init
+```
+
+
