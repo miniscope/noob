@@ -3,20 +3,16 @@ id: testing-branch
 nodes:
   a:
     type: noob.testing.count_source
-  b1:
+  b:
     type: noob.testing.multiply
-    depends:
-      - left: a.index
-  b2:
-    type: noob.testing.multiply
-    params:
-      - right: 5
     depends:
       - left: a.index
   c:
+    type: noob.testing.divide
+    depends:
+      - denominator: a.index
+  d:
     type: return
     depends:
-      - x2: b1.value
-      - x5: b2.value
-
-
+      - multiply: b.value
+      - divide: c.value

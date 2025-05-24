@@ -12,5 +12,3 @@ nodes:
     depends:
       # return node should by default simplify scalars
       - 0: b.value
-
-

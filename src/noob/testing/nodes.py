@@ -52,6 +52,10 @@ def multiply(left: int, right: int = 2) -> int:
     return left * right
 
 
+def divide(numerator: int = 3, denominator: int = 5) -> A[float, Name("ratio")]:
+    return numerator / denominator
+
+
 def concat(strings: list[str]) -> str:
     return "".join(strings)
 

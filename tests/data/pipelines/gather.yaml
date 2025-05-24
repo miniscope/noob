@@ -1,18 +1,13 @@
-id: testing-merge
-
 nodes:
   a:
-    type: noob.testing.count_source
+    type: noob.testing.source
   b:
     type: noob.testing.multiply
     depends:
       - left: a.index
   c:
     type: noob.testing.divide
-    depends:
-      - numerator: a.index
-      - denominator: b.value
   d:
     type: return
     depends:
-      - 0: c.ratio
+      - out: [ b.value, c.ratio ]

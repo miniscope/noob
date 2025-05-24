@@ -97,7 +97,7 @@ or "keep passing the last value that was emitted"
 
 - Pass the node
 - Pass the whole pipeline
-- Separate note that is a "config getter"
+- Separate node that is a "config getter"
 - "init" hook and special event name
 
 ```python
