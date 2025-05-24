@@ -7,7 +7,7 @@ from .fixtures import *
 
 DATA_DIR = Path(__file__).parent / "data"
 CONFIG_DIR = DATA_DIR / "config"
-PIPELINE_DIR = DATA_DIR / "pipeline"
+PIPELINE_DIR = DATA_DIR / "pipelines"
 MOCK_DIR = Path(__file__).parent / "mock"
 
 
