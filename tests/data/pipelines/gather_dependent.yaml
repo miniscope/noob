@@ -1,5 +1,5 @@
 # Gathering that is dependent on receiving input to another slot
-id: testing-gather-dependent
+noob_id: testing-gather-dependent
 
 nodes:
   a1:

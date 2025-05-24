@@ -1,5 +1,5 @@
 # Node that emits multiple signals that can be used separably
-id: testing-multi-signal
+noob_id: testing-multi-signal
 
 nodes:
   a:
