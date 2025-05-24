@@ -1,3 +1,27 @@
-from noob.testing.nodes import multiply, source
+from noob.testing.nodes import (
+    concat,
+    count_source,
+    dictify,
+    divide,
+    exclaim,
+    letter_source,
+    multiply,
+    repeat,
+    sporadic_word,
+    word_counts,
+    word_source,
+)
 
-__all__ = ["source", "multiply"]
+__all__ = [
+    "concat",
+    "count_source",
+    "dictify",
+    "divide",
+    "exclaim",
+    "letter_source",
+    "multiply",
+    "repeat",
+    "sporadic_word",
+    "word_counts",
+    "word_source",
+]

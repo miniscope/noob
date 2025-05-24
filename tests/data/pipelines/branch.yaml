@@ -10,7 +10,7 @@ nodes:
   c:
     type: noob.testing.divide
     depends:
-      - denominator: a.index
+      - numerator: a.index
   d:
     type: return
     depends:

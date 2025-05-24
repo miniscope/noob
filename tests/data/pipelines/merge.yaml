@@ -4,15 +4,19 @@ nodes:
   a:
     type: noob.testing.count_source
   b:
+    type: noob.testing.count_source
+    params:
+      start: 5
+  c:
     type: noob.testing.multiply
     depends:
       - left: a.index
-  c:
+  d:
     type: noob.testing.divide
     depends:
-      - numerator: a.index
-      - denominator: b.value
-  d:
+      - numerator: c.value
+      - denominator: b.index
+  e:
     type: return
     depends:
-      - 0: c.ratio
+      - 0: d.ratio

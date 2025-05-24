@@ -10,8 +10,8 @@ from faker import Faker
 from noob import Name
 
 
-def count_source(limit: int = 10) -> Generator[A[int, Name("index")], None, None]:
-    counter = count()
+def count_source(limit: int = 10, start: int = 0) -> Generator[A[int, Name("index")], None, None]:
+    counter = count(start=start)
     while val := next(counter) < limit:
         yield val
 
@@ -52,7 +52,7 @@ def multiply(left: int, right: int = 2) -> int:
     return left * right
 
 
-def divide(numerator: int = 3, denominator: int = 5) -> A[float, Name("ratio")]:
+def divide(numerator: int, denominator: int = 5) -> A[float, Name("ratio")]:
     return numerator / denominator
 
 

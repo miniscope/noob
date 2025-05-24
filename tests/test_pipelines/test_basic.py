@@ -27,13 +27,7 @@ def test_branch():
     """A nodes output can be branched and received by multiple nodes!"""
     tube = Tube.from_config("testing-branch")
     runner = SynchronousRunner(tube)
-    expected = [
-        {"x2": 0, "x5": 0},
-        {"x2": 2, "x5": 5},
-        {"x2": 4, "x5": 10},
-        {"x2": 6, "x5": 15},
-        {"x2": 8, "x5": 20},
-    ]
+    expected = [{"multiply": i * 2, "divide": i / 5} for i in range(5)]
 
     for e, value in zip(expected, runner.iter(n=5)):
         assert value == e
@@ -44,7 +38,7 @@ def test_merge():
     tube = Tube.from_config("testing-merge")
     runner = SynchronousRunner(tube)
 
-    expected = ["", "b", "c" * 2, "d" * 3, "e" * 4]
+    expected = [(i * 2) / j for i, j in zip(range(5), range(5, 10))]
 
     for e, value in zip(expected, runner.iter(n=5)):
         assert value == e
@@ -94,6 +88,7 @@ def test_map():
 
     for value in runner.iter(n=5):
         assert len(value) == 2
+        assert isinstance(value, str)
         assert value[1] == "!"
 
 
