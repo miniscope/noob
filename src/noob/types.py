@@ -50,6 +50,7 @@ ConfigSource: TypeAlias = Path | PathLike[str] | ConfigID
 """
 Union of all types of config sources
 """
+ReturnNodeType: TypeAlias = None | dict[str, Any] | Any
 
 
 @dataclass

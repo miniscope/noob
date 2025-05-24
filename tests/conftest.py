@@ -7,6 +7,7 @@ from .fixtures import *
 
 DATA_DIR = Path(__file__).parent / "data"
 CONFIG_DIR = DATA_DIR / "config"
+PIPELINE_DIR = DATA_DIR / "pipeline"
 MOCK_DIR = Path(__file__).parent / "mock"
 
 
@@ -18,6 +19,6 @@ def patch_config_source(monkeypatch_session: MonkeyPatch) -> None:
 
     def _config_sources(cls: type[ConfigYAMLMixin]) -> list[Path]:
         nonlocal current_sources
-        return [CONFIG_DIR, *current_sources]
+        return [CONFIG_DIR, PIPELINE_DIR, *current_sources]
 
     monkeypatch_session.setattr(ConfigYAMLMixin, "config_sources", classmethod(_config_sources))

@@ -1,0 +1,16 @@
+# Node that emits multiple signals that can be used separably
+id: testing-multi-signal
+
+nodes:
+  a:
+    type: noob.testing.word_counts
+  b1:
+    type: sum # should be possible to just use builtins
+    depends:
+      - 0: a.counts # need a way to do positional args
+  c:
+    type: return
+    depends:
+      - word: a.word
+      - count_sum: b1.value
+      - counts: a.counts

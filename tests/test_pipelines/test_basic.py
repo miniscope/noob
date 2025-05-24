@@ -1,0 +1,110 @@
+import pytest
+
+from noob import SynchronousRunner, Tube
+
+
+def test_basic():
+    """The most basic tube! We can process a fixed number of events"""
+    tube = Tube.from_config("testing-basic")
+    runner = SynchronousRunner(tube)
+
+    outputs = runner.run(n=5)
+    assert len(outputs) == 5
+    assert outputs == [0, 2, 4, 6, 8]
+
+
+def test_basic_iter():
+    """We should also be able to iterate over values"""
+    tube = Tube.from_config("testing-basic")
+    runner = SynchronousRunner(tube)
+
+    expected = [0, 2, 4, 6, 8]
+    for e, value in zip(expected, runner.iter(n=5)):
+        assert value == e
+
+
+def test_branch():
+    """A nodes output can be branched and received by multiple nodes!"""
+    tube = Tube.from_config("testing-branch")
+    runner = SynchronousRunner(tube)
+    expected = [
+        {"x2": 0, "x5": 0},
+        {"x2": 2, "x5": 5},
+        {"x2": 4, "x5": 10},
+        {"x2": 6, "x5": 15},
+        {"x2": 8, "x5": 20},
+    ]
+
+    for e, value in zip(expected, runner.iter(n=5)):
+        assert value == e
+
+
+def test_merge():
+    """Multiple node outputs can be merged into one node!"""
+    tube = Tube.from_config("testing-merge")
+    runner = SynchronousRunner(tube)
+
+    expected = ["", "b", "c" * 2, "d" * 3, "e" * 4]
+
+    for e, value in zip(expected, runner.iter(n=5)):
+        assert value == e
+
+
+def test_gather_n():
+    """A node can gather n inputs into one call"""
+    tube = Tube.from_config("testing-gather-n")
+    runner = SynchronousRunner(tube)
+
+    expected = ["abcde", "fghij", "klmno", "pqrst", "uvwxy"]
+
+    for e, value in zip(expected, runner.iter(n=5)):
+        assert value == e
+
+
+def test_gather_dependent():
+    """A node can gather inputs from one slot when another slot receives an event"""
+    tube = Tube.from_config("testing-gather-dependent")
+    runner = SynchronousRunner(tube)
+
+    expected = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+        [10, 11, 12],
+        [13, 14, 15],
+    ]
+
+    for e, value in zip(expected, runner.iter(n=5)):
+        assert isinstance(value, dict)
+        assert len(value) == 1
+        inner = value[list(value.keys())[0]]
+        assert inner == e
+
+
+def test_map():
+    """
+    A node with a sequence output can be mapped to a node with a scalar input
+
+    In this case, "process" should know to iterate over the mapped values
+    and return them one by one, so we should get n of the mapped values,
+    not n calls of the source node -> n sets of mapped values.
+    """
+    tube = Tube.from_config("testing-map")
+    runner = SynchronousRunner(tube)
+
+    for value in runner.iter(n=5):
+        assert len(value) == 2
+        assert value[1] == "!"
+
+
+def test_multi_signal():
+    """
+    Nodes that emit multiple signals can have each used independently
+    """
+    tube = Tube.from_config("testing-multi-signal")
+    runner = SynchronousRunner(tube)
+
+    for value in runner.iter(n=5):
+        assert isinstance(value, dict)
+        assert isinstance(value["word"], str)
+        assert value["count_sum"] == sum(value["counts"])

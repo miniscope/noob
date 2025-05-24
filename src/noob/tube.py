@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from noob.exceptions import ConfigMismatchError
 from noob.node import Edge, Node, NodeSpecification, Sink, Source, Transform
+from noob.types import ConfigSource
 from noob.yaml import ConfigYAMLMixin
 
 if sys.version_info < (3, 11) or sys.version_info < (3, 12):
@@ -207,7 +208,9 @@ class Tube(BaseModel):
         return [e for e in self.edges if e.source_node.id == node]
 
     @classmethod
-    def from_config(cls, config: TubeConfig, passed: dict[str, Any] | None = None) -> Self:
+    def from_config(
+        cls, config: TubeConfig | ConfigSource, passed: dict[str, Any] | None = None
+    ) -> Self:
         """
         Instantiate a tube model from its configuration
 
@@ -215,6 +218,7 @@ class Tube(BaseModel):
             config (TubeConfig): the tube config to instantiate
             passed (dict[str, Any]): If any nodes in the
         """
+        config = TubeConfig.from_any(config)
         cls._validate_passed(config, passed)
 
         nodes = cls._init_nodes(config, passed)

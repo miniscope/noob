@@ -1,0 +1,18 @@
+id: testing-merge
+
+nodes:
+  a1:
+    type: noob.testing.count_source
+  a2:
+    type: noob.testing.letter_source
+  b:
+    type: noob.testing.repeat
+    depends:
+      - times: a1.index
+      - string: a2.letter
+  c:
+    type: return
+    depends:
+      - 0: b.value
+
+

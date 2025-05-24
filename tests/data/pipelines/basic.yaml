@@ -1,6 +1,8 @@
+id: testing-basic
+
 nodes:
   a:
-    type: noob.testing.source
+    type: noob.testing.count_source
   b:
     type: noob.testing.multiply
     depends:
@@ -8,6 +10,7 @@ nodes:
   c:
     type: return
     depends:
-      - out: b.value
+      # return node should by default simplify scalars
+      - 0: b.value
 
 

@@ -1,0 +1,21 @@
+# Gathering that is dependent on receiving input to another slot
+id: testing-gather-dependent
+
+nodes:
+  a1:
+    type: noob.testing.count_source
+  a2:
+    type: noob.testing.sporadic_word
+  b:
+    type: noob.testing.dictify
+    depends:
+      - items:
+          source: a1.index
+          gather: a_key
+      - a_key: a2.word
+  c:
+    type: return
+    depends:
+      - word: b.value
+
+
