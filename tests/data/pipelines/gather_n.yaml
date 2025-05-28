@@ -6,12 +6,15 @@ nodes:
   b:
     type: noob.testing.concat
     depends:
-      - strings:
-          source: a.letter
-          gather: 5
+      - _: a.letter
+        edge_method:
+          type: gather
+          n: 5
   c:
     type: return
+    params:
+      cast_to: package.MyModel
     depends:
       - word: b.value
-
-
+      - nested:
+          - subfield: c.value

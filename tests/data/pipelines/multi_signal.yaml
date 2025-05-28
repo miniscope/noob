@@ -7,7 +7,8 @@ nodes:
   b1:
     type: sum # should be possible to just use builtins
     depends:
-      - 0: a.counts # need a way to do positional args
+      - a.counts # need a way to do positional args
+      - kwarg: a.other_value
   c:
     type: return
     depends:
