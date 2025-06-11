@@ -21,7 +21,7 @@ from pydantic import (
 )
 from pydantic_core import core_schema
 
-from noob.types import ConfigID, ConfigSource, PythonIdentifier, valid_config_id
+from noob.types import AbsoluteIdentifier, ConfigID, ConfigSource, valid_config_id
 
 
 class YamlDumper(yaml.SafeDumper):
@@ -89,7 +89,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
     model_config = ConfigDict(validate_default=True)
 
     noob_id: ConfigID | None = None
-    noob_model: PythonIdentifier = Field(None, validate_default=True)
+    noob_model: AbsoluteIdentifier = Field(None, validate_default=True)
     noob_version: str = version("noob")
 
     HEADER_FIELDS: ClassVar[tuple[str]] = ("noob_id", "noob_model", "noob_version")
@@ -186,7 +186,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
 
     @field_validator("noob_model", mode="before")
     @classmethod
-    def fill_noob_model(cls, v: str | None) -> PythonIdentifier:
+    def fill_noob_model(cls, v: str | None) -> AbsoluteIdentifier:
         """Get name of instantiating model, if not provided"""
         if v is None:
             v = cls._model_name()
@@ -207,7 +207,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         return {**self._yaml_header(self), **super()._dump_data(**kwargs)}
 
     @classmethod
-    def _model_name(cls) -> PythonIdentifier:
+    def _model_name(cls) -> AbsoluteIdentifier:
         return f"{cls.__module__}.{cls.__name__}"
 
     @classmethod

@@ -1,3 +1,4 @@
+import builtins
 import re
 import sys
 from dataclasses import dataclass
@@ -5,7 +6,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Annotated, Any, TypeAlias
 
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator, Field, TypeAdapter
 
 if sys.version_info < (3, 13):
     from typing_extensions import TypeIs
@@ -27,10 +28,23 @@ May be made less restrictive in the future, will not be made more restrictive.
 
 
 def _is_identifier(val: str) -> str:
-    # private validation method to validate the parts of a fully-qualified python identifier
-    # defined first and not made public bc used as a validator,
-    # distinct from a boolean "is_{x}" check
+    assert val.isidentifier(), "Must be a valid python identifier"
+    return val
 
+
+def _is_absolute_identifier(val: str) -> str:
+    from noob.node import SPECIAL_NODES
+
+    if val in SPECIAL_NODES:
+        return val
+
+    if "." not in val:
+        assert (
+            val in builtins.__dict__
+        ), "If not an absolute module.Object identifier, must be in builtins"
+        return val
+
+    assert not val.startswith("."), "Cannot use relative identifiers"
     for part in val.split("."):
         assert part.isidentifier(), f"{part} is not a valid python identifier within {val}"
     return val
@@ -39,9 +53,17 @@ def _is_identifier(val: str) -> str:
 Range: TypeAlias = tuple[int, int] | tuple[float, float]
 PythonIdentifier: TypeAlias = Annotated[str, AfterValidator(_is_identifier)]
 """
-A valid python identifier, including globally namespace pathed like 
-module.submodule.ClassName
+A single valid python identifier.
+
+See: https://docs.python.org/3.13/library/stdtypes.html#str.isidentifier
 """
+AbsoluteIdentifier: TypeAlias = Annotated[str, AfterValidator(_is_absolute_identifier)]
+"""
+- A valid python identifier, including globally accessible namespace like module.submodule.ClassName
+OR 
+- a name of a builtin function/type
+"""
+
 ConfigID: TypeAlias = Annotated[str, Field(pattern=CONFIG_ID_PATTERN)]
 """
 A string that refers to a config file by the ``id`` field in that config
@@ -70,3 +92,10 @@ def valid_config_id(val: Any) -> TypeIs[ConfigID]:
     Checks whether a string is a valid config id.
     """
     return bool(re.fullmatch(CONFIG_ID_PATTERN, val))
+
+
+# --------------------------------------------------
+# Type adapters
+# --------------------------------------------------
+
+AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)

@@ -2,24 +2,9 @@
 Special Return sink that tube runners use to return values from :meth:`.TubeRunner.process`
 """
 
-import sys
 from typing import Any
 
 from noob.node.base import Sink, TInput
-
-if sys.version_info < (3, 12):
-    from typing_extensions import TypedDict
-else:
-    from typing import TypedDict
-
-
-class ReturnConfig(TypedDict):
-    """
-    Config for return nodes
-    """
-
-    key: str
-    """The key to use in the returned dictionary"""
 
 
 class Return(Sink):
@@ -27,10 +12,7 @@ class Return(Sink):
     Special sink node that returns values from a tube runner's `process` method
     """
 
-    name = "return"
     input_type = Any
-
-    config: ReturnConfig
 
     _value: Any = None
 
