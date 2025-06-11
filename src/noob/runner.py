@@ -132,7 +132,7 @@ class SynchronousRunner(TubeRunner):
     def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: ANN001
         self.stop()
 
-    def start(self) -> Self:
+    def init(self) -> Self:
         """
         Start processing data with the tube graph.
         """
@@ -145,7 +145,7 @@ class SynchronousRunner(TubeRunner):
             node.start()
         return self
 
-    def stop(self) -> None:
+    def deinit(self) -> None:
         """Stop all nodes processing"""
         # TODO: lock to ensure we've been started
         for node in self.tube.nodes.values():

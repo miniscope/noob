@@ -19,4 +19,4 @@ nodes:
   e:
     type: return
     depends:
-      - 0: d.ratio
+      - d.ratio

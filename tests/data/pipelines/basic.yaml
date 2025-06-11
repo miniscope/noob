@@ -9,6 +9,8 @@ nodes:
       - left: a.index
   c:
     type: return
+    params:
+      - flatten_scalars: false
     depends:
       # return node should by default simplify scalars
-      - 0: b.value
+      - _: b.value
