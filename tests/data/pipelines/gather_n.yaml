@@ -1,20 +1,18 @@
 noob_id: testing-gather-n
-
+noob_model: noob.tube.TubeConfig
+noob_version: 0.0.1.dev5+g4d26757.d20250320
 nodes:
   a:
     type: noob.testing.letter_source
   b:
     type: noob.testing.concat
     depends:
-      - _: a.letter
-        edge_method:
+    - _:
+        source: a.letter
+        edge:
           type: gather
           n: 5
   c:
     type: return
-    params:
-      cast_to: package.MyModel
     depends:
-      - word: b.value
-      - nested:
-          - subfield: c.value
+    - word: b.value

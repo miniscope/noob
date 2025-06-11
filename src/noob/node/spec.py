@@ -1,41 +1,68 @@
-from typing import NotRequired, TypeAlias
+from typing import Annotated, ClassVar, Self, TypeAlias
 
-from pydantic import BaseModel, Field
+from annotated_types import Ge, Len
+from pydantic import BaseModel, Field, model_validator
 from typing_extensions import TypedDict
 
 from noob.types import AbsoluteIdentifier, PythonIdentifier
 
-_SlotSpec: TypeAlias = PythonIdentifier | int
-"""
-the left side of a dependency spec - what the dependent nodes plug into
+_DependsBasic: TypeAlias = Annotated[
+    dict[PythonIdentifier, AbsoluteIdentifier], Len(min_length=1, max_length=1)
+]
 
-e.g. the "slot" in the following
 
-depends:
-- slot: node_a.signal
-"""
+class _EdgeSpec(BaseModel):
+    type_: ClassVar[str] = Field(alias="type")
 
-_DependsBasic: TypeAlias = dict[_SlotSpec, AbsoluteIdentifier]
+
+class _GatherEdge(_EdgeSpec):
+    """
+    Either an int of number of items to gather, or another slot name *on the same node*
+    that triggers the node to be called with the gathered values
+
+    depends:
+    - items:
+      source: node_a.output_0
+      edge:
+        type: gather
+        trigger: a_key
+    - a_key: node_b.output_0
+    """
+
+    type_ = "gather"
+    n: Annotated[int, Ge(1)] | None = None
+    trigger: PythonIdentifier | None = None
+
+    @model_validator(mode="after")
+    def xor_parameterization(self) -> Self:
+        """Can define *either* `n` *or* `trigger`"""
+        assert not (self.n and self.trigger), "Can only define `n` OR `trigger`, not both"
+        assert self.n or self.trigger, "Must define either `n` or `trigger`"
+        return self
+
+
+class _MapEdge(_EdgeSpec):
+    """
+    map the input and call the node once per item in the iterator
+
+    depends:
+    - items:
+        source: node_a.output_0
+        edge:
+          type: map
+    """
+
+    type_ = "map"
 
 
 class _DependsExpanded(TypedDict):
     source: AbsoluteIdentifier
-    map: NotRequired[bool]
-    """If True, map the input and call the node once per item in the iterator"""
-    gather: NotRequired[PythonIdentifier | int]
-    """
-    Either an int of number of items to gather, or another slot name *on the same node*
-    that triggers the node to be called with the gathered values
-    
-    depends:
-    - items:
-      source: node_a.output_0
-      gather: a_key
-    - a_key: node_b.output_0 
-    """
+    edge: _EdgeSpec
 
 
-DependsType: TypeAlias = _DependsBasic | dict[_SlotSpec, _DependsExpanded]
+DependsType: TypeAlias = (
+    AbsoluteIdentifier | _DependsBasic | dict[PythonIdentifier, _DependsExpanded]
+)
 
 
 class NodeSpecification(BaseModel):

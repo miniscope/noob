@@ -1,17 +1,17 @@
 noob_id: testing-map
-
+noob_model: noob.tube.TubeConfig
+noob_version: 0.0.1.dev5+g4d26757.d20250320
 nodes:
   a:
     type: noob.testing.word_source
   b:
     type: noob.testing.exclaim
     depends:
-      - string:
-          source: a.word
-          map: true
+    - string:
+        source: a.word
+        edge:
+          type: map
   c:
     type: return
     depends:
-      - 0: b.value
-
-
+    - b.value

@@ -45,7 +45,7 @@ class TubeRunner(ABC):
         """
 
     @abstractmethod
-    def start(self) -> None:
+    def init(self) -> None:
         """
         Start processing data with the tube graph.
 
@@ -56,7 +56,7 @@ class TubeRunner(ABC):
         """
 
     @abstractmethod
-    def stop(self) -> None:
+    def deinit(self) -> None:
         """
         Stop processing data with the tube graph
         """
@@ -126,11 +126,11 @@ class SynchronousRunner(TubeRunner):
         self._running = ThreadEvent()
 
     def __enter__(self) -> Self:
-        self.start()
+        self.init()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: ANN001
-        self.stop()
+        self.deinit()
 
     def init(self) -> Self:
         """
@@ -184,19 +184,19 @@ class SynchronousRunner(TubeRunner):
 
     def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
         """Treat the runner as an iterable"""
-        self.start()
+        self.init()
         current_iter = 0
         try:
             while n is None or current_iter < n:
                 yield self.process()
                 current_iter += 1
         finally:
-            self.stop()
+            self.deinit()
 
     def run(self, n: int | None = None) -> None | list[ReturnNodeType]:
         outputs = []
         current_iter = 0
-        self.start()
+        self.init()
         try:
             while n is None or current_iter < n:
                 out = self.process()
@@ -207,6 +207,6 @@ class SynchronousRunner(TubeRunner):
             # fine, just return
             pass
         finally:
-            self.stop()
+            self.deinit()
 
         return outputs if outputs else None

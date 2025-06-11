@@ -1,6 +1,6 @@
-# Gathering that is dependent on receiving input to another slot
 noob_id: testing-gather-dependent
-
+noob_model: noob.tube.TubeConfig
+noob_version: 0.0.1.dev5+g4d26757.d20250320
 nodes:
   a1:
     type: noob.testing.count_source
@@ -9,13 +9,13 @@ nodes:
   b:
     type: noob.testing.dictify
     depends:
-      - items:
-          source: a1.index
-          gather: a_key
-      - a_key: a2.word
+    - items:
+        source: a1.index
+        edge:
+          type: gather
+          trigger: a_key
+    - a_key: a2.word
   c:
     type: return
     depends:
-      - word: b.value
-
-
+    - word: b.value

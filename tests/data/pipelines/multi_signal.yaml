@@ -4,11 +4,15 @@ noob_id: testing-multi-signal
 nodes:
   a:
     type: noob.testing.word_counts
+  b0:
+    type: concat # special node to take multiple dependencies and return as a list
+    depends:
+      - a.counts
+      - a.other_value
   b1:
     type: sum # should be possible to just use builtins
     depends:
-      - a.counts # need a way to do positional args
-      - kwarg: a.other_value
+      - b0.value
   c:
     type: return
     depends:
