@@ -1,4 +1,5 @@
 import sys
+import warnings
 from dataclasses import dataclass
 from graphlib import TopologicalSorter
 from importlib import resources
@@ -12,8 +13,8 @@ from typing import (
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from noob.exceptions import ConfigMismatchError
 from noob.node import Edge, Node, NodeSpecification, Sink, Source, Transform
+from noob.types import ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
 if sys.version_info < (3, 11) or sys.version_info < (3, 12):
@@ -114,21 +115,6 @@ class TubeConfig(ConfigYAMLMixin):
     #     Fill values refer to a property or attribute of a node (i.e. have at least one dot)
     #     """
 
-    def graph(self) -> TopologicalSorter:
-        """
-        For the node specifications in :attr:`.TubeConfig.nodes`,
-        produce a :class:`.TopologicalSorter` that accounts for the dependencies between nodes
-        induced by :attr:`.NodeSpecification.fill`
-        """
-        sorter = TopologicalSorter()
-        for node_id, node in self.nodes.items():
-            if node.fill is None:
-                sorter.add(node_id)
-            else:
-                dependents = {v.split(".")[0] for v in node.fill}
-                sorter.add(node_id, *dependents)
-        return sorter
-
 
 class Tube(BaseModel):
     """
@@ -207,134 +193,29 @@ class Tube(BaseModel):
         return [e for e in self.edges if e.source_node.id == node]
 
     @classmethod
-    def from_config(cls, config: TubeConfig, passed: dict[str, Any] | None = None) -> Self:
+    def from_config(cls, config: TubeConfig | ConfigSource) -> Self:
         """
         Instantiate a tube model from its configuration
 
         Args:
             config (TubeConfig): the tube config to instantiate
-            passed (dict[str, Any]): If any nodes in the
         """
-        cls._validate_passed(config, passed)
+        config = TubeConfig.from_any(config)
 
-        nodes = cls._init_nodes(config, passed)
+        nodes = cls._init_nodes(config)
         edges = cls._init_edges(nodes, config.nodes)
 
         return cls(nodes=nodes, edges=edges)
 
     @classmethod
-    def passed_values(cls, config: TubeConfig) -> dict[str, type]:
-        """
-        Dictionary containing the keys that must be passed as specified by the `passed` field
-        of a node specification and their types.
-
-        Args:
-            config (:class:`.TubeConfig`): Tube configuration to get passed values for
-        """
-        types = Node.node_types()
-        passed = {}
-        for node_id, node in config.nodes.items():
-            if not node.passed:
-                continue
-
-            for cfg_key, pass_key in node.passed.items():
-                # get type of config key that needs to be passed
-                config_type = types[node.type_].model_fields["config"].annotation
-                try:
-                    passed[pass_key] = config_type.__annotations__[cfg_key]
-                except KeyError as e:
-                    raise ConfigMismatchError(
-                        f"Node {node_id} requested {cfg_key} be passed as {pass_key}, "
-                        f"but node type {node.type_}'s config has no field {cfg_key}! "
-                        f"Possible keys: {list(config_type.__annotations__.keys())}"
-                    ) from e
-
-        return passed
-
-    @classmethod
-    def _init_nodes(
-        cls, config: TubeConfig, passed: dict[str, Any] | None = None
-    ) -> dict[str, Node]:
-        """
-        Initialize nodes, filling in any computed values from `fill` and `passed`
-        """
-        if passed is None:
-            passed = {}
-
-        types = Node.node_types()
-        graph = config.graph()
-        graph.prepare()
-
-        nodes = {}
-        while graph.is_active():
-            for node in graph.get_ready():
-                complete_cfg = cls._complete_node(config.nodes[node], nodes, passed)
-                nodes[node] = types[complete_cfg.type_].from_specification(complete_cfg)
-                graph.done(node)
-
+    def _init_nodes(cls, config: TubeConfig) -> dict[PythonIdentifier, Node]:
+        nodes = {spec.id: Node.from_specification(spec) for spec in config.nodes.values()}
         return nodes
 
     @classmethod
     def _init_edges(cls, nodes: dict[str, Node], spec: dict[str, NodeSpecification]) -> list[Edge]:
-        edges = []
-        for node_id, node_spec in spec.items():
-            if not node_spec.outputs:
-                continue
-            for output in node_spec.outputs:
-                # FIXME: Ugly and not DRY
-                target_parts = output["target"].split(".")
-                target_id, target_slot = (
-                    (target_parts[0], target_parts[1])
-                    if len(target_parts) == 2
-                    else (target_parts[0], None)
-                )
-                edges.append(
-                    Edge(
-                        source_node=nodes[node_id],
-                        target_node=nodes[target_id],
-                        source_slot=output["source"],
-                        target_slot=target_slot,
-                    )
-                )
-        return edges
-
-    @classmethod
-    def _complete_node(
-        cls, node: NodeSpecification, context: dict[str, Node], passed: dict
-    ) -> NodeSpecification:
-        """
-        Given the context of already-instantiated nodes and passed values,
-        complete the configuration.
-        """
-        if node.passed:
-            for cfg_key, passed_key in node.passed.items():
-                node.config[cfg_key] = passed[passed_key]
-        if node.fill:
-            for cfg_key, fill_key in node.fill.items():
-                parts = fill_key.split(".")
-                val = context[parts[0]]
-                for part in parts[1:]:
-                    val = getattr(val, part)
-                node.config[cfg_key] = val
-        return node
-
-    @classmethod
-    def _validate_passed(cls, config: TubeConfig, passed: dict[str, Any]) -> None:
-        """
-        Ensure that the passed values required by the tube config are in fact passed
-
-        Raise ConfigurationMismatchError if missing keys, otherwise do nothing
-        """
-        required = cls.passed_values(config)
-
-        for key in required:
-            if passed is None or key not in passed:
-                raise ConfigMismatchError(
-                    f"Tube config requires these values to be passed:\n"
-                    f"{required}\n"
-                    f"But received passed values:\n"
-                    f"{passed}"
-                )
+        warnings.warn("Implement me!", stacklevel=2)
+        return []
 
 
 class _ConfigProtocol(Protocol):

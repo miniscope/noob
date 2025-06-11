@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from logging import Logger
 from threading import Event as ThreadEvent
@@ -10,6 +11,7 @@ from noob.node import Node, Source
 from noob.node.return_ import Return
 from noob.store import EventStore
 from noob.tube import Tube
+from noob.types import ReturnNodeType
 
 
 @dataclass
@@ -29,7 +31,7 @@ class TubeRunner(ABC):
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
 
     @abstractmethod
-    def process(self) -> dict[str, Any] | None:
+    def process(self) -> ReturnNodeType:
         """
         Process one step of data from each of the sources,
         passing intermediate data to any subscribed nodes in a chain.
@@ -43,7 +45,7 @@ class TubeRunner(ABC):
         """
 
     @abstractmethod
-    def start(self) -> None:
+    def init(self) -> None:
         """
         Start processing data with the tube graph.
 
@@ -54,10 +56,17 @@ class TubeRunner(ABC):
         """
 
     @abstractmethod
-    def stop(self) -> None:
+    def deinit(self) -> None:
         """
         Stop processing data with the tube graph
         """
+
+    def run(self, n: int | None = None) -> None | list[ReturnNodeType]:
+        """Run the tube either indefinitely or for a fixed number of complete iterations!"""
+        raise NotImplementedError()
+
+    def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
+        raise NotImplementedError()
 
     @property
     @abstractmethod
@@ -82,7 +91,7 @@ class TubeRunner(ABC):
         edges = self.tube.in_edges(node)
         return self.store.gather(edges)
 
-    def gather_return(self) -> dict | None:
+    def gather_return(self) -> ReturnNodeType:
         """
         If any :class:`.Return` nodes are in the tube,
         gather their return values to return from :meth:`.TubeRunner.process`
@@ -113,18 +122,17 @@ class SynchronousRunner(TubeRunner):
     Just run the nodes in topological order and return from return nodes.
     """
 
-    def __init__(self, **kwargs: Any):
-        super().__init__(**kwargs)
+    def __post_init__(self):
         self._running = ThreadEvent()
 
     def __enter__(self) -> Self:
-        self.start()
+        self.init()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: ANN001
-        self.stop()
+        self.deinit()
 
-    def start(self) -> Self:
+    def init(self) -> Self:
         """
         Start processing data with the tube graph.
         """
@@ -137,7 +145,7 @@ class SynchronousRunner(TubeRunner):
             node.start()
         return self
 
-    def stop(self) -> None:
+    def deinit(self) -> None:
         """Stop all nodes processing"""
         # TODO: lock to ensure we've been started
         for node in self.tube.nodes.values():
@@ -149,7 +157,7 @@ class SynchronousRunner(TubeRunner):
         """Whether the tube is currently running"""
         return self._running.is_set()
 
-    def process(self) -> dict[str, Any] | None:
+    def process(self) -> ReturnNodeType:
         """
         Iterate through nodes in topological order,
         calling their process method and passing events as they are emitted.
@@ -173,3 +181,32 @@ class SynchronousRunner(TubeRunner):
                 self._logger.debug(f"Node {node_id} emitted %s", value)
 
         return self.gather_return()
+
+    def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
+        """Treat the runner as an iterable"""
+        self.init()
+        current_iter = 0
+        try:
+            while n is None or current_iter < n:
+                yield self.process()
+                current_iter += 1
+        finally:
+            self.deinit()
+
+    def run(self, n: int | None = None) -> None | list[ReturnNodeType]:
+        outputs = []
+        current_iter = 0
+        self.init()
+        try:
+            while n is None or current_iter < n:
+                out = self.process()
+                if out is not None:
+                    outputs.append(out)
+                current_iter += 1
+        except KeyboardInterrupt:
+            # fine, just return
+            pass
+        finally:
+            self.deinit()
+
+        return outputs if outputs else None

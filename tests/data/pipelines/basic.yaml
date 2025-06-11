@@ -1,0 +1,16 @@
+noob_id: testing-basic
+noob_model: noob.tube.TubeConfig
+noob_version: 0.0.1.dev5+g4d26757.d20250320
+nodes:
+  a:
+    type: noob.testing.count_source
+  b:
+    type: noob.testing.multiply
+    depends:
+    - left: a.index
+  c:
+    type: return
+    params:
+      flatten_scalars: false
+    depends:
+    - b.value
