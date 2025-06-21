@@ -43,7 +43,32 @@ we can't model dependencies at the node-node level all that well.
 
 So say we have a tube with a source node `A` and a few sink nodes with different dependency specifications:
 
+```{mermaid}
+flowchart TD
+    NodeA("NodeA")
+    NodeB("NodeB")
+    NodeC("NodeC")
+    NodeD("NodeD")
+    NodeA.signal1
+    NodeA.signal2
 
+    style NodeA stroke:#00f;
+
+    classDef signal2 stroke:#f00;
+
+    class NodeA.signal2,NodeA.signal2a,NodeA.signal2b signal2
+
+    NodeA --> NodeA.signal1
+    NodeA --> NodeA.signal2
+
+    NodeA.signal1 --> NodeB
+    NodeA.signal2 --> NodeB
+    NodeA.signal2 -- "gather:5" --> NodeC
+    NodeA.signal2 -- "gather:3" --> NodeD
+
+```
+
+We might have a bipartite node - event graph like this:
 
 *the arrows should be pointing `source node -> event` and `event -> sink node`
 but mermaid has piss-poor control over hierarchy*
@@ -75,3 +100,7 @@ flowchart LR
     NodeC -- "depends" --> NodeA.signal2a
     NodeD -- "depends" --> NodeA.signal2b
 ```
+
+so that we can call a node, process its events,
+compute the status of dependencies,
+which then gives us a fresh set of nodes that we can process next.
