@@ -1,0 +1,28 @@
+noob_id: test-depends
+noob_model: noob.tube.TubeConfig
+noob_version: 0.0.1.dev5+g4d26757.d20250320
+nodes:
+  word_source:
+    type: noob.testing.word_source
+  sporadic_source:
+    type: noob.testing.sporadic_word
+  count_source:
+    type: noob.testing.word_counts
+  dep_basic:
+    type: noob.testing.exclaim
+    depends:
+    - string: word_source.value
+  dep_positional:
+    type: concat
+    depends:
+    - count_source.counts
+    - count_source.other_value
+  dep_gather_dependent:
+    type: noob.testing.dictify
+    depends:
+    - items:
+        source: word_source.value
+        edge:
+          type: gather
+          trigger: a_key
+    - a_key: sporadic_source.word

@@ -170,3 +170,14 @@ class Edge(BaseModel):
     source_slot: str | None = None
     target_node: Node
     target_slot: str | None = None
+
+    def key(self) -> str:
+        """
+        Return some unique string that represents the dependency
+
+        NodeA.signal2
+        NodeA.signal2[type=gather,n=5]
+        """
+
+    def update(self, events: list[Event]) -> None:
+        """"""

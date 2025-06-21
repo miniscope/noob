@@ -16,23 +16,17 @@ class Return(Sink):
 
     _value: Any = None
 
-    def process(self, value: TInput) -> None:
+    def process(self, **kwargs: Any) -> None:
         """
         Store the incoming value to retrieve later with :meth:`.get`
         """
-        self._value = value
+        self._value = kwargs
 
-    def get(self, keep: bool = False) -> dict[str, TInput] | None:
+    def get(self) -> dict[str, TInput] | None:
         """
         Get the stored value from the process call
-
-        Args:
-            keep (bool): If ``True``, keep the stored value, otherwise clear it, consume it
         """
-        if self._value is None:
-            return None
-        else:
-            val = {self.config["key"]: self._value}
-            if not keep:
-                self._value = None
-            return val
+        val = self._value
+        self._value = None
+        return val
+
