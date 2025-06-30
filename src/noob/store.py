@@ -59,7 +59,7 @@ class EventStore:
         event = [e for e in self.events if e["node_id"] == node_id and e["slot"] == slot]
         return None if len(event) == 0 else event[-1]
 
-    def gather(self, edges: list[Edge]) -> dict | None:
+    def gather(self, edges: list[Edge]) -> dict:
         """
         Gather events into a form that can be consumed by a :meth:`.Node.process` method,
         given the collection of inbound edges (usually from :meth:`.Tube.in_edges` ).
@@ -82,7 +82,7 @@ class EventStore:
             value = None if event is None else event["value"]
             ret[edge.target_slot] = value
 
-        return None if not ret or all(val is None for val in ret.values()) else ret
+        return ret
 
     def clear(self) -> None:
         """

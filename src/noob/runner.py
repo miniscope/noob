@@ -3,7 +3,9 @@ from collections.abc import Generator
 from dataclasses import dataclass, field
 from logging import Logger
 from threading import Event as ThreadEvent
-from typing import Any, Self
+from typing import Any, Self, get_args
+import inspect
+from pydantic import TypeAdapter
 
 from noob import init_logger
 from noob.exceptions import AlreadyRunningError
@@ -66,6 +68,7 @@ class TubeRunner(ABC):
         raise NotImplementedError()
 
     def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
+        """Treat the runner as an iterable"""
         raise NotImplementedError()
 
     @property
@@ -102,10 +105,10 @@ class TubeRunner(ABC):
         """
         ret = {}
         for sink in self.tube.sinks.values():
-            if sink.name != "return":
+            if not TypeAdapter(Return).validate_python(sink):
                 continue
             sink: Return
-            val = sink.get(keep=False)
+            val = sink.get()
             ret.update(val)
 
         if not ret:
@@ -171,11 +174,11 @@ class SynchronousRunner(TubeRunner):
             for node_id in graph.get_ready():
                 node = self.tube.nodes[node_id]
                 node_input = self.gather_input(node)
-                if node_input is None:
-                    graph.done(node_id)
-                    self._logger.debug(f"Node {node_id} received no input, skipping")
-                    continue
                 value = node.process(**node_input)
+                if inspect.isgenerator(value):
+                    param = get_args(inspect.signature(node.fn).return_annotation.__args__[0])[1].name
+                    value = {param: next(value)}
+
                 self.store.add(value, node_id)
                 graph.done(node_id)
                 self._logger.debug(f"Node {node_id} emitted %s", value)
