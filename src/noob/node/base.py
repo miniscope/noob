@@ -6,6 +6,7 @@ from typing import Any, ClassVar, Generic, ParamSpec, TypeVar, Unpack
 
 from pydantic import BaseModel, Field
 
+from noob.event import Event
 from noob.utils import resolve_python_identifier
 
 if sys.version_info < (3, 11) or sys.version_info < (3, 12):
@@ -176,7 +177,7 @@ class Edge(BaseModel):
         Return some unique string that represents the dependency
 
         NodeA.signal2
-        NodeA.signal2[type=gather,n=5]
+        NodeA.signal2[type=gather,n=5]  --> we aren't doing this anymore if edge operations are now separate nodes.
         """
 
     def update(self, events: list[Event]) -> None:
