@@ -16,7 +16,7 @@ nodes:
     type: concat
     depends:
     - count_source.counts
-    - count_source.other_value
+    - count_source.words
   dep_gather_dependent:
     type: noob.testing.dictify
     depends:
