@@ -81,6 +81,9 @@ class TubeRunner(ABC):
             dict: empty dict if Node is a :class:`.Source`
             None: if no input is available
         """
+        if not node.spec.depends:
+            return {}
+
         edges = self.tube.in_edges(node)
         return self.store.gather(edges)
 
@@ -164,10 +167,6 @@ class SynchronousRunner(TubeRunner):
             for node_id in graph.get_ready():
                 node = self.tube.nodes[node_id]
                 node_input = self.gather_input(node)
-                if node_input is None:
-                    graph.done(node_id)
-                    self._logger.debug(f"Node {node_id} received no input, skipping")
-                    continue
                 value = node.process(**node_input)
                 self.store.add(value, node_id)
                 graph.done(node_id)
