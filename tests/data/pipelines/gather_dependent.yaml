@@ -7,15 +7,16 @@ nodes:
   a2:
     type: noob.testing.sporadic_word
   b:
+    type: gather
+    depends:
+      - value: a1.index
+      - trigger: a2.word
+  c:
     type: noob.testing.dictify
     depends:
-    - items:
-        source: a1.index
-        edge:
-          type: gather
-          trigger: a_key
-    - a_key: a2.word
-  c:
+      - key: a2.word
+      - items: b.value
+  d:
     type: return
     depends:
-    - word: b.value
+    - word: c.value

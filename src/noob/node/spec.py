@@ -1,68 +1,63 @@
-from typing import Annotated, ClassVar, Self, TypeAlias
+from typing import Annotated, TypeAlias
 
-from annotated_types import Ge, Len
-from pydantic import BaseModel, Field, model_validator
-from typing_extensions import TypedDict
+from annotated_types import Len
+from pydantic import BaseModel, Field
 
 from noob.types import AbsoluteIdentifier, PythonIdentifier
 
 _DependsBasic: TypeAlias = Annotated[
     dict[PythonIdentifier, AbsoluteIdentifier], Len(min_length=1, max_length=1)
 ]
+"""
+Standard dependency declaration, a mapping from a node's `slot` to a `node.signal` pair:
 
+Examples:
 
-class _EdgeSpec(BaseModel):
-    type_: ClassVar[str] = Field(alias="type")
+    for a pair of nodes like this:
+    
+    ```python
+    def node_a() -> Annotated[Generator[int], Name("index")]:
+        yield from count()
+    
+    def node_b(my_value: int) -> None:
+        print(my_value)
+    ```
+    
+    one would express "pass node_a.index to node_b's `my_value`" like
+    
+    ```yaml
+    nodes:
+      a:
+        type: node_a
+      b:
+        type: node_b
+        depends:
+        - my_value: a.index
+    ```
 
+"""
 
-class _GatherEdge(_EdgeSpec):
-    """
-    Either an int of number of items to gather, or another slot name *on the same node*
-    that triggers the node to be called with the gathered values
+DependsType: TypeAlias = AbsoluteIdentifier | _DependsBasic
+"""
+Either an absolute identifier (which is treated as a positional-only arg)
+or a dict mapping as described in _DependsBasic.
 
-    depends:
-    - items:
-      source: node_a.output_0
-      edge:
-        type: gather
-        trigger: a_key
-    - a_key: node_b.output_0
-    """
+Examples:
 
-    type_ = "gather"
-    n: Annotated[int, Ge(1)] | None = None
-    trigger: PythonIdentifier | None = None
-
-    @model_validator(mode="after")
-    def xor_parameterization(self) -> Self:
-        """Can define *either* `n` *or* `trigger`"""
-        assert not (self.n and self.trigger), "Can only define `n` OR `trigger`, not both"
-        assert self.n or self.trigger, "Must define either `n` or `trigger`"
-        return self
-
-
-class _MapEdge(_EdgeSpec):
-    """
-    map the input and call the node once per item in the iterator
-
-    depends:
-    - items:
-        source: node_a.output_0
-        edge:
-          type: map
-    """
-
-    type_ = "map"
-
-
-class _DependsExpanded(TypedDict):
-    source: AbsoluteIdentifier
-    edge: _EdgeSpec
-
-
-DependsType: TypeAlias = (
-    AbsoluteIdentifier | _DependsBasic | dict[PythonIdentifier, _DependsExpanded]
-)
+    ```python
+    def example(positional_only: int, /, another_arg: str) -> None:
+        return another_arg * positional_only
+    ```    
+    
+    ```yaml
+    nodes:
+      zzz:
+        type: example
+        depends:
+        - a.value
+        - another_arg: b.value
+    ```
+"""
 
 
 class NodeSpecification(BaseModel):
@@ -84,8 +79,8 @@ class NodeSpecification(BaseModel):
     """Dependency specification for the node.
     
     Can be specified as a simple mapping from this node's input slots 
-    to another node's output signals,
-    or by an expanded parameterization that declares mapping/gathering relationships.
+    to another node's output signals passed as kwargs,
+    or as a flat list of node.signal identifiers that are passed as positional args.
     """
     params: dict | None = None
     """Static kwargs to pass to this node, 

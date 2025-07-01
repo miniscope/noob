@@ -5,13 +5,14 @@ nodes:
   a:
     type: noob.testing.word_source
   b:
+    type: map
+    depends:
+      - a.word
+  c:
     type: noob.testing.exclaim
     depends:
-    - string:
-        source: a.word
-        edge:
-          type: map
-  c:
+    - string: b.value
+  d:
     type: return
     depends:
-    - b.value
+    - c.value

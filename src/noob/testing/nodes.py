@@ -68,5 +68,5 @@ def repeat(string: str, times: int) -> str:
     return string * times
 
 
-def dictify(a_key: str, items: list[Any]) -> dict[str, Any]:
-    return {a_key: items}
+def dictify(key: str, items: list[Any]) -> dict[str, Any]:
+    return {key: items}
