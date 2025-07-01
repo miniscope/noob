@@ -37,9 +37,9 @@ class TubeSpecification(ConfigYAMLMixin):
         Roll down the `id` from the key in the `nodes` dictionary into the node config
         """
         assert isinstance(value, dict)
-        for id, node in value.items():
+        for id_, node in value.items():
             if "id" not in node:
-                node["id"] = id
+                node["id"] = id_
         return value
 
 
@@ -71,7 +71,7 @@ class Tube(BaseModel):
         :attr:`.Tube.nodes` and :attr:`.Tube.edges` that yields node ids
         """
         sorter = TopologicalSorter()
-        for node_id, node in self.nodes.items():
+        for node_id in self.nodes:
             in_edges = [e.source_node for e in self.edges if e.target_node == node_id]
             sorter.add(node_id, *in_edges)
         return sorter
