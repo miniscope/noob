@@ -13,7 +13,7 @@ nodes:
   c:
     type: noob.testing.concat
     depends:
-    - _: b.value
+    - b.value
   d:
     type: return
     depends:
