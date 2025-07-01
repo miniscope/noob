@@ -1,58 +1,30 @@
 import inspect
-import sys
 from abc import abstractmethod
 from collections.abc import Callable
-from typing import Any, ClassVar, Generic, ParamSpec, TypeVar, Unpack
+from typing import Any, ParamSpec, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from noob.node.spec import NodeSpecification
 from noob.utils import resolve_python_identifier
 
-if sys.version_info < (3, 11) or sys.version_info < (3, 12):
-
-    from typing_extensions import TypedDict
-else:
-    from typing import TypedDict
-
-# if TYPE_CHECKING:
-from noob.node.spec import NodeSpecification
-
-TInput = TypeVar("TInput")
-"""
-Input Type typevar
-"""
-TOutput = TypeVar("TOutput", bound=dict[str, Any])
+TOutput = TypeVar("TOutput")
 """
 Output Type typevar
 """
 PWrap = ParamSpec("PWrap")
 
-"""
-mapping from node input kwargs to another node's outputs
 
-input_0: node_b.output_0
-"""
-
-
-class NodeConfig(TypedDict, total=False):
-    """
-    Abstract parent TypedDict that each node inherits from to define
-    what fields it needs to be configured.
-    """
-
-
-class Node(BaseModel, Generic[TInput, TOutput]):
+class Node(BaseModel):
     """A node within a processing tube"""
 
     id: str
     """Unique identifier of the node"""
-    spec: "NodeSpecification"
-    params: NodeConfig = Field(default_factory=dict)
+    spec: NodeSpecification
 
-    input_type: ClassVar[type[TInput]]
-    output_type: ClassVar[type[TOutput]]
+    model_config = ConfigDict(extra="forbid")
 
-    def start(self) -> None:
+    def init(self) -> None:
         """
         Start producing, processing, or receiving data.
 
@@ -61,7 +33,7 @@ class Node(BaseModel, Generic[TInput, TOutput]):
         """
         pass
 
-    def stop(self) -> None:
+    def deinit(self) -> None:
         """
         Stop producing, processing, or receiving data
 
@@ -71,94 +43,41 @@ class Node(BaseModel, Generic[TInput, TOutput]):
         pass
 
     @abstractmethod
-    def process(self, **kwargs: Unpack[TInput]) -> TOutput | None:
+    def process(self, *args: Any, **kwargs: Any) -> Any | None:
         """Process some input, emitting it. See subclasses for details"""
         pass
 
     @classmethod
     def from_specification(cls, spec: "NodeSpecification") -> "Node":
         """
-        Create a node from its config
+        Create a node from its spec
 
         - resolve the node type
         - if a function, wrap it in a node class
         - if a class, just instantiate it
         """
         obj = resolve_python_identifier(spec.type_)
+
+        params = spec.params if spec.params is not None else {}
+
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec)
+                return obj(id=spec.id, spec=spec, **params)
             else:
                 raise NotImplementedError("Handle wrapping classes")
         else:
-            return WrapNode(id=spec.id, fn=obj, spec=spec)
+            return WrapNode(id=spec.id, fn=obj, spec=spec, params=params)
 
 
 class WrapNode(Node):
     fn: Callable[PWrap, TOutput]
+    params: dict = Field(default_factory=dict)
 
-    def process(self, **kwargs: PWrap.kwargs) -> TOutput | None:
+    def process(self, *args: PWrap.args, **kwargs: PWrap.kwargs) -> TOutput | None:
         kwargs.update(self.params)
         return self.fn(**kwargs)
-
-
-class Source(Node, Generic[TInput, TOutput]):
-    """A source of data in a processing tube"""
-
-    input_type: ClassVar[None] = None
-
-    @abstractmethod
-    def process(self) -> TOutput:
-        """
-        Process some data, returning an output.
-
-
-        .. note::
-
-            The `process` method should not directly call or pass
-            data to subscribed output nodes, but instead return the output
-            and allow a containing tube class to handle dispatching data.
-
-        """
-
-
-class Sink(Node, Generic[TInput, TOutput]):
-    """A sink of data in a processing tube"""
-
-    output_type: ClassVar[None] = None
-
-    @abstractmethod
-    def process(self, **kwargs: Unpack[TInput]) -> None:
-        """
-        Process some incoming data, returning None
-
-        .. note::
-
-            The `process` method should not directly be called or passed data,
-            but instead should be called by a containing tube class.
-
-        """
-
-
-class Transform(Node, Generic[TInput, TOutput]):
-    """
-    An intermediate processing node that transforms some input to output
-    """
-
-    @abstractmethod
-    def process(self, **kwargs: Unpack[TInput]) -> TOutput:
-        """
-        Process some incoming data, yielding a transformed output
-
-        .. note::
-
-            The `process` method should not directly call or be called by
-            output or input nodes, but instead return the output
-            and allow a containing tube class to handle dispatching data.
-
-        """
 
 
 class Edge(BaseModel):

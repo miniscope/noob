@@ -5,7 +5,7 @@ from noob import SynchronousRunner, Tube
 
 def test_basic():
     """The most basic tube! We can process a fixed number of events"""
-    tube = Tube.from_config("testing-basic")
+    tube = Tube.from_specification("testing-basic")
     runner = SynchronousRunner(tube)
 
     outputs = runner.run(n=5)
@@ -15,7 +15,7 @@ def test_basic():
 
 def test_basic_iter():
     """We should also be able to iterate over values"""
-    tube = Tube.from_config("testing-basic")
+    tube = Tube.from_specification("testing-basic")
     runner = SynchronousRunner(tube)
 
     expected = [0, 2, 4, 6, 8]
@@ -25,7 +25,7 @@ def test_basic_iter():
 
 def test_branch():
     """A nodes output can be branched and received by multiple nodes!"""
-    tube = Tube.from_config("testing-branch")
+    tube = Tube.from_specification("testing-branch")
     runner = SynchronousRunner(tube)
     expected = [{"multiply": i * 2, "divide": i / 5} for i in range(5)]
 
@@ -35,7 +35,7 @@ def test_branch():
 
 def test_merge():
     """Multiple node outputs can be merged into one node!"""
-    tube = Tube.from_config("testing-merge")
+    tube = Tube.from_specification("testing-merge")
     runner = SynchronousRunner(tube)
 
     expected = [(i * 2) / j for i, j in zip(range(5), range(5, 10))]
@@ -46,7 +46,7 @@ def test_merge():
 
 def test_gather_n():
     """A node can gather n inputs into one call"""
-    tube = Tube.from_config("testing-gather-n")
+    tube = Tube.from_specification("testing-gather-n")
     runner = SynchronousRunner(tube)
 
     expected = ["abcde", "fghij", "klmno", "pqrst", "uvwxy"]
@@ -57,7 +57,7 @@ def test_gather_n():
 
 def test_gather_dependent():
     """A node can gather inputs from one slot when another slot receives an event"""
-    tube = Tube.from_config("testing-gather-dependent")
+    tube = Tube.from_specification("testing-gather-dependent")
     runner = SynchronousRunner(tube)
 
     expected = [
@@ -83,7 +83,7 @@ def test_map():
     and return them one by one, so we should get n of the mapped values,
     not n calls of the source node -> n sets of mapped values.
     """
-    tube = Tube.from_config("testing-map")
+    tube = Tube.from_specification("testing-map")
     runner = SynchronousRunner(tube)
 
     for value in runner.iter(n=5):
@@ -96,7 +96,7 @@ def test_multi_signal():
     """
     Nodes that emit multiple signals can have each used independently
     """
-    tube = Tube.from_config("testing-multi-signal")
+    tube = Tube.from_specification("testing-multi-signal")
     runner = SynchronousRunner(tube)
 
     for value in runner.iter(n=5):

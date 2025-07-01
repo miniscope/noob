@@ -7,7 +7,7 @@ from typing import Any, Self
 
 from noob import init_logger
 from noob.exceptions import AlreadyRunningError
-from noob.node import Node, Source
+from noob.node import Node
 from noob.node.return_ import Return
 from noob.store import EventStore
 from noob.tube import Tube
@@ -37,11 +37,7 @@ class TubeRunner(ABC):
         passing intermediate data to any subscribed nodes in a chain.
 
         The `process` method normally does not return anything,
-        except when using the special :class:`.ReturnSink` node -
-        if there are :class:`.ReturnSink` nodes in a :class:`.Tube` graph,
-        then each call to `process` will return a dictionary with one key
-        (from the :class:`.ReturnSink`'s `key` config value) and one value for each
-        :class:`.ReturnSink`.
+        except when using the special :class:`.Return` node
         """
 
     @abstractmethod
@@ -51,7 +47,7 @@ class TubeRunner(ABC):
 
         Implementations of this method must raise a :class:`.TubeRunningError`
         if the tube has already been started and is running,
-        (i.e. :meth:`.stop` has not been called,
+        (i.e. :meth:`.deinit` has not been called,
         or the tube has not exhausted itself)
         """
 
@@ -85,9 +81,6 @@ class TubeRunner(ABC):
             dict: empty dict if Node is a :class:`.Source`
             None: if no input is available
         """
-        if isinstance(node, Source):
-            return {}
-
         edges = self.tube.in_edges(node)
         return self.store.gather(edges)
 
@@ -142,14 +135,14 @@ class SynchronousRunner(TubeRunner):
 
         self._running.set()
         for node in self.tube.nodes.values():
-            node.start()
+            node.init()
         return self
 
     def deinit(self) -> None:
         """Stop all nodes processing"""
         # TODO: lock to ensure we've been started
         for node in self.tube.nodes.values():
-            node.stop()
+            node.deinit()
         self._running.clear()
 
     @property
