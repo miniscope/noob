@@ -1,8 +1,8 @@
+from collections.abc import Mapping
 from graphlib import TopologicalSorter
 from importlib import resources
 from typing import (
     Self,
-    Mapping,
 )
 
 from pydantic import BaseModel, Field, field_validator
@@ -72,7 +72,7 @@ class Tube(BaseModel):
         """
         sorter = TopologicalSorter()
         for node_id, node in self.nodes.items():
-            in_edges = [e.target_node.id for e in self.edges if e.target_node is node]
+            in_edges = [e.source_node for e in self.edges if e.target_node == node_id]
             sorter.add(node_id, *in_edges)
         return sorter
 

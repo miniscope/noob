@@ -85,7 +85,7 @@ class Edge(BaseModel):
     Directed connection between an output slot a node and an input slot in another node
     """
 
-    source_node: Node
+    source_node: str
     source_slot: str | None = None
-    target_node: Node
+    target_node: str
     target_slot: str | None = None
