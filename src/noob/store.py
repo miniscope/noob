@@ -78,7 +78,7 @@ class EventStore:
         """
         ret = {}
         for edge in edges:
-            event = self.get(edge.source_node.id, edge.source_slot)
+            event = self.get(edge.source_node, edge.source_slot)
             value = None if event is None else event["value"]
             ret[edge.target_slot] = value
 
