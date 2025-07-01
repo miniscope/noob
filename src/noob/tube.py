@@ -1,8 +1,8 @@
-import warnings
 from graphlib import TopologicalSorter
 from importlib import resources
 from typing import (
     Self,
+    Mapping,
 )
 
 from pydantic import BaseModel, Field, field_validator
@@ -88,7 +88,7 @@ class Tube(BaseModel):
         """
         if isinstance(node, Node):
             node = node.id
-        return [e for e in self.edges if e.target_node.id == node]
+        return [e for e in self.edges if e.target_node == node]
 
     def out_edges(self, node: Node | str) -> list[Edge]:
         """
@@ -102,7 +102,7 @@ class Tube(BaseModel):
         """
         if isinstance(node, Node):
             node = node.id
-        return [e for e in self.edges if e.source_node.id == node]
+        return [e for e in self.edges if e.source_node == node]
 
     @classmethod
     def from_specification(cls, spec: TubeSpecification | ConfigSource) -> Self:
@@ -115,7 +115,7 @@ class Tube(BaseModel):
         spec = TubeSpecification.from_any(spec)
 
         nodes = cls._init_nodes(spec)
-        edges = cls._init_edges(nodes, spec.nodes)
+        edges = cls._init_edges(spec.nodes)
 
         return cls(nodes=nodes, edges=edges)
 
@@ -125,9 +125,39 @@ class Tube(BaseModel):
         return nodes
 
     @classmethod
-    def _init_edges(cls, nodes: dict[str, Node], spec: dict[str, NodeSpecification]) -> list[Edge]:
-        warnings.warn("Implement me!", stacklevel=2)
-        return []
+    def _init_edges(cls, node_spec: dict[str, NodeSpecification]) -> list[Edge]:
+        edges = []
+
+        dependency_map = {id_: spec.depends for id_, spec in node_spec.items() if spec.depends}
+        for target_node, slot_inputs in dependency_map.items():
+            for arrow in slot_inputs:
+                if isinstance(arrow, Mapping):
+                    target_slot, source_signal = next(iter(arrow.items()))
+
+                elif isinstance(arrow, str):
+                    target_slot = None
+                    source_signal = arrow
+
+                else:
+                    raise NotImplementedError(
+                        "Only supporting signal-slot mapping or node pointer."
+                    )
+
+                source_node, source_slot = source_signal.split(".")
+
+                if source_slot == "value":
+                    source_slot = None  # what if the user dubs the signal "value"?
+
+                edges.append(
+                    Edge(
+                        source_node=source_node,
+                        source_slot=source_slot,
+                        target_node=target_node,
+                        target_slot=target_slot,
+                    )
+                )
+
+        return edges
 
 
 class TubeClassicEdition:
