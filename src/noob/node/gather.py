@@ -56,7 +56,6 @@ class Gather(Node):
                     self._items = []
 
     def _should_return(self, trigger: Any | None) -> bool:
-
         return (self.n is not None and len(self._items) >= self.n) or (
             self.n is None and trigger is not None
         )
