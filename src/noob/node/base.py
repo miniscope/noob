@@ -3,7 +3,7 @@ from abc import abstractmethod
 from collections.abc import Callable
 from typing import Any, ParamSpec, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from noob.node.spec import NodeSpecification
 from noob.utils import resolve_python_identifier
@@ -21,6 +21,8 @@ class Node(BaseModel):
     id: str
     """Unique identifier of the node"""
     spec: NodeSpecification
+
+    model_config = ConfigDict(extra="forbid")
 
     def init(self) -> None:
         """
@@ -55,15 +57,18 @@ class Node(BaseModel):
         - if a class, just instantiate it
         """
         obj = resolve_python_identifier(spec.type_)
+
+        params = spec.params if spec.params is not None else {}
+
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec)
+                return obj(id=spec.id, spec=spec, **params)
             else:
                 raise NotImplementedError("Handle wrapping classes")
         else:
-            return WrapNode(id=spec.id, fn=obj, spec=spec)
+            return WrapNode(id=spec.id, fn=obj, spec=spec, params=params)
 
 
 class WrapNode(Node):
