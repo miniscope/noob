@@ -10,7 +10,5 @@ nodes:
     - left: a.index
   c:
     type: return
-    params:
-      flatten_scalars: false
     depends:
-    - b.value
+      - b.value

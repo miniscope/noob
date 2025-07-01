@@ -120,8 +120,8 @@ class Tube(BaseModel):
         return cls(nodes=nodes, edges=edges)
 
     @classmethod
-    def _init_nodes(cls, config: TubeSpecification) -> dict[PythonIdentifier, Node]:
-        nodes = {spec.id: Node.from_specification(spec) for spec in config.nodes.values()}
+    def _init_nodes(cls, specs: TubeSpecification) -> dict[PythonIdentifier, Node]:
+        nodes = {spec.id: Node.from_specification(spec) for spec in specs.nodes.values()}
         return nodes
 
     @classmethod
