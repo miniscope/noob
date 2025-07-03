@@ -1,6 +1,7 @@
 import inspect
+from collections.abc import Generator
 from itertools import count
-from typing import Generator, Annotated as A
+from typing import Annotated as A
 
 from faker import Faker
 
@@ -9,7 +10,6 @@ from noob.node.base import WrapNode
 
 
 class TestWrapNode:
-
     @staticmethod
     def one_return(name: str) -> A[str, Name("hey")]:
         return name
@@ -54,7 +54,7 @@ class TestWrapNode:
         return None
 
     @staticmethod
-    def return_empty():
+    def return_empty():  # noqa: ANN205
         return False
 
     def test_one_return(self):

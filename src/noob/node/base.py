@@ -1,7 +1,7 @@
 import inspect
 from abc import abstractmethod
 from collections.abc import Callable, Generator
-from typing import Any, ParamSpec, TypeVar, get_args, get_origin, Annotated
+from typing import Annotated, Any, ParamSpec, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -76,7 +76,6 @@ class WrapNode(Node):
     params: dict = Field(default_factory=dict)
 
     def process(self, *args: PWrap.args, **kwargs: PWrap.kwargs) -> TOutput | None:
-
         kwargs.update(self.params)
         value = self.fn(*args, **kwargs)
         return_annotation = inspect.signature(self.fn).return_annotation
@@ -85,10 +84,7 @@ class WrapNode(Node):
         if inspect.isgenerator(value):
             value = next(value)
 
-        if len(names) == 1:
-            values = (value,)
-        else:
-            values = tuple(value)
+        values = (value,) if len(names) == 1 else tuple(value)
 
         event = {name: value for name, value in zip(names, values)}
         return event
@@ -111,7 +107,7 @@ class WrapNode(Node):
                 elif argument not in [type(None), None]:
                     names = ["value"]
 
-        elif return_annotation and not return_annotation is inspect.Signature.empty:
+        elif return_annotation and (return_annotation is not inspect.Signature.empty):
             names = ["value"]
 
         return names
