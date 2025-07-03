@@ -145,9 +145,6 @@ class Tube(BaseModel):
 
                 source_node, source_slot = source_signal.split(".")
 
-                if source_slot == "value":
-                    source_slot = None  # what if the user dubs the signal "value"?
-
                 edges.append(
                     Edge(
                         source_node=source_node,
