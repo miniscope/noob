@@ -3,6 +3,7 @@ from collections.abc import Generator
 from itertools import count
 from typing import Annotated as A
 
+import pytest
 from faker import Faker
 
 from noob import Name
@@ -57,47 +58,21 @@ class TestWrapNode:
     def return_empty():  # noqa: ANN205
         return False
 
-    def test_one_return(self):
-        return_annot = inspect.signature(self.one_return).return_annotation
+    @pytest.mark.parametrize(
+        "func, target",
+        [
+            (one_return, ["hey"]),
+            (two_returns, ["hey", "you"]),
+            (single_generator, ["you"]),
+            (double_generator, ["i can be your girlfriend", "you can be my boyfriend"]),
+            (unnamed_return, ["value"]),
+            (unnamed_tuple, ["value"]),
+            (unnamed_gen, ["value"]),
+            (return_none, []),
+            (return_empty, []),
+        ],
+    )
+    def test_collect_slot_names(self, func, target) -> None:
+        return_annot = inspect.signature(func).return_annotation
         names = WrapNode._collect_slot_names(return_annot)
-        assert names == ["hey"]
-
-    def test_two_returns(self):
-        return_annot = inspect.signature(self.two_returns).return_annotation
-        names = WrapNode._collect_slot_names(return_annot)
-        assert names == ["hey", "you"]
-
-    def test_single_generator(self):
-        return_annot = inspect.signature(self.single_generator).return_annotation
-        names = WrapNode._collect_slot_names(return_annot)
-        assert names == ["you"]
-
-    def test_double_generator(self):
-        return_annot = inspect.signature(self.double_generator).return_annotation
-        names = WrapNode._collect_slot_names(return_annot)
-        assert names == ["i can be your girlfriend", "you can be my boyfriend"]
-
-    def test_unnamed_return(self):
-        return_annot = inspect.signature(self.unnamed_return).return_annotation
-        names = WrapNode._collect_slot_names(return_annot)
-        assert names == ["value"]
-
-    def test_unnamed_tuple(self):
-        return_annot = inspect.signature(self.unnamed_tuple).return_annotation
-        names = WrapNode._collect_slot_names(return_annot)
-        assert names == ["value"]
-
-    def test_unnamed_gen(self):
-        return_annot = inspect.signature(self.unnamed_gen).return_annotation
-        names = WrapNode._collect_slot_names(return_annot)
-        assert names == ["value"]
-
-    def test_return_none(self):
-        return_annot = inspect.signature(self.return_none).return_annotation
-        names = WrapNode._collect_slot_names(return_annot)
-        assert names == []
-
-    def test_return_empty(self):
-        return_annot = inspect.signature(self.return_empty).return_annotation
-        names = WrapNode._collect_slot_names(return_annot)
-        assert names == []
+        assert names == target
