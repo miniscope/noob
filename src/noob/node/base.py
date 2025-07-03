@@ -78,8 +78,7 @@ class WrapNode(Node):
     def process(self, *args: PWrap.args, **kwargs: PWrap.kwargs) -> TOutput | None:
         kwargs.update(self.params)
         value = self.fn(*args, **kwargs)
-        return_annotation = inspect.signature(self.fn).return_annotation
-        names = self._collect_slot_names(return_annotation)
+        names = self.collect_slot_names(self.fn)
 
         if inspect.isgenerator(value):
             value = next(value)
@@ -89,8 +88,22 @@ class WrapNode(Node):
         event = {name: value for name, value in zip(names, values)}
         return event
 
+    def collect_slot_names(self, func: Callable) -> list[str]:
+        return_annotation = inspect.signature(func).return_annotation
+        return self._collect_slot_names(return_annotation)
+
     @staticmethod
     def _collect_slot_names(return_annotation: Annotated[Any, Any]) -> list[str]:
+        """
+        Recursive kernel for extracting name attribute of Name metadata from a type annotation.
+        If the outermost origin is `typing.Annotated`, it extracts all Name objects from its arguments and append.
+        If the outermost origin is `tuple` or `Generator`, grab the argument and recurses into this function.
+        If the outermost is `Generator`, or `tuple` but the inner layer isn't one of `Generator`, `tuple`, or
+        `Annotated`, assume it's an unnamed slot (no Name inside).
+        If the outermost is none of `Generator`, `tuple`, or `Annotated`, assume it's an unnamed slot.
+
+        Returns a list of names.
+        """
         from noob import Name
 
         names = []
