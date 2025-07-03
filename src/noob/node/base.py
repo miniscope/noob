@@ -1,7 +1,7 @@
 import inspect
 from abc import abstractmethod
-from collections.abc import Callable
-from typing import Any, ParamSpec, TypeVar
+from collections.abc import Callable, Generator
+from typing import Any, ParamSpec, TypeVar, get_args, get_origin, Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -76,8 +76,45 @@ class WrapNode(Node):
     params: dict = Field(default_factory=dict)
 
     def process(self, *args: PWrap.args, **kwargs: PWrap.kwargs) -> TOutput | None:
+
         kwargs.update(self.params)
-        return self.fn(**kwargs)
+        value = self.fn(*args, **kwargs)
+        return_annotation = inspect.signature(self.fn).return_annotation
+        names = self._collect_slot_names(return_annotation)
+
+        if inspect.isgenerator(value):
+            value = next(value)
+
+        if len(names) == 1:
+            values = (value,)
+        else:
+            values = tuple(value)
+
+        event = {name: value for name, value in zip(names, values)}
+        return event
+
+    @staticmethod
+    def _collect_slot_names(return_annotation: Annotated[Any, Any]) -> list[str]:
+        from noob import Name
+
+        names = []
+
+        if get_origin(return_annotation) is Annotated:
+            for argument in get_args(return_annotation):
+                if isinstance(argument, Name):
+                    names.append(argument.name)
+
+        elif get_origin(return_annotation) in [tuple, Generator]:
+            for argument in get_args(return_annotation):
+                if get_origin(argument) in [Annotated, Generator, tuple]:
+                    names += WrapNode._collect_slot_names(argument)
+                elif argument is not type(None):
+                    names = ["value"]
+
+        elif return_annotation and not return_annotation is inspect.Signature.empty:
+            names = ["value"]
+
+        return names
 
 
 class Edge(BaseModel):
