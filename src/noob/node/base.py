@@ -108,7 +108,7 @@ class WrapNode(Node):
             for argument in get_args(return_annotation):
                 if get_origin(argument) in [Annotated, Generator, tuple]:
                     names += WrapNode._collect_slot_names(argument)
-                elif argument is not type(None):
+                elif argument not in [type(None), None]:
                     names = ["value"]
 
         elif return_annotation and not return_annotation is inspect.Signature.empty:
