@@ -131,10 +131,10 @@ class Tube(BaseModel):
         dependency_map = {id_: spec.depends for id_, spec in node_spec.items() if spec.depends}
         for target_node, slot_inputs in dependency_map.items():
             for arrow in slot_inputs:
-                if isinstance(arrow, Mapping):
+                if isinstance(arrow, Mapping):  # keyword argument
                     target_slot, source_signal = next(iter(arrow.items()))
 
-                elif isinstance(arrow, str):
+                elif isinstance(arrow, str):  # positional argument
                     target_slot = None
                     source_signal = arrow
 
