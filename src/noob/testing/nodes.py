@@ -12,7 +12,7 @@ from noob import Name
 
 def count_source(limit: int = 10, start: int = 0) -> Generator[A[int, Name("index")], None, None]:
     counter = count(start=start)
-    while val := next(counter) < limit:
+    while (val := next(counter)) < limit:
         yield val
 
 
@@ -26,7 +26,7 @@ def word_source() -> Generator[A[str, Name("word")]]:
         yield fake.unique.word()
 
 
-def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")], None, None]:
+def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")] | None, None, None]:
     fake = Faker()
     i = 0
     while True:
