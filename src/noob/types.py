@@ -39,9 +39,9 @@ def _is_absolute_identifier(val: str) -> str:
         return val
 
     if "." not in val:
-        assert val in builtins.__dict__, (
-            "If not an absolute module.Object identifier, must be in builtins"
-        )
+        assert (
+            val in builtins.__dict__
+        ), "If not an absolute module.Object identifier, must be in builtins"
         return val
 
     assert not val.startswith("."), "Cannot use relative identifiers"
