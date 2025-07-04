@@ -12,22 +12,30 @@ class Return(Node):
     Special sink node that returns values from a tube runner's `process` method
     """
 
-    _value: dict | None = None
+    _args: tuple | None = None
+    _kwargs: dict | None = None
 
-    def process(self, **kwargs: Any) -> None:
+    def process(self, *args: Any, **kwargs: Any) -> None:
         """
         Store the incoming value to retrieve later with :meth:`.get`
         """
-        if self._value is None:
-            self._value = kwargs
+        if self._args is None:
+            self._args = args
         else:
-            self._value.update(kwargs)
+            self._args += args
 
-    def get(self) -> dict | None:
+        if self._kwargs is None:
+            self._kwargs = kwargs
+        else:
+            self._kwargs.update(kwargs)
+
+    def get(self, keep: bool) -> Any | None:
         """
         Get the stored value from the process call, clearing it.
         """
         try:
-            return self._value
+            return self._args, self._kwargs
         finally:
-            self._value = None
+            if not keep:
+                self._args = None
+                self._kwargs = None
