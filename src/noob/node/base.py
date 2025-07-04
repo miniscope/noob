@@ -3,7 +3,7 @@ from abc import abstractmethod
 from collections.abc import Callable, Generator
 from typing import Annotated, Any, ParamSpec, TypeVar, get_args, get_origin
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from noob.node.spec import NodeSpecification
 from noob.utils import resolve_python_identifier
@@ -74,6 +74,7 @@ class Node(BaseModel):
 class WrapNode(Node):
     fn: Callable[PWrap, TOutput]
     params: dict = Field(default_factory=dict)
+    _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
 
     def process(self, *args: PWrap.args, **kwargs: PWrap.kwargs) -> TOutput | None:
         kwargs.update(self.params)
@@ -81,7 +82,9 @@ class WrapNode(Node):
         names = self.collect_slot_names(self.fn)
 
         if inspect.isgenerator(value):
-            value = next(value)
+            if self._gen is None:
+                self._gen = value
+            value = next(self._gen)
 
         values = (value,) if len(names) == 1 else tuple(value)
 
