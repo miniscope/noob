@@ -72,7 +72,7 @@ class TubeRunner(ABC):
         """
         pass
 
-    def gather_input(self, node: Node) -> dict[str, Any] | None:
+    def gather_input(self, node: Node) -> tuple[list[Any] | None, dict[str, Any] | None]:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
 
@@ -82,7 +82,7 @@ class TubeRunner(ABC):
             None: if no input is available
         """
         if not node.spec.depends:
-            return {}
+            return None, None
 
         edges = self.tube.in_edges(node)
         return self.store.gather(edges)
@@ -96,18 +96,22 @@ class TubeRunner(ABC):
             dict: of the Return sink's key mapped to the returned value,
             None: if there are no :class:`.Return` sinks in the tube
         """
-        ret = {}
-        for sink in self.tube.sinks.values():
-            if sink.name != "return":
-                continue
-            sink: Return
-            val = sink.get(keep=False)
-            ret.update(val)
+        pos_ret = []
+        kw_ret = {}
 
-        if not ret:
-            return None
-        else:
-            return ret
+        for node in self.tube.nodes.values():
+            if not isinstance(node, Return):
+                continue
+            node: Return
+            args, kwargs = node.get(keep=False)
+            if args:
+                pos_ret += args
+            if kwargs:
+                kw_ret.update(kwargs)
+
+        if pos_ret and kw_ret:
+            return pos_ret, kw_ret
+        return pos_ret or kw_ret
 
 
 @dataclass
@@ -166,8 +170,13 @@ class SynchronousRunner(TubeRunner):
         while graph.is_active():
             for node_id in graph.get_ready():
                 node = self.tube.nodes[node_id]
-                node_input = self.gather_input(node)
-                value = node.process(**node_input)
+                args, kwargs = self.gather_input(node)
+
+                # need to eventually distinguish "still waiting" vs "there is none"
+                args = [] if args is None else args
+                kwargs = {} if kwargs is None else kwargs
+
+                value = node.process(*args, **kwargs)
                 self.store.add(value, node_id)
                 graph.done(node_id)
                 self._logger.debug(f"Node {node_id} emitted %s", value)
