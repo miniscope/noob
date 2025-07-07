@@ -54,6 +54,7 @@ class Gather(Node):
                 finally:
                     # clear list after returning
                     self._items = []
+            return None
 
     def _should_return(self, trigger: Any | None) -> bool:
         return (self.n is not None and len(self._items) >= self.n) or (
