@@ -5,10 +5,11 @@ nodes:
   a:
     type: noob.testing.word_counts
   b0:
-    type: concat # special node to take multiple dependencies and return as a list
+    type: gather # special node to take multiple dependencies and return as a list
+    param:
+      n: a.count
     depends:
-      - a.counts
-      - a.other_value
+      - value: a.word
   b1:
     type: sum # should be possible to just use builtins
     depends:
