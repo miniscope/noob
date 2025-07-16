@@ -130,29 +130,45 @@ class Tube(BaseModel):
 
         dependency_map = {id_: spec.depends for id_, spec in node_spec.items() if spec.depends}
         for target_node, slot_inputs in dependency_map.items():
-            for arrow in slot_inputs:
-                if isinstance(arrow, Mapping):  # keyword argument
-                    target_slot, source_signal = next(iter(arrow.items()))
-
-                elif isinstance(arrow, str):  # positional argument
-                    target_slot = None
-                    source_signal = arrow
-
-                else:
-                    raise NotImplementedError(
-                        "Only supporting signal-slot mapping or node pointer."
-                    )
-
-                source_node, source_slot = source_signal.split(".")
-
+            if isinstance(slot_inputs, str):
+                # handle scalar dependency like
+                # depends: node.slot
+                source_node, source_slot = slot_inputs.split(".")
                 edges.append(
                     Edge(
                         source_node=source_node,
                         source_slot=source_slot,
                         target_node=target_node,
-                        target_slot=target_slot,
+                        target_slot=None,
                     )
                 )
+            else:
+                # handle arrays of dependencies, positional and kwargs
+                position_index = 0
+                for arrow in slot_inputs:
+                    if isinstance(arrow, Mapping):  # keyword argument
+                        target_slot, source_signal = next(iter(arrow.items()))
+
+                    elif isinstance(arrow, str):  # positional argument
+                        target_slot = position_index
+                        source_signal = arrow
+                        position_index += 1
+
+                    else:
+                        raise NotImplementedError(
+                            "Only supporting signal-slot mapping or node pointer."
+                        )
+
+                    source_node, source_slot = source_signal.split(".")
+
+                    edges.append(
+                        Edge(
+                            source_node=source_node,
+                            source_slot=source_slot,
+                            target_node=target_node,
+                            target_slot=target_slot,
+                        )
+                    )
 
         return edges
 

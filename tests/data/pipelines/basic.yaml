@@ -10,5 +10,4 @@ nodes:
     - left: a.index
   c:
     type: return
-    depends:
-      - b.value
+    depends: b.value

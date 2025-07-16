@@ -140,4 +140,9 @@ class Edge(BaseModel):
     source_node: str
     source_slot: str | None = None
     target_node: str
-    target_slot: str | None = None
+    target_slot: str | int | None = None
+    """
+    - For kwargs, target_slot is the name of the kwarg that the value is passed to.
+    - For positional arguments, target_slot is an integer that indicates the index of the arg
+    - For scalar arguments, target slot is None 
+    """
