@@ -34,7 +34,17 @@ class Return(Node):
         Get the stored value from the process call, clearing it.
         """
         try:
-            return self._args, self._kwargs
+            # FIXME: what a nightmare - make all of these derive from the spec
+            if isinstance(self.spec.depends, str):
+                return self._args[0]
+            elif self._args and self._kwargs:
+                return self._args, self._kwargs
+            elif self._args:
+                return self._args
+            elif self._kwargs:
+                return self._kwargs
+            else:
+                return None
         finally:
             if not keep:
                 self._args = None

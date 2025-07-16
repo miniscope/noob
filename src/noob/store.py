@@ -78,6 +78,7 @@ class EventStore:
         """
         args = []
         kwargs = {}
+        edges = self._sort_edges(edges)
         for edge in edges:
             event = self.get(edge.source_node, edge.source_slot)
             value = None if event is None else event["value"]
@@ -90,6 +91,18 @@ class EventStore:
         kwargs = None if not kwargs or all(val is None for val in kwargs.values()) else kwargs
 
         return args, kwargs
+
+    def _sort_edges(self, edges: list[Edge]) -> list[Edge]:
+        """
+        Sort edges such that
+        - positional arguments come first
+        - positional arguments are in order
+        - then kwargs come next and are also sorted
+        """
+        # FIXME: test this
+        return sorted(
+            edges, key=lambda item: (not isinstance(item.target_slot, int), item.target_slot)
+        )
 
     def clear(self) -> None:
         """

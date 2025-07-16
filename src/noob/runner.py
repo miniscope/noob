@@ -96,22 +96,11 @@ class TubeRunner(ABC):
             dict: of the Return sink's key mapped to the returned value,
             None: if there are no :class:`.Return` sinks in the tube
         """
-        pos_ret = []
-        kw_ret = {}
-
-        for node in self.tube.nodes.values():
-            if not isinstance(node, Return):
-                continue
-            node: Return
-            args, kwargs = node.get(keep=False)
-            if args:
-                pos_ret += args
-            if kwargs:
-                kw_ret.update(kwargs)
-
-        if pos_ret and kw_ret:
-            return pos_ret, kw_ret
-        return pos_ret or kw_ret
+        ret_nodes = [n for n in self.tube.nodes.values() if isinstance(n, Return)]
+        if not ret_nodes:
+            return None
+        ret_node = ret_nodes[0]
+        return ret_node.get(keep=False)
 
 
 @dataclass

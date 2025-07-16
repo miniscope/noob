@@ -19,5 +19,4 @@ nodes:
     - denominator: b.index
   e:
     type: return
-    depends:
-    - d.ratio
+    depends: d.ratio
