@@ -166,7 +166,7 @@ class SynchronousRunner(TubeRunner):
                 kwargs = {} if kwargs is None else kwargs
 
                 value = node.process(*args, **kwargs)
-                self.store.add(value, node_id)
+                self.store.add(node.slots, value, node_id)
                 graph.done(node_id)
                 self._logger.debug(f"Node {node_id} emitted %s", value)
 
