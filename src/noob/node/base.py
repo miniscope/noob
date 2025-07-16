@@ -22,6 +22,8 @@ class Node(BaseModel):
     """Unique identifier of the node"""
     spec: NodeSpecification
 
+    _slots: list[str] = PrivateAttr(default_factory=list)
+
     model_config = ConfigDict(extra="forbid")
 
     def init(self) -> None:
@@ -70,28 +72,20 @@ class Node(BaseModel):
         else:
             return WrapNode(id=spec.id, fn=obj, spec=spec, params=params)
 
+    @property
+    def slots(self) -> list[str]:
+        return self._slots
+
 
 class WrapNode(Node):
     fn: Callable[PWrap, TOutput]
     params: dict = Field(default_factory=dict)
     _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
 
-    def process(self, *args: PWrap.args, **kwargs: PWrap.kwargs) -> TOutput | None:
-        kwargs.update(self.params)
-        value = self.fn(*args, **kwargs)
-        names = self.collect_slot_names(self.fn)
+    def model_post_init(self, __context: None = None) -> None:
+        self._slots = self.collect_return_names(self.fn)
 
-        if inspect.isgenerator(value):
-            if self._gen is None:
-                self._gen = value
-            value = next(self._gen)
-
-        values = (value,) if len(names) == 1 else tuple(value)
-
-        event = {name: value for name, value in zip(names, values)}
-        return event
-
-    def collect_slot_names(self, func: Callable) -> list[str]:
+    def collect_return_names(self, func: Callable) -> list[str]:
         return_annotation = inspect.signature(func).return_annotation
         return self._collect_slot_names(return_annotation)
 
@@ -130,6 +124,17 @@ class WrapNode(Node):
             names = ["value"]
 
         return names
+
+    def process(self, *args: PWrap.args, **kwargs: PWrap.kwargs) -> TOutput | None:
+        kwargs.update(self.params)
+        value = self.fn(*args, **kwargs)
+
+        if inspect.isgenerator(value):
+            if self._gen is None:
+                self._gen = value
+            value = next(self._gen)
+
+        return value
 
 
 class Edge(BaseModel):

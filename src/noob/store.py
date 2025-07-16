@@ -21,7 +21,7 @@ class EventStore:
     events: MutableSequence = field(default_factory=list)
     counter: count = field(default_factory=count)
 
-    def add(self, values: dict[str, Any], node_id: str) -> None:
+    def add(self, slots: Any, value: Any, node_id: str) -> None:
         """
         Add the result of a :meth:`.Node.process` call to the event store.
 
@@ -29,20 +29,24 @@ class EventStore:
         store along with current timestamp
 
         Args:
-            values (dict): Dict emitted by a :meth:`.Node.process` call
+            slots (Any): Slots from which the value was emitted by a :meth:`.Node.process` call
+            value (Any): Value emitted by a :meth:`.Node.process` call
             node_id (str): ID of the node that emitted the events
         """
-        if values is None:
+        if value is None:
             return
         timestamp = datetime.now()
-        for slot, value in values.items():
+
+        values = [value] if len(slots) == 1 else value
+
+        for slot, val in zip(slots, values):
             self.events.append(
                 Event(
                     id=next(self.counter),
                     timestamp=timestamp,
                     node_id=node_id,
                     slot=slot,
-                    value=value,
+                    value=val,
                 )
             )
 
