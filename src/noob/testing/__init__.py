@@ -5,6 +5,7 @@ from noob.testing.nodes import (
     divide,
     exclaim,
     letter_source,
+    multi_words_source,
     multiply,
     repeat,
     sporadic_word,
@@ -24,4 +25,5 @@ __all__ = [
     "sporadic_word",
     "word_counts",
     "word_source",
+    "multi_words_source",
 ]

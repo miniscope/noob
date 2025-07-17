@@ -83,9 +83,12 @@ class WrapNode(Node):
     _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
 
     def model_post_init(self, __context: None = None) -> None:
-        self._slots = self.collect_return_names(self.fn)
+        self._slots = self.collect_slot_names(self.fn)
 
-    def collect_return_names(self, func: Callable) -> list[str]:
+    def collect_slot_names(self, func: Callable) -> list[str]:
+        if getattr(func, "__module__", None) == "builtins":
+            return ["value"]
+
         return_annotation = inspect.signature(func).return_annotation
         return self._collect_slot_names(return_annotation)
 

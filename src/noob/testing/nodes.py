@@ -26,6 +26,12 @@ def word_source() -> Generator[A[str, Name("word")]]:
         yield fake.unique.word()
 
 
+def multi_words_source(n: int) -> Generator[A[list[str], Name("multi_words")]]:
+    fake = Faker()
+    while True:
+        yield [fake.unique.word() for _ in range(n)]
+
+
 def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")] | None, None, None]:
     fake = Faker()
     i = 0
