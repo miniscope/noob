@@ -74,5 +74,5 @@ class TestWrapNode:
     )
     def test_collect_slot_names(self, func, target) -> None:
         return_annot = inspect.signature(func).return_annotation
-        names = WrapNode._collect_slot_names(return_annot)
+        names = WrapNode._collect_signal_names(return_annot)
         assert names == target

@@ -133,11 +133,11 @@ class Tube(BaseModel):
             if isinstance(slot_inputs, str):
                 # handle scalar dependency like
                 # depends: node.slot
-                source_node, source_slot = slot_inputs.split(".")
+                source_node, source_signal = slot_inputs.split(".")
                 edges.append(
                     Edge(
                         source_node=source_node,
-                        source_slot=source_slot,
+                        source_signal=source_signal,
                         target_node=target_node,
                         target_slot=None,
                     )
@@ -159,12 +159,12 @@ class Tube(BaseModel):
                             "Only supporting signal-slot mapping or node pointer."
                         )
 
-                    source_node, source_slot = source_signal.split(".")
+                    source_node, source_signal = source_signal.split(".")
 
                     edges.append(
                         Edge(
                             source_node=source_node,
-                            source_slot=source_slot,
+                            source_signal=source_signal,
                             target_node=target_node,
                             target_slot=target_slot,
                         )

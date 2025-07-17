@@ -22,7 +22,7 @@ class Node(BaseModel):
     """Unique identifier of the node"""
     spec: NodeSpecification
 
-    _slots: list[str] = PrivateAttr(default_factory=list)
+    _signals: list[str] = PrivateAttr(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -73,8 +73,8 @@ class Node(BaseModel):
             return WrapNode(id=spec.id, fn=obj, spec=spec, params=params)
 
     @property
-    def slots(self) -> list[str]:
-        return self._slots
+    def signals(self) -> list[str]:
+        return self._signals
 
 
 class WrapNode(Node):
@@ -83,17 +83,17 @@ class WrapNode(Node):
     _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
 
     def model_post_init(self, __context: None = None) -> None:
-        self._slots = self.collect_slot_names(self.fn)
+        self._signals = self.collect_signal_names(self.fn)
 
-    def collect_slot_names(self, func: Callable) -> list[str]:
+    def collect_signal_names(self, func: Callable) -> list[str]:
         if getattr(func, "__module__", None) == "builtins":
             return ["value"]
 
         return_annotation = inspect.signature(func).return_annotation
-        return self._collect_slot_names(return_annotation)
+        return self._collect_signal_names(return_annotation)
 
     @staticmethod
-    def _collect_slot_names(return_annotation: Annotated[Any, Any]) -> list[str]:
+    def _collect_signal_names(return_annotation: Annotated[Any, Any]) -> list[str]:
         """
         Recursive kernel for extracting name attribute of Name metadata from a type annotation.
         If the outermost origin is `typing.Annotated`, it extracts all Name objects from its
@@ -101,9 +101,9 @@ class WrapNode(Node):
         If the outermost origin is `tuple` or `Generator`, grab the argument and recurses into
         this function.
         If the outermost is `Generator`, or `tuple` but the inner layer isn't one of `Generator`,
-        `tuple`, or `Annotated`, assume it's an unnamed slot (no Name inside).
+        `tuple`, or `Annotated`, assume it's an unnamed signal (no Name inside).
         If the outermost is none of `Generator`, `tuple`, or `Annotated`, assume it's an unnamed
-        slot.
+        signal.
 
         Returns a list of names.
         """
@@ -119,7 +119,7 @@ class WrapNode(Node):
         elif get_origin(return_annotation) in [tuple, Generator]:
             for argument in get_args(return_annotation):
                 if get_origin(argument) in [Annotated, Generator, tuple]:
-                    names += WrapNode._collect_slot_names(argument)
+                    names += WrapNode._collect_signal_names(argument)
                 elif argument not in [type(None), None]:
                     names = ["value"]
 
@@ -146,7 +146,7 @@ class Edge(BaseModel):
     """
 
     source_node: str
-    source_slot: str | None = None
+    source_signal: str | None = None
     target_node: str
     target_slot: str | int | None = None
     """

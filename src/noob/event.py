@@ -19,7 +19,7 @@ class Event(TypedDict):
     """Timestamp of when the event was received by the :class:`.TubeRunner`"""
     node_id: str
     """ID of node that emitted the event"""
-    slot: str
-    """name of the slot that emitted the event"""
+    signal: str
+    """name of the signal that emitted the event"""
     value: Any
     """Value emitted by the processing node"""
