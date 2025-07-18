@@ -119,9 +119,6 @@ class WrapNode(Node):
         self._signals = self.collect_signal_names(self.fn)
 
     def collect_signal_names(self, func: Callable) -> list[str]:
-        if getattr(func, "__module__", None) == "builtins":
-            return ["value"]
-
         return_annotation = inspect.signature(func).return_annotation
         return self._collect_signal_names(return_annotation)
 
