@@ -21,7 +21,7 @@ class EventStore:
     events: MutableSequence = field(default_factory=list)
     counter: count = field(default_factory=count)
 
-    def add(self, signals: Any, value: Any, node_id: str) -> None:
+    def add(self, signals: Any, value: Any, node_id: str) -> list[Event] | None:
         """
         Add the result of a :meth:`.Node.process` call to the event store.
 
@@ -39,16 +39,18 @@ class EventStore:
 
         values = [value] if len(signals) == 1 else value
 
+        new_events = []
         for signal, val in zip(signals, values):
-            self.events.append(
-                Event(
-                    id=next(self.counter),
-                    timestamp=timestamp,
-                    node_id=node_id,
-                    signal=signal,
-                    value=val,
-                )
+            new_event = Event(
+                id=next(self.counter),
+                timestamp=timestamp,
+                node_id=node_id,
+                signal=signal,
+                value=val,
             )
+            self.events.append(new_event)
+            new_events.append(new_event)
+        return new_events
 
     def get(self, node_id: str, signal: str) -> Event | None:
         """

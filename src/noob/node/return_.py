@@ -4,7 +4,7 @@ Special Return sink that tube runners use to return values from :meth:`.TubeRunn
 
 from typing import Any
 
-from noob.node.base import Node
+from noob.node.base import Node, Slot
 
 
 class Return(Node):
@@ -49,3 +49,14 @@ class Return(Node):
             if not keep:
                 self._args = None
                 self._kwargs = None
+
+    def _collect_slots(self) -> dict[str, Slot]:
+        if isinstance(self.spec.depends, str):
+            return {}
+        slots = {}
+        for dep in self.spec.depends:
+            if isinstance(dep, str):
+                continue
+            name = list(dep.keys())[0]
+            slots[name] = Slot(name=name, annotation=Any)
+        return slots

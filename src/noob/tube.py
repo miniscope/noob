@@ -72,7 +72,9 @@ class Tube(BaseModel):
         """
         sorter = TopologicalSorter()
         for node_id in self.nodes:
-            in_edges = [e.source_node for e in self.edges if e.target_node == node_id]
+            in_edges = [
+                e.source_node for e in self.edges if e.target_node == node_id and e.required
+            ]
             sorter.add(node_id, *in_edges)
         return sorter
 
@@ -115,7 +117,7 @@ class Tube(BaseModel):
         spec = TubeSpecification.from_any(spec)
 
         nodes = cls._init_nodes(spec)
-        edges = cls._init_edges(spec.nodes)
+        edges = cls._init_edges(spec.nodes, nodes)
 
         return cls(nodes=nodes, edges=edges)
 
@@ -125,7 +127,9 @@ class Tube(BaseModel):
         return nodes
 
     @classmethod
-    def _init_edges(cls, node_spec: dict[str, NodeSpecification]) -> list[Edge]:
+    def _init_edges(
+        cls, node_spec: dict[str, NodeSpecification], nodes: dict[str, Node]
+    ) -> list[Edge]:
         edges = []
 
         dependency_map = {id_: spec.depends for id_, spec in node_spec.items() if spec.depends}
@@ -146,8 +150,10 @@ class Tube(BaseModel):
                 # handle arrays of dependencies, positional and kwargs
                 position_index = 0
                 for arrow in slot_inputs:
+                    required = True
                     if isinstance(arrow, Mapping):  # keyword argument
                         target_slot, source_signal = next(iter(arrow.items()))
+                        required = nodes[target_node].slots[target_slot].required
 
                     elif isinstance(arrow, str):  # positional argument
                         target_slot = position_index
@@ -167,6 +173,7 @@ class Tube(BaseModel):
                             source_signal=source_signal,
                             target_node=target_node,
                             target_slot=target_slot,
+                            required=required,
                         )
                     )
 
