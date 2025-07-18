@@ -129,6 +129,7 @@ class SynchronousRunner(TubeRunner):
 
     Just run the nodes in topological order and return from return nodes.
     """
+
     MAX_ITER_LOOPS = 100
     """The max number of times that `iter` will call `process` to try and get a result"""
 
