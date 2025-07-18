@@ -5,6 +5,7 @@ from typing import Annotated, Any, ParamSpec, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
 from noob.utils import resolve_python_identifier
 
@@ -15,6 +16,25 @@ Output Type typevar
 PWrap = ParamSpec("PWrap")
 
 
+class Slot(BaseModel):
+    name: str
+    annotation: Any
+    required: bool = True
+
+    @classmethod
+    def from_callable(cls, func: Callable) -> dict[str, "Slot"]:
+        slots = {}
+        sig = inspect.signature(func)
+
+        for name, param in sig.parameters.items():
+            slots[name] = Slot(
+                name=name,
+                annotation=param.annotation,
+                required=not (is_optional(param.annotation) and param.default is None),
+            )
+        return slots
+
+
 class Node(BaseModel):
     """A node within a processing tube"""
 
@@ -23,6 +43,7 @@ class Node(BaseModel):
     spec: NodeSpecification
 
     _signals: list[str] = PrivateAttr(default_factory=list)
+    _slots: dict[str, Slot] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -74,7 +95,19 @@ class Node(BaseModel):
 
     @property
     def signals(self) -> list[str]:
-        return self._signals
+        if not self._signals:
+            return ["value"]
+        else:
+            return self._signals
+
+    @property
+    def slots(self) -> dict[str, Slot]:
+        if self._slots is None:
+            self._slots = self._collect_slots()
+        return self._slots
+
+    def _collect_slots(self) -> dict[str, Slot]:
+        return Slot.from_callable(self.process)
 
 
 class WrapNode(Node):
@@ -111,14 +144,19 @@ class WrapNode(Node):
 
         names = []
 
+        # --- get yield type of generators before handling other types
+        if get_origin(return_annotation) is Generator:
+            return_annotation = get_args(return_annotation)[0]
+        # ---
+
         if get_origin(return_annotation) is Annotated:
             for argument in get_args(return_annotation):
                 if isinstance(argument, Name):
                     names.append(argument.name)
 
-        elif get_origin(return_annotation) in [tuple, Generator]:
+        elif get_origin(return_annotation) is tuple or is_union(return_annotation):
             for argument in get_args(return_annotation):
-                if get_origin(argument) in [Annotated, Generator, tuple]:
+                if get_origin(argument) in [Annotated, tuple]:
                     names += WrapNode._collect_signal_names(argument)
                 elif argument not in [type(None), None]:
                     names = ["value"]
@@ -128,6 +166,9 @@ class WrapNode(Node):
 
         return names
 
+    def _collect_slots(self) -> dict[str, Slot]:
+        return Slot.from_callable(self.fn)
+
     def process(self, *args: PWrap.args, **kwargs: PWrap.kwargs) -> TOutput | None:
         kwargs.update(self.params)
         value = self.fn(*args, **kwargs)
@@ -135,7 +176,11 @@ class WrapNode(Node):
         if inspect.isgenerator(value):
             if self._gen is None:
                 self._gen = value
-            value = next(self._gen)
+            try:
+                value = next(self._gen)
+            except StopIteration as e:
+                # generator is exhausted
+                raise RuntimeError("Generator node stopped its iteration") from e
 
         return value
 
@@ -154,3 +199,4 @@ class Edge(BaseModel):
     - For positional arguments, target_slot is an integer that indicates the index of the arg
     - For scalar arguments, target slot is None 
     """
+    required: bool = True
