@@ -8,6 +8,7 @@ from typing import Any
 from faker import Faker
 
 from noob import Name
+from noob.node import Node
 
 
 def count_source(limit: int = 1000, start: int = 0) -> Generator[A[int, Name("index")], None, None]:
@@ -76,3 +77,17 @@ def repeat(string: str, times: int) -> str:
 
 def dictify(key: str, items: list[Any]) -> dict[str, Any]:
     return {key: items}
+
+
+class CountSource(Node):
+    limit: int = 1000
+    start: int = 0
+
+    def process(self) -> Generator[A[int, Name("index")], None, None]:
+        return count_source(limit=self.limit, start=self.start)
+
+
+class Multiply(Node):
+
+    def process(self, left: int, right: int = 2) -> A[int, Name("product")]:
+        return multiply(left=left, right=right)

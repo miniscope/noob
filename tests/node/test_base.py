@@ -7,7 +7,8 @@ import pytest
 from faker import Faker
 
 from noob import Name
-from noob.node.base import WrapNode
+from noob.node import NodeSpecification
+from noob.node.base import Node, WrapNode
 
 
 class TestWrapNode:
@@ -72,7 +73,28 @@ class TestWrapNode:
             (return_empty, []),
         ],
     )
-    def test_collect_slot_names(self, func, target) -> None:
+    def test_collect_signal_names(self, func, target) -> None:
         return_annot = inspect.signature(func).return_annotation
         names = WrapNode._collect_signal_names(return_annot)
         assert names == target
+
+
+class TestNode:
+    @pytest.mark.parametrize(
+        "type, params, expected",
+        [
+            ("noob.testing.CountSource", {"limit": 10, "start": 5}, ["index"]),
+            ("noob.testing.Multiply", {}, ["product"]),
+        ],
+    )
+    def test_node_subclass_signal(self, type, params, expected):
+        node = Node.from_specification(
+            spec=NodeSpecification(
+                id="test_node_subclass_signal",
+                type=type,
+                params=params,
+                depends=None,
+            )
+        )
+
+        assert node.signals == expected

@@ -1,4 +1,6 @@
 from noob.testing.nodes import (
+    CountSource,
+    Multiply,
     concat,
     count_source,
     dictify,
@@ -26,4 +28,6 @@ __all__ = [
     "word_counts",
     "word_source",
     "multi_words_source",
+    "CountSource",
+    "Multiply",
 ]

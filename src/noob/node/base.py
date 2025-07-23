@@ -42,7 +42,7 @@ class Node(BaseModel):
     """Unique identifier of the node"""
     spec: NodeSpecification
 
-    _signals: list[str] = PrivateAttr(default_factory=list)
+    _signals: list[str] = None
     _slots: dict[str, Slot] = None
 
     model_config = ConfigDict(extra="forbid")
@@ -95,6 +95,8 @@ class Node(BaseModel):
 
     @property
     def signals(self) -> list[str]:
+        if self._signals is None:
+            self._signals = self.collect_signal_names(self.process)
         if not self._signals:
             return ["value"]
         else:
@@ -108,15 +110,6 @@ class Node(BaseModel):
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)
-
-
-class WrapNode(Node):
-    fn: Callable[PWrap, TOutput]
-    params: dict = Field(default_factory=dict)
-    _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
-
-    def model_post_init(self, __context: None = None) -> None:
-        self._signals = self.collect_signal_names(self.fn)
 
     def collect_signal_names(self, func: Callable) -> list[str]:
         return_annotation = inspect.signature(func).return_annotation
@@ -162,6 +155,15 @@ class WrapNode(Node):
             names = ["value"]
 
         return names
+
+
+class WrapNode(Node):
+    fn: Callable[PWrap, TOutput]
+    params: dict = Field(default_factory=dict)
+    _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
+
+    def model_post_init(self, __context: None = None) -> None:
+        self._signals = self.collect_signal_names(self.fn)
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.fn)
