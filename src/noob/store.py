@@ -10,6 +10,7 @@ from typing import Any
 
 from noob.event import Event
 from noob.node import Edge
+from noob.node.base import Signal
 
 
 @dataclass
@@ -21,7 +22,7 @@ class EventStore:
     events: MutableSequence = field(default_factory=list)
     counter: count = field(default_factory=count)
 
-    def add(self, signals: Any, value: Any, node_id: str) -> list[Event] | None:
+    def add(self, signals: list[Signal], value: Any, node_id: str) -> list[Event] | None:
         """
         Add the result of a :meth:`.Node.process` call to the event store.
 
@@ -45,7 +46,7 @@ class EventStore:
                 id=next(self.counter),
                 timestamp=timestamp,
                 node_id=node_id,
-                signal=signal,
+                signal=signal.name,
                 value=val,
             )
             self.events.append(new_event)

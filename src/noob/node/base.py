@@ -1,6 +1,7 @@
 import inspect
 from abc import abstractmethod
 from collections.abc import Callable, Generator
+from types import GenericAlias, NoneType, UnionType
 from typing import Annotated, Any, ParamSpec, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -35,6 +36,70 @@ class Slot(BaseModel):
         return slots
 
 
+class Signal(BaseModel):
+    name: str
+    type_: type | NoneType | UnionType | GenericAlias
+
+    class Config:
+        # Unable to generate pydantic-core schema for <class 'types.UnionType'>
+        arbitrary_types_allowed = True
+
+    @classmethod
+    def from_callable(cls, func: Callable) -> list["Signal"]:
+        signals = []
+        return_annotation = inspect.signature(func).return_annotation
+        for name, type_ in cls._collect_signal_names(return_annotation):
+            signals.append(Signal(name=name, type_=type_))
+        return signals
+
+    @classmethod
+    def _collect_signal_names(
+        cls, return_annotation: Annotated[Any, Any]
+    ) -> list[tuple[str, type]]:
+        """
+        Recursive kernel for extracting name attribute of Name metadata from a type annotation.
+        If the outermost origin is `typing.Annotated`, it extracts all Name objects from its
+        arguments and append.
+        If the outermost origin is `tuple` or `Generator`, grab the argument and recurses into
+        this function.
+        If the outermost is `Generator`, or `tuple` but the inner layer isn't one of `Generator`,
+        `tuple`, or `Annotated`, assume it's an unnamed signal (no Name inside).
+        If the outermost is none of `Generator`, `tuple`, or `Annotated`, assume it's an unnamed
+        signal.
+
+        Returns a list of names.
+        """
+        from noob import Name
+
+        default_name = "value"
+        names = []
+
+        # --- get yield type of generators before handling other types
+        if get_origin(return_annotation) is Generator:
+            return_annotation = get_args(return_annotation)[0]
+        # ---
+
+        # def func() -> Annotated[...]
+        if get_origin(return_annotation) is Annotated:
+            for argument in get_args(return_annotation):
+                if isinstance(argument, Name):
+                    names.append((argument.name, get_args(return_annotation)[0]))
+
+        # def func() -> tuple[...]: OR def func() -> A | B:
+        elif get_origin(return_annotation) is tuple or is_union(return_annotation):
+            for argument in get_args(return_annotation):
+                if get_origin(argument) in [Annotated, tuple]:
+                    names += Signal._collect_signal_names(argument)
+                elif argument not in [type(None), None]:
+                    names = [(default_name, return_annotation)]
+
+        # def func() -> type:
+        elif return_annotation and (return_annotation is not inspect.Signature.empty):
+            names = [(default_name, return_annotation)]
+
+        return names
+
+
 class Node(BaseModel):
     """A node within a processing tube"""
 
@@ -42,7 +107,7 @@ class Node(BaseModel):
     """Unique identifier of the node"""
     spec: NodeSpecification
 
-    _signals: list[str] = None
+    _signals: list[Signal] = None
     _slots: dict[str, Slot] = None
 
     model_config = ConfigDict(extra="forbid")
@@ -94,13 +159,16 @@ class Node(BaseModel):
             return WrapNode(id=spec.id, fn=obj, spec=spec, params=params)
 
     @property
-    def signals(self) -> list[str]:
+    def signals(self) -> list[Signal]:
         if self._signals is None:
-            self._signals = self.collect_signal_names(self.process)
+            self._signals = self._collect_signals()
         if not self._signals:
-            return ["value"]
+            return [Signal(name="value", type_=Any)]
         else:
             return self._signals
+
+    def _collect_signals(self) -> list[Signal]:
+        return Signal.from_callable(self.process)
 
     @property
     def slots(self) -> dict[str, Slot]:
@@ -111,59 +179,14 @@ class Node(BaseModel):
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)
 
-    def collect_signal_names(self, func: Callable) -> list[str]:
-        return_annotation = inspect.signature(func).return_annotation
-        return self._collect_signal_names(return_annotation)
-
-    @staticmethod
-    def _collect_signal_names(return_annotation: Annotated[Any, Any]) -> list[str]:
-        """
-        Recursive kernel for extracting name attribute of Name metadata from a type annotation.
-        If the outermost origin is `typing.Annotated`, it extracts all Name objects from its
-        arguments and append.
-        If the outermost origin is `tuple` or `Generator`, grab the argument and recurses into
-        this function.
-        If the outermost is `Generator`, or `tuple` but the inner layer isn't one of `Generator`,
-        `tuple`, or `Annotated`, assume it's an unnamed signal (no Name inside).
-        If the outermost is none of `Generator`, `tuple`, or `Annotated`, assume it's an unnamed
-        signal.
-
-        Returns a list of names.
-        """
-        from noob import Name
-
-        names = []
-
-        # --- get yield type of generators before handling other types
-        if get_origin(return_annotation) is Generator:
-            return_annotation = get_args(return_annotation)[0]
-        # ---
-
-        if get_origin(return_annotation) is Annotated:
-            for argument in get_args(return_annotation):
-                if isinstance(argument, Name):
-                    names.append(argument.name)
-
-        elif get_origin(return_annotation) is tuple or is_union(return_annotation):
-            for argument in get_args(return_annotation):
-                if get_origin(argument) in [Annotated, tuple]:
-                    names += WrapNode._collect_signal_names(argument)
-                elif argument not in [type(None), None]:
-                    names = ["value"]
-
-        elif return_annotation and (return_annotation is not inspect.Signature.empty):
-            names = ["value"]
-
-        return names
-
 
 class WrapNode(Node):
     fn: Callable[PWrap, TOutput]
     params: dict = Field(default_factory=dict)
     _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
 
-    def model_post_init(self, __context: None = None) -> None:
-        self._signals = self.collect_signal_names(self.fn)
+    def _collect_signals(self) -> list[Signal]:
+        return Signal.from_callable(self.fn)
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.fn)

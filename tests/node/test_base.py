@@ -8,7 +8,7 @@ from faker import Faker
 
 from noob import Name
 from noob.node import NodeSpecification
-from noob.node.base import Node, WrapNode
+from noob.node.base import Node, Signal
 
 
 class TestWrapNode:
@@ -38,12 +38,26 @@ class TestWrapNode:
             yield fake.unique.word(), val
 
     @staticmethod
+    def union_return(num1: int, name2: str) -> A[str | int, Name("sk8r-boi")]:
+        if num1 > 0:
+            return num1
+        else:
+            return name2
+
+    @staticmethod
     def unnamed_return(name: str) -> str:
         return name
 
     @staticmethod
     def unnamed_tuple(num1: int, name2: str) -> tuple[int, str]:
         return num1, name2
+
+    @staticmethod
+    def unnamed_union(num1: int, name2: str) -> int | str:
+        if num1 > 0:
+            return num1
+        else:
+            return name2
 
     @staticmethod
     def unnamed_gen() -> Generator[str]:
@@ -62,20 +76,25 @@ class TestWrapNode:
     @pytest.mark.parametrize(
         "func, target",
         [
-            (one_return, ["hey"]),
-            (two_returns, ["hey", "you"]),
-            (single_generator, ["you"]),
-            (double_generator, ["i can be your girlfriend", "you can be my boyfriend"]),
-            (unnamed_return, ["value"]),
-            (unnamed_tuple, ["value"]),
-            (unnamed_gen, ["value"]),
+            (one_return, [("hey", str)]),
+            (two_returns, [("hey", str), ("you", str)]),
+            (single_generator, [("you", str)]),
+            (
+                double_generator,
+                [("i can be your girlfriend", str), ("you can be my boyfriend", int)],
+            ),
+            (union_return, [("sk8r-boi", str | int)]),
+            (unnamed_return, [("value", str)]),
+            (unnamed_tuple, [("value", tuple[int, str])]),
+            (unnamed_union, [("value", int | str)]),
+            (unnamed_gen, [("value", str)]),
             (return_none, []),
             (return_empty, []),
         ],
     )
     def test_collect_signal_names(self, func, target) -> None:
         return_annot = inspect.signature(func).return_annotation
-        names = WrapNode._collect_signal_names(return_annot)
+        names = Signal._collect_signal_names(return_annot)
         assert names == target
 
 
