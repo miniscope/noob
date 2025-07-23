@@ -68,14 +68,26 @@ class Tube(BaseModel):
     def graph(self) -> TopologicalSorter:
         """
         Produce a :class:`.TopologicalSorter` based on the graph induced by
-        :attr:`.Tube.nodes` and :attr:`.Tube.edges` that yields node ids
+        :attr:`.Tube.nodes` and :attr:`.Tube.edges` that yields node ids.
+
+        .. note:: Optional params
+
+            Dependency graph only includes edges where `required == True` -
+            aka even if we declare some dependency that passes a value to an
+            optional (type annotation is `type | None`), default == `None`
+            param, we still call that node even if that optional param is absent.
+
+            This behavior will likely change,
+            allowing explicit parameterization of how optional values are handled,
+            see: https://github.com/miniscope/noob/issues/26,
+
         """
         sorter = TopologicalSorter()
         for node_id in self.nodes:
-            in_edges = [
+            required_edges = [
                 e.source_node for e in self.edges if e.target_node == node_id and e.required
             ]
-            sorter.add(node_id, *in_edges)
+            sorter.add(node_id, *required_edges)
         return sorter
 
     def in_edges(self, node: Node | str) -> list[Edge]:
