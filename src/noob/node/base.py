@@ -40,9 +40,8 @@ class Signal(BaseModel):
     name: str
     type_: type | NoneType | UnionType | GenericAlias
 
-    class Config:
-        # Unable to generate pydantic-core schema for <class 'types.UnionType'>
-        arbitrary_types_allowed = True
+    # Unable to generate pydantic-core schema for <class 'types.UnionType'>
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
     def from_callable(cls, func: Callable) -> list["Signal"]:
@@ -156,8 +155,8 @@ class Node(BaseModel):
             else:
 
                 class Composite(cls, obj):
-                    class Config:
-                        arbitrary_types_allowed = True
+                    # Defense against types without Pydantic support.
+                    model_config = ConfigDict(arbitrary_types_allowed=True)
 
                     def process(self) -> Any:
                         pass
