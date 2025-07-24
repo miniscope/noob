@@ -102,8 +102,12 @@ class TestNode:
     @pytest.mark.parametrize(
         "type, params, expected",
         [
-            ("noob.testing.CountSource", {"limit": 10, "start": 5}, ["index"]),
-            ("noob.testing.Multiply", {}, ["product"]),
+            (
+                "noob.testing.CountSource",
+                {"limit": 10, "start": 5},
+                [Signal(name="index", type_=int)],
+            ),
+            ("noob.testing.Multiply", {}, [Signal(name="product", type_=int)]),
         ],
     )
     def test_node_subclass_signal(self, type, params, expected):
