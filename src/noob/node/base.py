@@ -154,7 +154,12 @@ class Node(BaseModel):
             if issubclass(obj, Node):
                 return obj(id=spec.id, spec=spec, **params)
             else:
-                raise NotImplementedError("Handle wrapping classes")
+
+                class Composite(cls, obj):
+                    def process(self, *args: Any, **kwargs: Any) -> Any:
+                        return obj.process(self, *args, **kwargs)
+
+                return Composite(id=spec.id, spec=spec, **params)
         else:
             return WrapNode(id=spec.id, fn=obj, spec=spec, params=params)
 

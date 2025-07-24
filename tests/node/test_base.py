@@ -11,7 +11,7 @@ from noob.node import NodeSpecification
 from noob.node.base import Node, Signal
 
 
-class TestWrapNode:
+class TestSignal:
     @staticmethod
     def one_return(name: str) -> A[str, Name("hey")]:
         return name
@@ -117,3 +117,14 @@ class TestNode:
         )
 
         assert node.signals == expected
+
+    def test_node_independent(self):
+        node = Node.from_specification(
+            spec=NodeSpecification(
+                id="test_node_independent",
+                type="noob.testing.IndependentNode",
+                params={"param1": 1, "param2": 2.5},
+                depends=None,
+            )
+        )
+        assert node.process(left=2, right=3) == 1 * 2.5 * 2 * 3

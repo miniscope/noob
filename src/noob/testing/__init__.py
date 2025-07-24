@@ -1,5 +1,6 @@
 from noob.testing.nodes import (
     CountSource,
+    IndependentNode,
     Multiply,
     concat,
     count_source,
@@ -30,4 +31,5 @@ __all__ = [
     "multi_words_source",
     "CountSource",
     "Multiply",
+    "IndependentNode",
 ]

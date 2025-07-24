@@ -91,3 +91,22 @@ class Multiply(Node):
 
     def process(self, left: int, right: int = 2) -> A[int, Name("product")]:
         return multiply(left=left, right=right)
+
+
+class IndependentNode:
+    param1: int
+    param2: float = 0.5
+
+    def method(self) -> float:
+        return self.param1 * self.param2
+
+    @classmethod
+    def class_method(cls) -> list[float | int]:
+        return [cls.param1, cls.param2]
+
+    @staticmethod
+    def static_method() -> int:
+        return 1
+
+    def process(self, left: int, right: int) -> A[float, Name("product")]:
+        return self.param1 * self.param2 * multiply(left=left, right=right)
