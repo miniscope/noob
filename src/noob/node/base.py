@@ -156,6 +156,9 @@ class Node(BaseModel):
             else:
 
                 class Composite(cls, obj):
+                    class Config:
+                        arbitrary_types_allowed = True
+
                     def process(self, *args: Any, **kwargs: Any) -> Any:
                         if hasattr(obj, "process"):
                             return obj.process(self, *args, **kwargs)

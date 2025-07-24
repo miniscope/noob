@@ -5,6 +5,7 @@ from itertools import count, cycle
 from typing import Annotated as A
 from typing import Any
 
+import numpy as np
 from faker import Faker
 
 from noob import Name
@@ -96,6 +97,7 @@ class Multiply(Node):
 class IndependentNode:
     param1: int
     param2: float = 0.5
+    param3: np.ndarray = np.array([])
 
     def method(self) -> float:
         return self.param1 * self.param2
