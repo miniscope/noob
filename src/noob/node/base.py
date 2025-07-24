@@ -157,7 +157,10 @@ class Node(BaseModel):
 
                 class Composite(cls, obj):
                     def process(self, *args: Any, **kwargs: Any) -> Any:
-                        return obj.process(self, *args, **kwargs)
+                        if hasattr(obj, "process"):
+                            return obj.process(self, *args, **kwargs)
+                        else:
+                            raise AttributeError(f"{obj} must have a process method.")
 
                 return Composite(id=spec.id, spec=spec, **params)
         else:
