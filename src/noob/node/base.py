@@ -159,11 +159,13 @@ class Node(BaseModel):
                     class Config:
                         arbitrary_types_allowed = True
 
-                    def process(self, *args: Any, **kwargs: Any) -> Any:
-                        if hasattr(obj, "process"):
-                            return obj.process(self, *args, **kwargs)
-                        else:
-                            raise AttributeError(f"{obj} must have a process method.")
+                    def process(self) -> Any:
+                        pass
+
+                if hasattr(obj, "process"):
+                    Composite.process = obj.process
+                else:
+                    raise AttributeError(f"{obj} needs to have a process() method.")
 
                 return Composite(id=spec.id, spec=spec, **params)
         else:
