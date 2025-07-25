@@ -95,9 +95,11 @@ class Multiply(Node):
 
 
 class IndependentNode:
-    param1: int
-    param2: float = 0.5
-    param3: np.ndarray = np.array([])
+    class_property: np.ndarray = np.array([])
+
+    def __init__(self, param1: int, param2: float = 0.5):
+        self.param1 = param1
+        self.param2 = param2
 
     def method(self) -> float:
         return self.param1 * self.param2
