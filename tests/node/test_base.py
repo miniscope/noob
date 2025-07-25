@@ -131,6 +131,7 @@ class TestNode:
                 depends=None,
             )
         )
+        node.init()
         assert node.process(left=2, right=3) == 1 * 2.5 * 2 * 3
         assert set(node.slots) == {"left", "right"}
         assert node.signals == [Signal(name="product", type_=float)]

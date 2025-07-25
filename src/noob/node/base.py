@@ -4,7 +4,7 @@ from collections.abc import Callable, Generator
 from types import GenericAlias, NoneType, UnionType
 from typing import Annotated, Any, ParamSpec, TypeVar, get_args, get_origin
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
@@ -153,31 +153,17 @@ class Node(BaseModel):
             if issubclass(obj, Node):
                 return obj(id=spec.id, spec=spec, **params)
             else:
-
-                class Composite(cls, obj):
-                    # Defense against types without Pydantic support.
-                    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-                    def process(self) -> Any:
-                        pass
-
-                if hasattr(obj, "process"):
-                    Composite.process = obj.process
-                else:
-                    raise AttributeError(f"{obj} needs to have a process() method.")
-
-                return Composite(id=spec.id, spec=spec, **params)
+                return WrapClassNode(id=spec.id, obj=obj, spec=spec, params=params)
         else:
-            return WrapNode(id=spec.id, fn=obj, spec=spec, params=params)
+            return WrapFuncNode(id=spec.id, fn=obj, spec=spec, params=params)
 
     @property
     def signals(self) -> list[Signal]:
         if self._signals is None:
             self._signals = self._collect_signals()
         if not self._signals:
-            return [Signal(name="value", type_=Any)]
-        else:
-            return self._signals
+            self._signals = [Signal(name="value", type_=Any)]
+        return self._signals
 
     def _collect_signals(self) -> list[Signal]:
         return Signal.from_callable(self.process)
@@ -192,7 +178,34 @@ class Node(BaseModel):
         return Slot.from_callable(self.process)
 
 
-class WrapNode(Node):
+class WrapClassNode(Node):
+    obj: type
+    params: dict[str, Any] = Field(default_factory=dict)
+    instance: type | None = None
+
+    @field_validator("obj", mode="after")
+    @classmethod
+    def has_process_method(cls, value: type) -> type:
+        assert hasattr(value, "process")
+        return value
+
+    def init(self) -> None:
+        self.instance = self.obj(**self.params)
+
+    def process(self, *args: Any, **kwargs: Any) -> Any:
+        return getattr(self.instance, "process")(*args, **kwargs)
+
+    def deinit(self) -> None:
+        self.instance = None
+
+    def _collect_signals(self) -> list[Signal]:
+        return Signal.from_callable(getattr(self.instance, "process"))
+
+    def _collect_slots(self) -> dict[str, Slot]:
+        return Slot.from_callable(getattr(self.instance, "process"))
+
+
+class WrapFuncNode(Node):
     fn: Callable[PWrap, TOutput]
     params: dict = Field(default_factory=dict)
     _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
