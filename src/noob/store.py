@@ -30,8 +30,11 @@ class EventStore:
         store along with current timestamp
 
         Args:
-            signals (Any): Signals from which the value was emitted by a :meth:`.Node.process` call
-            value (Any): Value emitted by a :meth:`.Node.process` call
+            signals (list[Signal]): Signals from which the value was emitted by
+                a :meth:`.Node.process` call
+            value (Any): Value emitted by a :meth:`.Node.process` call. Gets wrapped
+                with a list in case the length of signals is 1. Otherwise, it's zipped
+                with :signals:
             node_id (str): ID of the node that emitted the events
         """
         if value is None:
