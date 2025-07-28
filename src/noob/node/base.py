@@ -193,16 +193,16 @@ class WrapClassNode(Node):
         self.instance = self.obj(**self.params)
 
     def process(self, *args: Any, **kwargs: Any) -> Any:
-        return getattr(self.instance, "process")(*args, **kwargs)
+        return self.instance.process(*args, **kwargs)
 
     def deinit(self) -> None:
         self.instance = None
 
     def _collect_signals(self) -> list[Signal]:
-        return Signal.from_callable(getattr(self.instance, "process"))
+        return Signal.from_callable(self.instance.process)
 
     def _collect_slots(self) -> dict[str, Slot]:
-        return Slot.from_callable(getattr(self.instance, "process"))
+        return Slot.from_callable(self.instance.process)
 
 
 class WrapFuncNode(Node):

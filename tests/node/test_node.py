@@ -1,7 +1,7 @@
 import pytest
 
 from noob.node import NodeSpecification
-from noob.node.base import Signal, Node
+from noob.node.base import Node, Signal
 
 
 @pytest.mark.parametrize(
