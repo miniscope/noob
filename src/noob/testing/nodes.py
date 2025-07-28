@@ -1,12 +1,13 @@
 import random
 import string
-from collections.abc import Generator
+from collections.abc import Coroutine, Generator
+from datetime import datetime
 from itertools import count, cycle
 from typing import Annotated as A
 from typing import Any
 
-import numpy as np
 from faker import Faker
+from websockets.asyncio.connection import Connection
 
 from noob import Name
 from noob.node import Node
@@ -94,23 +95,33 @@ class Multiply(Node):
         return multiply(left=left, right=right)
 
 
-class IndependentNode:
-    class_property: np.ndarray = np.array([])
+class VolumeProcess:
+    def __init__(self, height: int = 2):
+        self.height = height
 
-    def __init__(self, param1: int, param2: float = 0.5):
-        self.param1 = param1
-        self.param2 = param2
+    def process(self, width: int, depth: int) -> A[int, Name("volume")]:
+        return self.height * multiply(left=width, right=depth)
 
-    def method(self) -> float:
-        return self.param1 * self.param2
 
-    @classmethod
-    def class_method(cls) -> list[float | int]:
-        return [cls.param1, cls.param2]
+class Volume:
+    def __init__(self, height: int = 2):
+        self.height = height
 
-    @staticmethod
-    def static_method() -> int:
-        return 1
+    def volume(self, width: int, depth: int) -> A[int, Name("volume")]:
+        return self.height * multiply(left=width, right=depth)
 
-    def process(self, left: int, right: int) -> A[float, Name("product")]:
-        return self.param1 * self.param2 * multiply(left=left, right=right)
+
+class Now:
+    def __init__(self):
+        self.now = datetime.now()
+
+    def print(self) -> A[str, Name("timestamp")]:
+        return self.now.isoformat()
+
+
+class Communicate:
+    def __init__(self, conn: Connection):
+        self.conn = conn
+
+    def ping(self, msg: str) -> A[Coroutine[str, None, None], Name("ping")]:
+        return self.conn.send(msg)
