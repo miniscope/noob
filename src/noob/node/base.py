@@ -1,10 +1,11 @@
+import functools
 import inspect
 from abc import abstractmethod
 from collections.abc import Callable, Generator
 from types import GenericAlias, NoneType, UnionType
 from typing import Annotated, Any, ParamSpec, TypeVar, get_args, get_origin
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
@@ -99,6 +100,22 @@ class Signal(BaseModel):
         return names
 
 
+_PROCESS_METHOD_SENTINEL = "__is_process_method__"
+
+
+def process_method(func: Callable) -> Callable:
+    """
+    Decorator to mark a method as the designated 'process' method for a class.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs)
+
+    setattr(wrapper, _PROCESS_METHOD_SENTINEL, True)
+    return wrapper
+
+
 class Node(BaseModel):
     """A node within a processing tube"""
 
@@ -183,14 +200,9 @@ class WrapClassNode(Node):
     params: dict[str, Any] = Field(default_factory=dict)
     instance: type | None = None
 
-    @field_validator("obj", mode="after")
-    @classmethod
-    def has_process_method(cls, value: type) -> type:
-        assert hasattr(value, "process")
-        return value
-
     def init(self) -> None:
-        self.instance = self.obj(**self.params)
+
+        self.instance = self._map_main_method(self.obj)(**self.params)
 
     def process(self, *args: Any, **kwargs: Any) -> Any:
         return self.instance.process(*args, **kwargs)
@@ -203,6 +215,23 @@ class WrapClassNode(Node):
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.instance.process)
+
+    def _map_main_method(self, cls: type) -> type:
+        process_func = None
+        for name, member in inspect.getmembers(cls, predicate=inspect.isfunction):
+            # inspect.isfunction for classmethod and staticmethod appears as
+            # wrapped methods. do we have to functools.unwrap them?
+            if hasattr(member, _PROCESS_METHOD_SENTINEL) or name == "process":
+                if process_func:
+                    raise TypeError(
+                        f"Class {cls.__name__} has multiple 'process' methods. Only one is allowed."
+                    )
+                process_func = member
+
+        if process_func:
+            cls.process = process_func
+
+        return cls
 
 
 class WrapFuncNode(Node):

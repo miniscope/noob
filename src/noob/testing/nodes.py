@@ -9,7 +9,7 @@ from typing import Any
 from faker import Faker
 from websockets.asyncio.connection import Connection
 
-from noob import Name
+from noob import Name, process_method
 from noob.node import Node
 
 
@@ -107,6 +107,7 @@ class Volume:
     def __init__(self, height: int = 2):
         self.height = height
 
+    @process_method
     def volume(self, width: int, depth: int) -> A[int, Name("volume")]:
         return self.height * multiply(left=width, right=depth)
 
@@ -115,6 +116,7 @@ class Now:
     def __init__(self):
         self.now = datetime.now()
 
+    @process_method
     def print(self, prefix: str = "Now: ") -> A[str, Name("timestamp")]:
         return f"{prefix}{self.now.isoformat()}"
 
@@ -123,6 +125,7 @@ class Comm:
     def __init__(self, conn: Connection):
         self.conn = conn
 
+    @process_method
     async def ping(self, msg: str) -> A[str | bytes, Name("ping")]:
         await self.conn.send(msg)
         return await self.conn.recv()
