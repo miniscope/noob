@@ -1,6 +1,6 @@
 import random
 import string
-from collections.abc import Coroutine, Generator
+from collections.abc import Generator
 from datetime import datetime
 from itertools import count, cycle
 from typing import Annotated as A
@@ -115,13 +115,14 @@ class Now:
     def __init__(self):
         self.now = datetime.now()
 
-    def print(self) -> A[str, Name("timestamp")]:
-        return self.now.isoformat()
+    def print(self, prefix: str = "Now: ") -> A[str, Name("timestamp")]:
+        return f"{prefix}{self.now.isoformat()}"
 
 
 class Communicate:
     def __init__(self, conn: Connection):
         self.conn = conn
 
-    def ping(self, msg: str) -> A[Coroutine[str, None, None], Name("ping")]:
-        return self.conn.send(msg)
+    async def ping(self, msg: str) -> A[str | bytes, Name("ping")]:
+        await self.conn.send(msg)
+        return await self.conn.recv()
