@@ -10,6 +10,7 @@ from noob.types import AbsoluteIdentifier
 from noob.utils import resolve_python_identifier
 
 ScopeType = Literal["function", "class", "module", "package", "session"]
+"""Defines at which scale the resource should be locked."""
 
 
 class AssetSpecification(BaseModel):
@@ -68,6 +69,7 @@ class Asset(BaseModel):
         obj = resolve_python_identifier(spec.type_)
 
         params = spec.params if spec.params is not None else {}
+        scope = spec.scope
 
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable
@@ -75,9 +77,9 @@ class Asset(BaseModel):
             if issubclass(obj, Asset):
                 return obj(id=spec.id, spec=spec, **params)
             else:
-                return WrapClassAsset(id=spec.id, obj=obj, spec=spec, params=params)
+                return WrapClassAsset(id=spec.id, obj=obj, spec=spec, params=params, scope=scope)
         else:
-            return WrapFuncAsset(id=spec.id, fn=obj, spec=spec, params=params)
+            return WrapFuncAsset(id=spec.id, fn=obj, spec=spec, params=params, scope=scope)
 
 
 class WrapClassAsset(Asset):
