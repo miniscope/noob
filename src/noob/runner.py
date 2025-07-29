@@ -8,6 +8,7 @@ from threading import Event as ThreadEvent
 from typing import TYPE_CHECKING, Any, Self
 
 from noob import init_logger
+from noob.cube import Cube
 from noob.event import Event
 from noob.exceptions import AlreadyRunningError
 from noob.node import Node
@@ -33,6 +34,7 @@ class TubeRunner(ABC):
 
     tube: Tube
     store: EventStore = field(default_factory=EventStore)
+    cube: Cube = field(default_factory=Cube)
 
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
 
