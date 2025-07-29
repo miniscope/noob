@@ -119,7 +119,7 @@ class Now:
         return f"{prefix}{self.now.isoformat()}"
 
 
-class Communicate:
+class Comm:
     def __init__(self, conn: Connection):
         self.conn = conn
 

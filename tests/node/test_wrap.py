@@ -1,4 +1,4 @@
-from datetime import datetime
+import datetime
 
 import pytest
 
@@ -40,9 +40,9 @@ def test_process_method():
         )
     )
     node.init()
-    assert node.process(width=2, height=3) == 5 * 2 * 3
-    assert set(node.slots) == {"left", "right"}
-    assert node.signals == [Signal(name="product", type_=float)]
+    assert node.process(width=2, depth=3) == 5 * 2 * 3
+    assert set(node.slots) == {"width", "depth"}
+    assert node.signals == [Signal(name="volume", type_=int)]
 
 
 def test_basic_external_class():
@@ -54,7 +54,7 @@ def test_basic_external_class():
         )
     )
     node.init()
-    assert node.process(width=2, height=3) == 5 * 2 * 3
+    assert node.process(width=2, depth=3) == 5 * 2 * 3
 
 
 def test_dep_external_class():
@@ -66,14 +66,14 @@ def test_dep_external_class():
     )
     node.init()
     prefix = "What time is it?: "
-    assert node.process(prefix=prefix) == f"{prefix}{datetime.now().isoformat()}"
+    assert node.process(prefix=prefix) == f"{prefix}{datetime.datetime.now().isoformat()}"
 
 
 def test_resource_class():
     node = Node.from_specification(
         spec=NodeSpecification(
             id="test-resource",
-            type="noob.testing.Communicate",
+            type="noob.testing.Comm",
         )
     )
     node.init()

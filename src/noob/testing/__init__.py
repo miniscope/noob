@@ -1,5 +1,5 @@
 from noob.testing.nodes import (
-    Communicate,
+    Comm,
     CountSource,
     Multiply,
     Now,
@@ -37,5 +37,5 @@ __all__ = [
     "VolumeProcess",
     "Volume",
     "Now",
-    "Communicate",
+    "Comm",
 ]
