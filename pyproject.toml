@@ -58,6 +58,7 @@ tests = [
     "pytest-cov>=6.0.0",
     "tomli-w>=1.2.0",
     "faker>=37.3.0",
+    "numpy>=2.3.2",
 ]
 docs = [
     "sphinx>=8.2.3",

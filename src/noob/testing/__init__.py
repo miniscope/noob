@@ -1,4 +1,10 @@
 from noob.testing.nodes import (
+    Comm,
+    CountSource,
+    Multiply,
+    Now,
+    Volume,
+    VolumeProcess,
     concat,
     count_source,
     dictify,
@@ -26,4 +32,10 @@ __all__ = [
     "word_counts",
     "word_source",
     "multi_words_source",
+    "CountSource",
+    "Multiply",
+    "VolumeProcess",
+    "Volume",
+    "Now",
+    "Comm",
 ]
