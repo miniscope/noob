@@ -1,18 +1,20 @@
 import random
 import string
 from collections.abc import Generator
+from datetime import datetime
 from itertools import count, cycle
 from typing import Annotated as A
 from typing import Any
 
 from faker import Faker
 
-from noob import Name
+from noob import Name, process_method
+from noob.node import Node
 
 
-def count_source(limit: int = 10, start: int = 0) -> Generator[A[int, Name("index")], None, None]:
+def count_source(limit: int = 1000, start: int = 0) -> Generator[A[int, Name("index")], None, None]:
     counter = count(start=start)
-    while val := next(counter) < limit:
+    while (val := next(counter)) < limit:
         yield val
 
 
@@ -26,7 +28,13 @@ def word_source() -> Generator[A[str, Name("word")]]:
         yield fake.unique.word()
 
 
-def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")], None, None]:
+def multi_words_source(n: int) -> Generator[A[list[str], Name("multi_words")]]:
+    fake = Faker()
+    while True:
+        yield [fake.unique.word() for _ in range(n)]
+
+
+def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")] | None, None, None]:
     fake = Faker()
     i = 0
     while True:
@@ -70,3 +78,53 @@ def repeat(string: str, times: int) -> str:
 
 def dictify(key: str, items: list[Any]) -> dict[str, Any]:
     return {key: items}
+
+
+class CountSource(Node):
+    limit: int = 1000
+    start: int = 0
+
+    def process(self) -> Generator[A[int, Name("index")], None, None]:
+        return count_source(limit=self.limit, start=self.start)
+
+
+class Multiply(Node):
+
+    def process(self, left: int, right: int = 2) -> A[int, Name("product")]:
+        return multiply(left=left, right=right)
+
+
+class VolumeProcess:
+    def __init__(self, height: int = 2):
+        self.height = height
+
+    def process(self, width: int, depth: int) -> A[int, Name("volume")]:
+        return self.height * multiply(left=width, right=depth)
+
+
+class Volume:
+    def __init__(self, height: int = 2):
+        self.height = height
+
+    @process_method
+    def volume(self, width: int, depth: int) -> A[int, Name("volume")]:
+        return self.height * multiply(left=width, right=depth)
+
+
+class Now:
+    def __init__(self):
+        self.now = datetime.now()
+
+    @process_method
+    def print(self, prefix: str = "Now: ") -> A[str, Name("timestamp")]:
+        return f"{prefix}{self.now.isoformat()}"
+
+
+class Comm:
+    def __init__(self, conn: Any):
+        self.conn = conn
+
+    @process_method
+    async def ping(self, msg: str) -> A[str | bytes, Name("ping")]:
+        await self.conn.send(msg)
+        return await self.conn.recv()

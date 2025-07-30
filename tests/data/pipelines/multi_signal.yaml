@@ -1,21 +1,16 @@
-# Node that emits multiple signals that can be used separably
 noob_id: testing-multi-signal
-
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev42+gd638e1b.d20250708
 nodes:
   a:
     type: noob.testing.word_counts
-  b0:
-    type: concat # special node to take multiple dependencies and return as a list
-    depends:
-      - a.counts
-      - a.other_value
-  b1:
+  b:
     type: sum # should be possible to just use builtins
     depends:
-      - b0.value
+      - a.counts
   c:
     type: return
     depends:
       - word: a.word
-      - count_sum: b1.value
+      - count_sum: b.value
       - counts: a.counts

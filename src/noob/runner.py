@@ -1,17 +1,23 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Generator
 from dataclasses import dataclass, field
 from logging import Logger
 from threading import Event as ThreadEvent
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from noob import init_logger
+from noob.event import Event
 from noob.exceptions import AlreadyRunningError
 from noob.node import Node
 from noob.node.return_ import Return
 from noob.store import EventStore
 from noob.tube import Tube
 from noob.types import ReturnNodeType
+
+if TYPE_CHECKING:
+    from graphlib import TopologicalSorter
 
 
 @dataclass
@@ -72,7 +78,7 @@ class TubeRunner(ABC):
         """
         pass
 
-    def gather_input(self, node: Node) -> dict[str, Any] | None:
+    def gather_input(self, node: Node) -> tuple[list[Any] | None, dict[str, Any] | None]:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
 
@@ -81,6 +87,9 @@ class TubeRunner(ABC):
             dict: empty dict if Node is a :class:`.Source`
             None: if no input is available
         """
+        if not node.spec.depends:
+            return None, None
+
         edges = self.tube.in_edges(node)
         return self.store.gather(edges)
 
@@ -93,18 +102,24 @@ class TubeRunner(ABC):
             dict: of the Return sink's key mapped to the returned value,
             None: if there are no :class:`.Return` sinks in the tube
         """
-        ret = {}
-        for sink in self.tube.sinks.values():
-            if sink.name != "return":
-                continue
-            sink: Return
-            val = sink.get(keep=False)
-            ret.update(val)
-
-        if not ret:
+        ret_nodes = [n for n in self.tube.nodes.values() if isinstance(n, Return)]
+        if not ret_nodes:
             return None
-        else:
-            return ret
+        ret_node = ret_nodes[0]
+        return ret_node.get(keep=False)
+
+    def update_graph(
+        self, graph: TopologicalSorter, node_id: str, events: list[Event] | None
+    ) -> None:
+        """
+        Update the state of the processing graph after events are emitted.
+
+        Largely a placeholder method until we write our own graph processor.
+        """
+        if not events:
+            return
+
+        graph.done(node_id)
 
 
 @dataclass
@@ -114,6 +129,9 @@ class SynchronousRunner(TubeRunner):
 
     Just run the nodes in topological order and return from return nodes.
     """
+
+    MAX_ITER_LOOPS = 100
+    """The max number of times that `iter` will call `process` to try and get a result"""
 
     def __post_init__(self):
         self._running = ThreadEvent()
@@ -161,27 +179,45 @@ class SynchronousRunner(TubeRunner):
         graph.prepare()
 
         while graph.is_active():
-            for node_id in graph.get_ready():
+            ready = graph.get_ready()
+            if not ready:
+                break
+            for node_id in ready:
                 node = self.tube.nodes[node_id]
-                node_input = self.gather_input(node)
-                if node_input is None:
-                    graph.done(node_id)
-                    self._logger.debug(f"Node {node_id} received no input, skipping")
-                    continue
-                value = node.process(**node_input)
-                self.store.add(value, node_id)
-                graph.done(node_id)
-                self._logger.debug(f"Node {node_id} emitted %s", value)
+                args, kwargs = self.gather_input(node)
+
+                # need to eventually distinguish "still waiting" vs "there is none"
+                args = [] if args is None else args
+                kwargs = {} if kwargs is None else kwargs
+
+                value = node.process(*args, **kwargs)
+                events = self.store.add(node.signals, value, node_id)
+                self.update_graph(graph, node_id, events)
+                self._logger.debug("Node %s emitted %s", node_id, value)
 
         return self.gather_return()
 
     def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
-        """Treat the runner as an iterable"""
+        """
+        Treat the runner as an iterable.
+
+        Calls :meth:`.TubeRunner.process` until it yields a result
+        (e.g. multiple times in the case of any `gather`s that change the cardinality of the graph.)
+        """
+
         self.init()
         current_iter = 0
         try:
             while n is None or current_iter < n:
-                yield self.process()
+                ret = None
+                loop = 0
+                while ret is None:
+                    ret = self.process()
+                    loop += 1
+                    if loop > self.MAX_ITER_LOOPS:
+                        raise RuntimeError("Reached maximum process calls per iteration")
+
+                yield ret
                 current_iter += 1
         finally:
             self.deinit()

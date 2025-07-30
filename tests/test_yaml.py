@@ -97,13 +97,13 @@ b: "10\"""",
 a: 9
 noob_id: "my-config"
 noob_model: "tests.test_yaml.MyModel"
-noob_version: "{version('noob')}"
+noob_version: "{version("noob")}"
 b: "10\"""",
             id="not-at-start",
         ),
         pytest.param(
             f"""
-noob_version: "{version('noob')}"
+noob_version: "{version("noob")}"
 noob_model: "tests.test_yaml.MyModel"
 noob_id: "my-config"
 a: 9

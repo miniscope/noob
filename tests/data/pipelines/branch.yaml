@@ -7,13 +7,13 @@ nodes:
   b:
     type: noob.testing.multiply
     depends:
-    - left: a.index
+      - left: a.index
   c:
     type: noob.testing.divide
     depends:
-    - numerator: a.index
+      - numerator: a.index
   d:
     type: return
     depends:
-    - multiply: b.value
-    - divide: c.value
+      - multiply: b.value
+      - divide: c.ratio
