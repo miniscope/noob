@@ -1,16 +1,17 @@
 noob_id: testing-xarray-asset
-assets: # or this section exists in a separate yaml?
-  basic-xarray:
-    type: noob.testing.xarray_source
-
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
+assets:
+  basic_xarray:
+    type: noob.testing.xarray_asset
 nodes:
   concat:
     type: noob.testing.array_concat
     params:
       dim: z
     depends:
-      - left: basic-xarray  # this is going to cause issues. not sure what to do about the type validation here.
-      - right: basic-xarray
+      - left: assets.basic_xarray
+      - right: assets.basic_xarray
   return:
     type: return
     depends: concat.value

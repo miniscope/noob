@@ -1,12 +1,11 @@
 import inspect
-from abc import abstractmethod
 from collections.abc import Callable
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from noob.node.base import PWrap, TOutput
-from noob.types import AbsoluteIdentifier
+from noob.types import AbsoluteIdentifier, PythonIdentifier
 from noob.utils import resolve_python_identifier
 
 ScopeType = Literal["function", "class", "module", "package", "session"]
@@ -14,23 +13,14 @@ ScopeType = Literal["function", "class", "module", "package", "session"]
 
 
 class AssetSpecification(BaseModel):
-    id: str
+    id: PythonIdentifier
     type_: AbsoluteIdentifier = Field(..., alias="type")
     scope: ScopeType
     params: dict | None = None  # or config?
 
 
 class Asset(BaseModel):
-    """
-    Each asset needs...
-    exposure (scope) system: which node can connect
-    processes: resources may provide more than one way to approach the data
-    data paths: slots (data going in), signals (data coming out)
-    a lifecycle: init, deinit
-    the actual entity is wrapped to unify these interfaces
-    """
-
-    id: str
+    id: PythonIdentifier
     spec: AssetSpecification
     scope: ScopeType
 
@@ -52,16 +42,6 @@ class Asset(BaseModel):
         Default is a no-op.
         Subclasses do not need to override if they have no deinit logic.
         """
-        pass
-
-    @abstractmethod
-    def push(self, *args: Any, **kwargs: Any) -> Any | None:
-        """Push some input. See subclasses for details"""
-        pass
-
-    @abstractmethod
-    def pull(self, *args: Any, **kwargs: Any) -> Any | None:
-        """Pull some input. See subclasses for details"""
         pass
 
     @classmethod
@@ -86,13 +66,13 @@ class Asset(BaseModel):
             if issubclass(obj, Asset):
                 return obj(id=spec.id, spec=spec, **params)
             else:
-                return WrapClassAsset(id=spec.id, obj=obj, spec=spec, params=params, scope=scope)
+                return WrapClassAsset(id=spec.id, cls=obj, spec=spec, params=params, scope=scope)
         else:
             return WrapFuncAsset(id=spec.id, fn=obj, spec=spec, params=params, scope=scope)
 
 
 class WrapClassAsset(Asset):
-    obj: type
+    cls: type
     params: dict[str, Any] = Field(default_factory=dict)
     instance: type | None = None
 

@@ -1,7 +1,7 @@
 noob_id: testing-server-asset
 assets:
   server:
-    type: noob.testing.server_source
+    type: noob.testing.server_asset
     scope: session
     config: # or load it from a separate yaml
       host: localhost  # or some reference to secure secret
@@ -13,7 +13,7 @@ nodes:
     params:
       msg: pitbull forever
     depends:
-      - conn: server.conn  # or maybe this should illegal? Not sure about the Connection layer between assets and nodes
+      - conn: assets.server
   return:
     type: return
     depends: ping.ping
