@@ -170,7 +170,7 @@ class Node(BaseModel):
             if issubclass(obj, Node):
                 return obj(id=spec.id, spec=spec, **params)
             else:
-                return WrapClassNode(id=spec.id, obj=obj, spec=spec, params=params)
+                return WrapClassNode(id=spec.id, cls=obj, spec=spec, params=params)
         else:
             return WrapFuncNode(id=spec.id, fn=obj, spec=spec, params=params)
 
@@ -196,7 +196,7 @@ class Node(BaseModel):
 
 
 class WrapClassNode(Node):
-    obj: type
+    cls: type
     params: dict[str, Any] = Field(default_factory=dict)
     instance: type | None = None
 
