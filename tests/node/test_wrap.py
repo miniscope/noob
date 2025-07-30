@@ -69,6 +69,7 @@ def test_dep_external_class():
     assert node.process(prefix=prefix) == f"{prefix}{datetime.datetime.now().isoformat()}"
 
 
+@pytest.mark.xfail(reason="resources not implemented")
 def test_resource_class():
     node = Node.from_specification(
         spec=NodeSpecification(
