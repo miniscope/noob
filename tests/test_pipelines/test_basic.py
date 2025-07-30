@@ -110,3 +110,10 @@ def test_xarray_asset():
     runner = SynchronousRunner(tube)
 
     outputs = runner.process()
+
+
+def test_server_asset():
+    tube = Tube.from_specification("testing-server-asset")
+    runner = SynchronousRunner(tube)
+
+    outputs = runner.process()
