@@ -76,6 +76,7 @@ def test_gather_dependent():
         assert inner == e
 
 
+@pytest.mark.xfail(reason="map has not been implemented.")
 def test_map():
     """
     A node with a sequence output can be mapped to a node with a scalar input

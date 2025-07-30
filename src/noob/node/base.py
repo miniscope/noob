@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
+from noob.types import PythonIdentifier
 from noob.utils import resolve_python_identifier
 
 TOutput = TypeVar("TOutput")
@@ -199,13 +200,14 @@ class WrapClassNode(Node):
     cls: type
     params: dict[str, Any] = Field(default_factory=dict)
     instance: type | None = None
+    process_method: PythonIdentifier | None = None
 
     def init(self) -> None:
-
-        self.instance = self._map_main_method(self.obj)(**self.params)
+        self.process_method = self._map_main_method(self.cls)
+        self.instance = self.cls(**self.params)
 
     def process(self, *args: Any, **kwargs: Any) -> Any:
-        return self.instance.process(*args, **kwargs)
+        return getattr(self.instance, self.process_method)(*args, **kwargs)
 
     def deinit(self) -> None:
         self.instance = None
@@ -216,22 +218,26 @@ class WrapClassNode(Node):
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.instance.process)
 
-    def _map_main_method(self, cls: type) -> type:
+    def _map_main_method(self, cls: type) -> str:
         process_func = None
         for name, member in inspect.getmembers(cls, predicate=inspect.isfunction):
             # inspect.isfunction for classmethod and staticmethod appears as
             # wrapped methods. do we have to functools.unwrap them?
-            if hasattr(member, _PROCESS_METHOD_SENTINEL) or name == "process":
+            if hasattr(member, _PROCESS_METHOD_SENTINEL):
                 if process_func:
                     raise TypeError(
                         f"Class {cls.__name__} has multiple 'process' methods. Only one is allowed."
                     )
-                process_func = member
+                process_func = name
+        if process_func is None:
+            if hasattr(cls, "process") and inspect.isfunction(cls.process):
+                process_func = "process"
+            else:
+                raise TypeError(
+                    "Class must have 'process' method or decorate a method with @process_method."
+                )
 
-        if process_func:
-            cls.process = process_func
-
-        return cls
+        return process_func
 
 
 class WrapFuncNode(Node):

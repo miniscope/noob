@@ -7,7 +7,6 @@ from typing import Annotated as A
 from typing import Any
 
 from faker import Faker
-from websockets.asyncio.connection import Connection
 
 from noob import Name, process_method
 from noob.node import Node
@@ -122,7 +121,7 @@ class Now:
 
 
 class Comm:
-    def __init__(self, conn: Connection):
+    def __init__(self, conn: Any):
         self.conn = conn
 
     @process_method
