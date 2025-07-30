@@ -1,0 +1,33 @@
+noob_id: testing-xarray-asset
+assets: # or this section exists in a separate yaml?
+  basic-xarray:
+    type: noob.testing.xarray_source
+#  server:
+#    type: noob.testing.assets.Server
+#    scope: session
+#    config: # or load it from a separate yaml
+#      host: "localhost"
+#      port: 5432
+#      database: "db"
+#      user: "user"
+#      password_secret: "pw"  # or some reference to secure secret
+#  database:
+#    ...
+
+nodes:
+  a:
+    type: noob.testing.count_source
+  b:
+    type: noob.testing.multiply
+    depends:
+      - left: a.index
+  concat:
+    type: noob.testing.array_concat
+    params:
+      dim: z
+    depends:
+      - left: basic-xarray  # this is going to cause issues. not sure what to do about the type validation here.
+      - right: basic-xarray
+  return:
+    type: return
+    depends: concat.value

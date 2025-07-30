@@ -21,6 +21,15 @@ class AssetSpecification(BaseModel):
 
 
 class Asset(BaseModel):
+    """
+    Each asset needs...
+    exposure (scope) system: which node can connect
+    processes: resources may provide more than one way to approach the data
+    data paths: slots (data going in), signals (data coming out)
+    a lifecycle: init, deinit
+    the actual entity is wrapped to unify these interfaces
+    """
+
     id: str
     spec: AssetSpecification
     scope: ScopeType

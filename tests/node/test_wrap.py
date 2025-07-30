@@ -17,7 +17,7 @@ from noob.node.base import Node, Signal
         ("noob.testing.Multiply", {}, [Signal(name="product", type_=int)]),
     ],
 )
-def test_internal_class(type_, params, expected):
+def test_subclass(type_, params, expected):
     node = Node.from_specification(
         spec=NodeSpecification(
             id="test_node_subclass_signal", type=type_, params=params, depends=None
@@ -26,7 +26,7 @@ def test_internal_class(type_, params, expected):
     assert node.signals == expected
 
 
-def test_process_method():
+def test_class_with_process():
     node = Node.from_specification(
         spec=NodeSpecification(
             id="test_node_process",
@@ -41,7 +41,7 @@ def test_process_method():
     assert node.signals == [Signal(name="volume", type_=int)]
 
 
-def test_basic_external_class():
+def test_class_without_process():
     node = Node.from_specification(
         spec=NodeSpecification(id="test-volume", type="noob.testing.Volume", params={"height": 5})
     )
@@ -49,7 +49,7 @@ def test_basic_external_class():
     assert node.process(width=2, depth=3) == 5 * 2 * 3
 
 
-def test_dep_external_class():
+def test_class_without_init_params():
     node = Node.from_specification(spec=NodeSpecification(id="test-now", type="noob.testing.Now"))
     node.init()
     prefix = "What time is it?: "

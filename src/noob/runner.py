@@ -35,6 +35,11 @@ class TubeRunner(ABC):
     tube: Tube
     store: EventStore = field(default_factory=EventStore)
     cube: Cube = field(default_factory=Cube)
+    """
+    To prevent the assets from being copied into events and stored a bunch of times, 
+    if assets are emitted as events, when they are converted from raw returned values to events 
+    the resource instances are converted to references to the resource.
+    """
 
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
 

@@ -1,5 +1,3 @@
-import pytest
-
 from noob import SynchronousRunner, Tube
 
 
@@ -105,3 +103,10 @@ def test_multi_signal():
         assert isinstance(value, dict)
         assert isinstance(value["word"], str)
         assert value["count_sum"] == sum(value["counts"])
+
+
+def test_xarray_asset():
+    tube = Tube.from_specification("testing-xarray-asset")
+    runner = SynchronousRunner(tube)
+
+    outputs = runner.process()
