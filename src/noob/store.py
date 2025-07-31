@@ -88,9 +88,10 @@ class EventStore:
         """
         args = {}
         for edge in edges:
-            event = self.get(edge.source_node, edge.source_signal)
-            value = None if event is None else event["value"]
-            args[edge.target_slot] = value
+            if edge.source_node != "assets":
+                event = self.get(edge.source_node, edge.source_signal)
+                value = None if event is None else event["value"]
+                args[edge.target_slot] = value
 
         args = None if not args or all(val is None for val in args.values()) else args
 

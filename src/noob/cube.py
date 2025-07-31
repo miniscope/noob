@@ -132,9 +132,10 @@ class Cube(BaseModel):  # or Pube
         """
         args = {}
         for edge in edges:
-            asset = self.get(edge.source_signal)
-            obj = None if asset is None else asset.obj
-            args[edge.target_slot] = obj
+            if edge.source_node == "assets":
+                asset = self.get(edge.source_signal)
+                obj = None if asset is None else asset.obj
+                args[edge.target_slot] = obj
 
         args = None if not args or all(val is None for val in args.values()) else args
 
