@@ -224,6 +224,10 @@ class SynchronousRunner(TubeRunner):
                 args = [] if args is None else args
                 kwargs = {} if kwargs is None else kwargs
                 value = node.process(*args, **kwargs)
+
+                # take the value from cube first. if it's taken by an asset,
+                # the value is converted to its id, and returned again.
+                value = self.cube.add(node.signals, value, node_id)
                 events = self.store.add(node.signals, value, node_id)
                 self.update_graph(graph, node_id, events)
                 self._logger.debug("Node %s emitted %s", node_id, value)

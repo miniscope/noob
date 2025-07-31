@@ -96,7 +96,7 @@ class Cube(BaseModel):  # or Pube
             ]
             for edge in edges:
                 self.assets[edge.target_slot].update(val)
-                values[idx] = AssetRef(asset=edge.target_slot)
+                values[idx] = AssetRef(id=edge.target_slot)
 
         return values if len(signals) > 1 else values[0]
 
