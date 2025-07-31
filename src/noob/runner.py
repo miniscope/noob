@@ -111,7 +111,7 @@ class TubeRunner(ABC):
 
         inputs = dict(sorted(inputs.items()))
         args = [val for key, val in inputs.items() if isinstance(key, int | None)]
-        kwargs = {key: val for key, val in inputs.items() if not isinstance(key, PythonIdentifier)}
+        kwargs = {key: val for key, val in inputs.items() if isinstance(key, str)}
 
         return args, kwargs
 
