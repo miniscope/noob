@@ -15,7 +15,7 @@ from noob.node import Node
 from noob.node.return_ import Return
 from noob.store import EventStore
 from noob.tube import Tube
-from noob.types import ReturnNodeType
+from noob.types import ReturnNodeType, PythonIdentifier
 
 if TYPE_CHECKING:
     from graphlib import TopologicalSorter
@@ -213,13 +213,16 @@ class SynchronousRunner(TubeRunner):
             if not ready:
                 break
             for node_id in ready:
+                if node_id == "assets":
+                    # graph autogenerates "assets" node if something depends on it
+                    graph.done(node_id)
+                    continue
                 node = self.tube.nodes[node_id]
                 args, kwargs = self.gather_input(node)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
                 args = [] if args is None else args
                 kwargs = {} if kwargs is None else kwargs
-
                 value = node.process(*args, **kwargs)
                 events = self.store.add(node.signals, value, node_id)
                 self.update_graph(graph, node_id, events)
