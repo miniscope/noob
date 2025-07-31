@@ -85,7 +85,9 @@ class TubeRunner(ABC):
         """
         pass
 
-    def gather_input(self, node: Node) -> tuple[list[Any] | None, dict[str, Any] | None]:
+    def gather_input(
+        self, node: Node
+    ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None] | None:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
 
@@ -98,7 +100,20 @@ class TubeRunner(ABC):
             return None, None
 
         edges = self.tube.in_edges(node)
-        return self.store.gather(edges)
+
+        inputs = {}
+
+        cube_inputs = self.cube.gather(edges)
+        inputs |= cube_inputs if cube_inputs else inputs
+
+        event_inputs = self.store.gather(edges)
+        inputs |= event_inputs if event_inputs else inputs
+
+        inputs = dict(sorted(inputs.items()))
+        args = [val for key, val in inputs.items() if isinstance(key, int | None)]
+        kwargs = {key: val for key, val in inputs.items() if not isinstance(key, int | None)}
+
+        return args, kwargs
 
     def gather_return(self) -> ReturnNodeType:
         """
