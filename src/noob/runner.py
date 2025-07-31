@@ -176,6 +176,10 @@ class SynchronousRunner(TubeRunner):
         self._running.set()
         for node in self.tube.nodes.values():
             node.init()
+
+        for asset in self.cube.assets.values():
+            asset.init()
+
         return self
 
     def deinit(self) -> None:
@@ -183,6 +187,10 @@ class SynchronousRunner(TubeRunner):
         # TODO: lock to ensure we've been started
         for node in self.tube.nodes.values():
             node.deinit()
+
+        for asset in self.cube.assets.values():
+            asset.deinit()
+
         self._running.clear()
 
     @property
