@@ -8,13 +8,14 @@ from threading import Event as ThreadEvent
 from typing import TYPE_CHECKING, Any, Self
 
 from noob import init_logger
+from noob.cube import Cube
 from noob.event import Event
 from noob.exceptions import AlreadyRunningError
 from noob.node import Node
 from noob.node.return_ import Return
 from noob.store import EventStore
 from noob.tube import Tube
-from noob.types import ReturnNodeType
+from noob.types import PythonIdentifier, ReturnNodeType
 
 if TYPE_CHECKING:
     from graphlib import TopologicalSorter
@@ -33,6 +34,12 @@ class TubeRunner(ABC):
 
     tube: Tube
     store: EventStore = field(default_factory=EventStore)
+    cube: Cube = field(default_factory=Cube)
+    """
+    To prevent the assets from being copied into events and stored a bunch of times, 
+    if assets are emitted as events, when they are converted from raw returned values to events 
+    the resource instances are converted to references to the resource.
+    """
 
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
 
@@ -78,7 +85,9 @@ class TubeRunner(ABC):
         """
         pass
 
-    def gather_input(self, node: Node) -> tuple[list[Any] | None, dict[str, Any] | None]:
+    def gather_input(
+        self, node: Node
+    ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None] | None:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
 
@@ -91,7 +100,20 @@ class TubeRunner(ABC):
             return None, None
 
         edges = self.tube.in_edges(node)
-        return self.store.gather(edges)
+
+        inputs = {}
+
+        cube_inputs = self.cube.gather(edges)
+        inputs |= cube_inputs if cube_inputs else inputs
+
+        event_inputs = self.store.gather(edges)
+        inputs |= event_inputs if event_inputs else inputs
+
+        inputs = dict(sorted(inputs.items()))
+        args = [val for key, val in inputs.items() if isinstance(key, int | None)]
+        kwargs = {key: val for key, val in inputs.items() if isinstance(key, str)}
+
+        return args, kwargs
 
     def gather_return(self) -> ReturnNodeType:
         """
@@ -154,6 +176,10 @@ class SynchronousRunner(TubeRunner):
         self._running.set()
         for node in self.tube.nodes.values():
             node.init()
+
+        for asset in self.cube.assets.values():
+            asset.init()
+
         return self
 
     def deinit(self) -> None:
@@ -161,6 +187,10 @@ class SynchronousRunner(TubeRunner):
         # TODO: lock to ensure we've been started
         for node in self.tube.nodes.values():
             node.deinit()
+
+        for asset in self.cube.assets.values():
+            asset.deinit()
+
         self._running.clear()
 
     @property
@@ -183,14 +213,21 @@ class SynchronousRunner(TubeRunner):
             if not ready:
                 break
             for node_id in ready:
+                if node_id == "assets":
+                    # graph autogenerates "assets" node if something depends on it
+                    graph.done(node_id)
+                    continue
                 node = self.tube.nodes[node_id]
                 args, kwargs = self.gather_input(node)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
                 args = [] if args is None else args
                 kwargs = {} if kwargs is None else kwargs
-
                 value = node.process(*args, **kwargs)
+
+                # take the value from cube first. if it's taken by an asset,
+                # the value is converted to its id, and returned again.
+                value = self.cube.add(node.signals, value, node_id)
                 events = self.store.add(node.signals, value, node_id)
                 self.update_graph(graph, node_id, events)
                 self._logger.debug("Node %s emitted %s", node_id, value)

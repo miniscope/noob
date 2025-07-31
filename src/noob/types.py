@@ -94,6 +94,15 @@ def valid_config_id(val: Any) -> TypeIs[ConfigID]:
     return bool(re.fullmatch(CONFIG_ID_PATTERN, val))
 
 
+@dataclass
+class AssetRef:
+    """
+    A reference to an asset, to replace an actual value within an event.
+    """
+
+    id: PythonIdentifier
+
+
 # --------------------------------------------------
 # Type adapters
 # --------------------------------------------------

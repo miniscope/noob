@@ -1,4 +1,5 @@
 from noob.config import config as cfg
+from noob.cube import Cube
 from noob.logging import init_logger
 from noob.node.base import process_method
 from noob.runner import SynchronousRunner
@@ -13,4 +14,5 @@ __all__ = [
     "cfg",
     "init_logger",
     "process_method",
+    "Cube",
 ]

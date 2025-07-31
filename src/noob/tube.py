@@ -1,9 +1,7 @@
 from collections.abc import Mapping
 from graphlib import TopologicalSorter
 from importlib import resources
-from typing import (
-    Self,
-)
+from typing import Self
 
 from pydantic import BaseModel, Field, field_validator
 

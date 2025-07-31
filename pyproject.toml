@@ -59,6 +59,8 @@ tests = [
     "tomli-w>=1.2.0",
     "faker>=37.3.0",
     "numpy>=2.3.2",
+    "xarray>=2025.7.1",
+    "fastapi[standard]>=0.116.1",
 ]
 docs = [
     "sphinx>=8.2.3",

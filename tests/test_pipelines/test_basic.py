@@ -1,6 +1,7 @@
 import pytest
 
 from noob import SynchronousRunner, Tube
+from noob.cube import Cube
 
 
 def test_basic():
@@ -105,3 +106,27 @@ def test_multi_signal():
         assert isinstance(value, dict)
         assert isinstance(value["word"], str)
         assert value["count_sum"] == sum(value["counts"])
+
+
+def test_xarray_asset():
+    tube = Tube.from_specification("testing-xarray-asset")
+    cube = Cube.from_specification("testing-xarray-asset")
+    runner = SynchronousRunner(tube=tube, cube=cube)
+
+    runner.init()
+    output = runner.process()
+
+    assert cube.assets["basic_xarray"].obj.sizes == {"x": 3, "y": 4, "z": 10}
+    assert output.equals(cube.assets["basic_xarray"].obj)
+
+
+def test_server_asset():
+    tube = Tube.from_specification("testing-server-asset")
+    cube = Cube.from_specification("testing-server-asset")
+    runner = SynchronousRunner(tube=tube, cube=cube)
+
+    runner.init()
+    response = runner.process()
+
+    assert response.status_code == 200
+    assert response.json() == {"Hello": "World"}
