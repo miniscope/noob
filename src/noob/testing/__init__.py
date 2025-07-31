@@ -1,3 +1,7 @@
+from noob.testing.assets import (
+    xarray_asset,
+    server_asset,
+)
 from noob.testing.nodes import (
     Comm,
     CountSource,
@@ -17,6 +21,7 @@ from noob.testing.nodes import (
     sporadic_word,
     word_counts,
     word_source,
+    array_concat,
 )
 
 __all__ = [
@@ -38,4 +43,7 @@ __all__ = [
     "Volume",
     "Now",
     "Comm",
+    "array_concat",
+    "xarray_asset",
+    "server_asset",
 ]

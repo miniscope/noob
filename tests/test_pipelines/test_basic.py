@@ -1,4 +1,5 @@
 from noob import SynchronousRunner, Tube
+from noob.cube import Cube
 
 
 def test_basic():
@@ -107,13 +108,19 @@ def test_multi_signal():
 
 def test_xarray_asset():
     tube = Tube.from_specification("testing-xarray-asset")
-    runner = SynchronousRunner(tube)
+    cube = Cube.from_specification("testing-xarray-asset")
+    runner = SynchronousRunner(tube=tube, cube=cube)
 
-    outputs = runner.process()
+    runner.init()
+    output = runner.process()
+
+    assert cube.assets["basic_xarray"].obj.sizes == {"x": 3, "y": 4, "z": 10}
+    assert output.equals(cube.assets["basic_xarray"].obj)
 
 
 def test_server_asset():
     tube = Tube.from_specification("testing-server-asset")
     runner = SynchronousRunner(tube)
 
+    runner.init()
     outputs = runner.process()

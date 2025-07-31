@@ -6,12 +6,8 @@ from itertools import count, cycle
 from typing import Annotated as A
 from typing import Any
 
-import numpy as np
-import uvicorn
 import xarray as xr
 from faker import Faker
-from fastapi import FastAPI
-from websockets.asyncio.connection import Connection
 
 from noob import Name, process_method
 from noob.node import Node
@@ -133,14 +129,6 @@ class Comm:
     async def ping(self, msg: str) -> A[str | bytes, Name("ping")]:
         await self.conn.send(msg)
         return await self.conn.recv()
-
-
-def xarray_source() -> xr.DataArray:
-    return xr.DataArray(
-        [np.ones((3, 4, 5), dtype=float)],
-        dims=["x", "y", "z"],
-        coords={"x": np.arange(0, 3, 1), "y": np.arange(0, 4, 1), "z": np.arange(0, 5, 1)},
-    )
 
 
 def array_concat(left: xr.DataArray, right: xr.DataArray, dim: str) -> xr.DataArray:
