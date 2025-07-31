@@ -12,19 +12,19 @@ def xarray_asset() -> xr.DataArray:
     )
 
 
-def server_asset(host, port) -> FastAPI:
+def server_asset(host: str, port: int) -> FastAPI:
     app = FastAPI()
 
     @app.get("/")
-    def read_root():
+    def read_root() -> dict:
         return {"Hello": "World"}
 
     @app.get("/items/{item_id}")
-    def read_item(item_id: int, q: str | None = None):
+    def read_item(item_id: int, q: str | None = None) -> dict:
         return {"item_id": item_id, "q": q}
 
     @app.get("/heartbeat")
-    def read_heartbeat(msg: str):
+    def read_heartbeat(msg: str) -> dict:
         return {"message": msg}
 
     uvicorn.run(app, host=host, port=port)

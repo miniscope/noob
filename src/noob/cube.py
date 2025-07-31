@@ -1,10 +1,10 @@
-from typing import Self, Any
+from typing import Any, Self
 
 from pydantic import BaseModel, Field, field_validator
 
 from noob.asset import Asset, AssetSpecification
-from noob.node.base import Signal, Edge
-from noob.types import ConfigSource, PythonIdentifier, AssetRef
+from noob.node.base import Edge, Signal
+from noob.types import AssetRef, ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
 

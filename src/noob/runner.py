@@ -15,7 +15,7 @@ from noob.node import Node
 from noob.node.return_ import Return
 from noob.store import EventStore
 from noob.tube import Tube
-from noob.types import ReturnNodeType, PythonIdentifier
+from noob.types import PythonIdentifier, ReturnNodeType
 
 if TYPE_CHECKING:
     from graphlib import TopologicalSorter
@@ -111,7 +111,7 @@ class TubeRunner(ABC):
 
         inputs = dict(sorted(inputs.items()))
         args = [val for key, val in inputs.items() if isinstance(key, int | None)]
-        kwargs = {key: val for key, val in inputs.items() if not isinstance(key, int | None)}
+        kwargs = {key: val for key, val in inputs.items() if not isinstance(key, PythonIdentifier)}
 
         return args, kwargs
 

@@ -17,7 +17,8 @@ class AssetSpecification(BaseModel):
     id: PythonIdentifier
     type_: AbsoluteIdentifier = Field(..., alias="type")
     scope: ScopeType
-    params: dict | None = None  # or config?
+    params: dict | None = None
+    depends: list[AbsoluteIdentifier] | None = None
 
 
 class Asset(BaseModel):
