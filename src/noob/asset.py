@@ -1,4 +1,5 @@
 import inspect
+from abc import abstractmethod
 from collections.abc import Callable
 from typing import Any, Literal
 
@@ -23,9 +24,13 @@ class Asset(BaseModel):
     id: PythonIdentifier
     spec: AssetSpecification
     scope: ScopeType
+    params: dict[str, Any] = Field(default_factory=dict)
+
+    obj: type | None = None
 
     model_config = ConfigDict(extra="forbid")
 
+    @abstractmethod
     def init(self) -> None:
         """
         Start producing, processing, or receiving data.
@@ -70,14 +75,25 @@ class Asset(BaseModel):
         else:
             return WrapFuncAsset(id=spec.id, fn=obj, spec=spec, params=params, scope=scope)
 
+    def update(self, obj: Any) -> None:
+        self.obj = obj
+
 
 class WrapClassAsset(Asset):
     cls: type
-    params: dict[str, Any] = Field(default_factory=dict)
-    instance: type | None = None
+
+    def init(self) -> None:
+        self.obj = self.cls(**self.params)
+
+    def deinit(self) -> None:
+        self.obj = None
 
 
 class WrapFuncAsset(Asset):
     fn: Callable[PWrap, TOutput]
-    params: dict[str, Any] = Field(default_factory=dict)
-    instance: type | None = None
+
+    def init(self) -> None:
+        self.obj = self.fn(**self.params)
+
+    def deinit(self) -> None:
+        self.obj = None
