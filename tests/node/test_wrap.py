@@ -43,14 +43,14 @@ def test_class_with_process():
 
 def test_class_without_process():
     node = Node.from_specification(
-        spec=NodeSpecification(id="test-volume", type="noob.testing.Volume", params={"height": 5})
+        spec=NodeSpecification(id="test_volume", type="noob.testing.Volume", params={"height": 5})
     )
     node.init()
     assert node.process(width=2, depth=3) == 5 * 2 * 3
 
 
 def test_class_without_init_params():
-    node = Node.from_specification(spec=NodeSpecification(id="test-now", type="noob.testing.Now"))
+    node = Node.from_specification(spec=NodeSpecification(id="test_now", type="noob.testing.Now"))
     node.init()
     prefix = "What time is it?: "
     assert node.process(prefix=prefix) == f"{prefix}{datetime.datetime.now().isoformat()}"
@@ -59,7 +59,7 @@ def test_class_without_init_params():
 @pytest.mark.xfail(reason="resources not implemented")
 def test_resource_class():
     node = Node.from_specification(
-        spec=NodeSpecification(id="test-resource", type="noob.testing.Comm")
+        spec=NodeSpecification(id="test_resource", type="noob.testing.Comm")
     )
     node.init()
     msg = "boom boom pow"

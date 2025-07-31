@@ -1,12 +1,13 @@
 noob_id: testing-server-asset
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
 assets:
   server:
     type: noob.testing.server_asset
     scope: session
-    config: # or load it from a separate yaml
-      host: localhost  # or some reference to secure secret
+    config:
+      host: localhost
       port: 5432
-
 nodes:
   ping:
     type: noob.testing.Comm
