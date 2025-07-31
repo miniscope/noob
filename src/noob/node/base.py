@@ -202,8 +202,10 @@ class WrapClassNode(Node):
     instance: type | None = None
     process_method: PythonIdentifier | None = None
 
+    def model_post_init(self, context: Any, /) -> None:
+        self.process_method = self._get_process_method(self.cls)
+
     def init(self) -> None:
-        self.process_method = self._map_main_method(self.cls)
         self.instance = self.cls(**self.params)
 
     def process(self, *args: Any, **kwargs: Any) -> Any:
@@ -213,16 +215,14 @@ class WrapClassNode(Node):
         self.instance = None
 
     def _collect_signals(self) -> list[Signal]:
-        return Signal.from_callable(self.instance.process)
+        return Signal.from_callable(getattr(self.cls, self.process_method))
 
     def _collect_slots(self) -> dict[str, Slot]:
-        return Slot.from_callable(self.instance.process)
+        return Slot.from_callable(getattr(self.cls, self.process_method))
 
-    def _map_main_method(self, cls: type) -> str:
+    def _get_process_method(self, cls: type) -> str:
         process_func = None
         for name, member in inspect.getmembers(cls, predicate=inspect.isfunction):
-            # inspect.isfunction for classmethod and staticmethod appears as
-            # wrapped methods. do we have to functools.unwrap them?
             if hasattr(member, _PROCESS_METHOD_SENTINEL):
                 if process_func:
                     raise TypeError(

@@ -5,16 +5,17 @@ assets:
   server:
     type: noob.testing.server_asset
     scope: session
-    config:
+    params:
       host: localhost
       port: 5432
+
 nodes:
-  ping:
-    type: noob.testing.Comm
+  hello:
+    type: noob.testing.Server
     params:
-      msg: pitbull forever
+      item_id: Mr. Worldwide
     depends:
-      - conn: assets.server
+      - app: assets.server
   return:
     type: return
-    depends: ping.ping
+    depends: hello.greeting

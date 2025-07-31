@@ -8,6 +8,8 @@ from typing import Any
 
 import xarray as xr
 from faker import Faker
+from starlette.responses import Response
+from starlette.testclient import TestClient
 
 from noob import Name, process_method
 from noob.node import Node
@@ -121,14 +123,16 @@ class Now:
         return f"{prefix}{self.now.isoformat()}"
 
 
-class Comm:
-    def __init__(self, conn: Any):
-        self.conn = conn
+class Server:
+    def __init__(self, item_id: str):
+        self.item_id = item_id
 
     @process_method
-    async def ping(self, msg: str) -> A[str | bytes, Name("ping")]:
-        await self.conn.send(msg)
-        return await self.conn.recv()
+    def hello(self, app: TestClient) -> A[Response, Name("greeting")]:
+        return app.get("/")
+
+    def lookup(self, app: TestClient) -> A[Response, Name("item_id")]:
+        return app.get(f"/items/{self.item_id}")
 
 
 def array_concat(left: xr.DataArray, right: xr.DataArray, dim: str) -> xr.DataArray:

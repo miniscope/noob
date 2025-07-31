@@ -120,10 +120,13 @@ def test_xarray_asset():
     assert output.equals(cube.assets["basic_xarray"].obj)
 
 
-@pytest.mark.xfail(reason="server has not been implemented.")
 def test_server_asset():
     tube = Tube.from_specification("testing-server-asset")
-    runner = SynchronousRunner(tube)
+    cube = Cube.from_specification("testing-server-asset")
+    runner = SynchronousRunner(tube=tube, cube=cube)
 
     runner.init()
-    outputs = runner.process()
+    response = runner.process()
+
+    assert response.status_code == 200
+    assert response.json() == {"Hello": "World"}

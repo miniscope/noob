@@ -1,7 +1,13 @@
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from tempfile import TemporaryDirectory
+from typing import Any
+
 import numpy as np
-import uvicorn
 import xarray as xr
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.testclient import TestClient
 
 
 def xarray_asset() -> xr.DataArray:
@@ -12,21 +18,28 @@ def xarray_asset() -> xr.DataArray:
     )
 
 
-def server_asset(host: str, port: int) -> FastAPI:
-    app = FastAPI()
+def server_asset(host: str, port: int) -> TestClient:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, Any]:
+        yield
 
-    @app.get("/")
+    router = APIRouter()
+
+    @router.get("/")
     def read_root() -> dict:
         return {"Hello": "World"}
 
-    @app.get("/items/{item_id}")
+    @router.get("/items/{item_id}")
     def read_item(item_id: int, q: str | None = None) -> dict:
         return {"item_id": item_id, "q": q}
 
-    @app.get("/heartbeat")
-    def read_heartbeat(msg: str) -> dict:
-        return {"message": msg}
+    app = FastAPI(lifespan=lifespan, debug=True)
 
-    uvicorn.run(app, host=host, port=port)
+    with TemporaryDirectory() as tmpdir:
+        app.mount(path="/dist", app=StaticFiles(directory=tmpdir), name="dist")
+    app.include_router(router)
 
-    return app
+    # figure out how to run this in the background
+    # uvicorn.run(app, host=host, port=port)
+
+    return TestClient(app)

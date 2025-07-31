@@ -3,10 +3,10 @@ from noob.testing.assets import (
     xarray_asset,
 )
 from noob.testing.nodes import (
-    Comm,
     CountSource,
     Multiply,
     Now,
+    Server,
     Volume,
     VolumeProcess,
     array_concat,
@@ -42,7 +42,7 @@ __all__ = [
     "VolumeProcess",
     "Volume",
     "Now",
-    "Comm",
+    "Server",
     "array_concat",
     "xarray_asset",
     "server_asset",
