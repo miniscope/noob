@@ -54,13 +54,3 @@ def test_class_without_init_params():
     node.init()
     prefix = "What time is it?: "
     assert node.process(prefix=prefix) == f"{prefix}{datetime.datetime.now().isoformat()}"
-
-
-@pytest.mark.xfail(reason="resources not implemented")
-def test_resource_class():
-    node = Node.from_specification(
-        spec=NodeSpecification(id="test_resource", type="noob.testing.Comm")
-    )
-    node.init()
-    msg = "boom boom pow"
-    assert node.process(msg=msg) == msg

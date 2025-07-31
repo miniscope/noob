@@ -204,8 +204,6 @@ class WrapClassNode(Node):
 
     def model_post_init(self, context: Any, /) -> None:
         self.process_method = self._get_process_method(self.cls)
-
-    def init(self) -> None:
         self.instance = self.cls(**self.params)
 
     def process(self, *args: Any, **kwargs: Any) -> Any:
@@ -215,10 +213,10 @@ class WrapClassNode(Node):
         self.instance = None
 
     def _collect_signals(self) -> list[Signal]:
-        return Signal.from_callable(getattr(self.cls, self.process_method))
+        return Signal.from_callable(getattr(self.instance, self.process_method))
 
     def _collect_slots(self) -> dict[str, Slot]:
-        return Slot.from_callable(getattr(self.cls, self.process_method))
+        return Slot.from_callable(getattr(self.instance, self.process_method))
 
     def _get_process_method(self, cls: type) -> str:
         process_func = None
