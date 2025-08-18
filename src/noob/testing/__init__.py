@@ -4,6 +4,7 @@ from noob.testing.assets import (
 )
 from noob.testing.nodes import (
     CountSource,
+    GenClass,
     Multiply,
     Now,
     Server,
@@ -46,4 +47,5 @@ __all__ = [
     "array_concat",
     "xarray_asset",
     "server_asset",
+    "GenClass",
 ]

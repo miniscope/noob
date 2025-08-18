@@ -54,3 +54,14 @@ def test_class_without_init_params():
     node.init()
     prefix = "What time is it?: "
     assert node.process(prefix=prefix) == f"{prefix}{datetime.datetime.now().isoformat()}"
+
+
+def test_gen_class():
+    node = Node.from_specification(
+        spec=NodeSpecification(
+            id="test_gen_class", type="noob.testing.GenClass", params={"start": 5}
+        )
+    )
+    node.init()
+    assert node.process() == 5
+    assert node.process() == 6

@@ -137,3 +137,12 @@ class Server:
 
 def array_concat(left: xr.DataArray, right: xr.DataArray, dim: str) -> xr.DataArray:
     return xr.concat([left, right], dim=dim)
+
+
+class GenClass:
+    def __init__(self, start: int) -> None:
+        self.gen = count(start=start)
+
+    @process_method
+    def process(self) -> Generator[A[int, Name("count")], None, None]:
+        yield from self.gen
