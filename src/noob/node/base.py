@@ -201,13 +201,23 @@ class WrapClassNode(Node):
     params: dict[str, Any] = Field(default_factory=dict)
     instance: type | None = None
     process_method: PythonIdentifier | None = None
+    _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
 
     def model_post_init(self, context: Any, /) -> None:
         self.process_method = self._get_process_method(self.cls)
         self.instance = self.cls(**self.params)
 
     def process(self, *args: Any, **kwargs: Any) -> Any:
-        return getattr(self.instance, self.process_method)(*args, **kwargs)
+        value = getattr(self.instance, self.process_method)(*args, **kwargs)
+        if inspect.isgenerator(value):
+            if self._gen is None:
+                self._gen = value
+            try:
+                value = next(self._gen)
+            except StopIteration as e:
+                # generator is exhausted
+                raise RuntimeError("Generator node stopped its iteration") from e
+        return value
 
     def deinit(self) -> None:
         self.instance = None
