@@ -120,13 +120,11 @@ def test_xarray_asset():
     assert output.equals(cube.assets["basic_xarray"].obj)
 
 
-def test_server_asset():
-    tube = Tube.from_specification("testing-server-asset")
-    cube = Cube.from_specification("testing-server-asset")
-    runner = SynchronousRunner(tube=tube, cube=cube)
+def test_db_asset():
+    tube = Tube.from_specification("testing-db-asset")
+    runner = SynchronousRunner(tube=tube)
 
     runner.init()
-    response = runner.process()
+    output = runner.process()
 
-    assert response.status_code == 200
-    assert response.json() == {"Hello": "World"}
+    assert output == (1, "Hannah Montana")

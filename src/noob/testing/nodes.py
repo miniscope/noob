@@ -1,4 +1,5 @@
 import random
+import sqlite3
 import string
 from collections.abc import Generator
 from datetime import datetime
@@ -8,8 +9,6 @@ from typing import Any
 
 import xarray as xr
 from faker import Faker
-from starlette.responses import Response
-from starlette.testclient import TestClient
 
 from noob import Name, process_method
 from noob.node import Node
@@ -146,3 +145,13 @@ class GenClass:
     @process_method
     def process(self) -> Generator[A[int, Name("count")], None, None]:
         yield from self.gen
+
+
+def input_party(
+    one: int, two: float, three: str, four: bool, five: list, six: dict, seven: set
+) -> A[bool, Name("works")]:
+    return True
+
+
+def read_db(conn: sqlite3.Connection) -> A[tuple[int, str], Name("payload")]:
+    return conn.cursor().execute("SELECT * FROM users").fetchone()

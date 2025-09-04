@@ -1,13 +1,7 @@
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
-from tempfile import TemporaryDirectory
-from typing import Any
+import sqlite3
 
 import numpy as np
 import xarray as xr
-from fastapi import APIRouter, FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.testclient import TestClient
 
 
 def xarray_asset() -> xr.DataArray:
@@ -18,28 +12,14 @@ def xarray_asset() -> xr.DataArray:
     )
 
 
-def server_asset(host: str, port: int) -> TestClient:
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncGenerator[None, Any]:
-        yield
+def db_connection() -> sqlite3.Connection:
+    """
+    in-memory database connection
+    """
+    conn = sqlite3.connect(":memory:")
 
-    router = APIRouter()
-
-    @router.get("/")
-    def read_root() -> dict:
-        return {"Hello": "World"}
-
-    @router.get("/items/{item_id}")
-    def read_item(item_id: int, q: str | None = None) -> dict:
-        return {"item_id": item_id, "q": q}
-
-    app = FastAPI(lifespan=lifespan, debug=True)
-
-    with TemporaryDirectory() as tmpdir:
-        app.mount(path="/dist", app=StaticFiles(directory=tmpdir), name="dist")
-    app.include_router(router)
-
-    # figure out how to run this in the background
-    # uvicorn.run(app, host=host, port=port)
-
-    return TestClient(app)
+    cursor = conn.cursor()
+    cursor.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    cursor.execute("INSERT INTO users(name)" "VALUES (?)", ["Hannah Montana"])
+    conn.commit()
+    return conn

@@ -1,5 +1,5 @@
 from noob.testing.assets import (
-    server_asset,
+    db_connection,
     xarray_asset,
 )
 from noob.testing.nodes import (
@@ -7,7 +7,6 @@ from noob.testing.nodes import (
     GenClass,
     Multiply,
     Now,
-    Server,
     Volume,
     VolumeProcess,
     array_concat,
@@ -19,6 +18,7 @@ from noob.testing.nodes import (
     letter_source,
     multi_words_source,
     multiply,
+    read_db,
     repeat,
     sporadic_word,
     word_counts,
@@ -46,6 +46,8 @@ __all__ = [
     "Server",
     "array_concat",
     "xarray_asset",
-    "server_asset",
+    "db_connection",
     "GenClass",
+    "input_party",
+    "read_db",
 ]
