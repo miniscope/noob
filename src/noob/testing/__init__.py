@@ -15,6 +15,7 @@ from noob.testing.nodes import (
     dictify,
     divide,
     exclaim,
+    input_party,
     letter_source,
     multi_words_source,
     multiply,
