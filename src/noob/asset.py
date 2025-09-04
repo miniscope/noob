@@ -9,14 +9,18 @@ from noob.node.base import PWrap, TOutput
 from noob.types import AbsoluteIdentifier, PythonIdentifier
 from noob.utils import resolve_python_identifier
 
-ScopeType = Literal["function", "class", "module", "package", "session"]
+
+class AssetScope(StrEnum):
+    RUNNER = "runner"
+
+
 """Defines at which scale the resource should be locked."""
 
 
 class AssetSpecification(BaseModel):
     id: PythonIdentifier
     type_: AbsoluteIdentifier = Field(..., alias="type")
-    scope: ScopeType
+    scope: AssetScope
     params: dict | None = None
     depends: list[AbsoluteIdentifier] | None = None
 
@@ -24,7 +28,7 @@ class AssetSpecification(BaseModel):
 class Asset(BaseModel):
     id: PythonIdentifier
     spec: AssetSpecification
-    scope: ScopeType
+    scope: AssetScope
     params: dict[str, Any] = Field(default_factory=dict)
 
     obj: type | None = None

@@ -4,9 +4,8 @@ noob_version: 0.1.1.dev86+gcf9e11b.d20250725
 assets:
   basic_xarray:
     type: noob.testing.xarray_asset
-    scope: session
-    depends:
-      - concat.value
+    scope: runner
+
 nodes:
   concat:
     type: noob.testing.array_add_to_left
