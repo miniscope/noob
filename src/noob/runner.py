@@ -85,7 +85,7 @@ class TubeRunner(ABC):
         """
         pass
 
-    def gather_input(
+    def collect_input(
         self, node: Node
     ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None] | None:
         """
@@ -115,7 +115,7 @@ class TubeRunner(ABC):
 
         return args, kwargs
 
-    def gather_return(self) -> ReturnNodeType:
+    def collect_return(self) -> ReturnNodeType:
         """
         If any :class:`.Return` nodes are in the tube,
         gather their return values to return from :meth:`.TubeRunner.process`
@@ -218,7 +218,7 @@ class SynchronousRunner(TubeRunner):
                     graph.done(node_id)
                     continue
                 node = self.tube.nodes[node_id]
-                args, kwargs = self.gather_input(node)
+                args, kwargs = self.collect_input(node)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
                 args = [] if args is None else args
@@ -232,7 +232,7 @@ class SynchronousRunner(TubeRunner):
                 self.update_graph(graph, node_id, events)
                 self._logger.debug("Node %s emitted %s", node_id, value)
 
-        return self.gather_return()
+        return self.collect_return()
 
     def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
         """
