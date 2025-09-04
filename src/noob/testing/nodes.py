@@ -122,20 +122,9 @@ class Now:
         return f"{prefix}{self.now.isoformat()}"
 
 
-class Server:
-    def __init__(self, item_id: str):
-        self.item_id = item_id
-
-    @process_method
-    def hello(self, app: TestClient) -> A[Response, Name("greeting")]:
-        return app.get("/")
-
-    def lookup(self, app: TestClient) -> A[Response, Name("item_id")]:
-        return app.get(f"/items/{self.item_id}")
-
-
-def array_concat(left: xr.DataArray, right: xr.DataArray, dim: str) -> xr.DataArray:
-    return xr.concat([left, right], dim=dim)
+def array_add_to_left(left: xr.DataArray, right: xr.DataArray) -> xr.DataArray:
+    left += right
+    return left
 
 
 class GenClass:
