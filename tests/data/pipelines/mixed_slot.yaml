@@ -1,0 +1,23 @@
+noob_id: testing-mixed-slot
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev42+gd638e1b.d20250708
+nodes:
+  a:
+    type: noob.testing.word_counts
+  b:
+    type: sum # should be possible to just use builtins
+    depends:
+      - a.counts
+  c:
+    type: noob.testing.input_party
+    depends:
+      - a.counts
+      - b.value
+      - a.word
+      - four: a.counts
+      - five: b.value
+      - six: a.word
+      - seven: a.counts
+  d:
+    type: return
+    depends: c.works
