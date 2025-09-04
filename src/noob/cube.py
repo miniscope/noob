@@ -27,7 +27,6 @@ class CubeSpecification(ConfigYAMLMixin):
 
 class Cube(BaseModel):  # or Pube
     assets: dict[PythonIdentifier, Asset] = Field(default_factory=dict)
-    edges: list[Edge] = Field(default_factory=list)
 
     @classmethod
     def from_specification(cls, spec: CubeSpecification | ConfigSource) -> Self:
@@ -49,57 +48,6 @@ class Cube(BaseModel):  # or Pube
         assets = {spec.id: Asset.from_specification(spec) for spec in specs.assets.values()}
         return assets
 
-    @classmethod
-    def _init_edges(cls, asset_spec: dict[str, AssetSpecification]) -> list[Edge]:
-        edges = []
-
-        dependencies = {id_: spec.depends for id_, spec in asset_spec.items() if spec.depends}
-        for asset_id, slot_inputs in dependencies.items():
-            for source in slot_inputs:
-                source_node, source_signal = source.split(".")
-
-                edges.append(
-                    Edge(
-                        source_node=source_node,
-                        source_signal=source_signal,
-                        target_node="assets",
-                        target_slot=asset_id,
-                        required=True,
-                    )
-                )
-
-        return edges
-
-    def add(self, signals: list[Signal], value: Any, node_id: str) -> Any:
-        """
-        Add the result of a :meth:`.Node.process` call to the asset cube.
-
-        Split the Signal instance into separate :class:`.Asset` s.
-        Returns asset values replaced with asset.id, leaving others intact.
-        Does not support dynamic creation of assets unspecified in yaml specification.
-
-        Args:
-            signals (list[Signal]): Signals from which the value was emitted by
-                a :meth:`.Node.process` call
-            value (Any): Value emitted by a :meth:`.Node.process` call. Gets wrapped
-                with a list in case the length of signals is 1. Otherwise, it's zipped
-                with :signals:
-        """
-        if value is None:
-            return
-
-        values = [value] if len(signals) == 1 else value
-
-        for idx, (signal, val) in enumerate(zip(signals, values)):
-            edges = [
-                e for e in self.edges if e.source_node == node_id and e.source_signal == signal.name
-            ]
-            for edge in edges:
-                self.assets[edge.target_slot].update(val)
-                values[idx] = AssetRef(id=edge.target_slot)
-
-        return values if len(signals) > 1 else values[0]
-
     def get(self, signal: str) -> Asset | None:
         """
         Get the event with the matching node_id and signal name
@@ -113,7 +61,7 @@ class Cube(BaseModel):  # or Pube
         asset = [val for key, val in self.assets.items() if key == signal]
         return None if len(asset) == 0 else asset[-1]
 
-    def gather(self, edges: list[Edge]) -> dict | None:
+    def collect(self, edges: list[Edge]) -> dict | None:
         """
         Gather events into a form that can be consumed by a :meth:`.Node.process` method,
         given the collection of inbound edges (usually from :meth:`.Tube.in_edges` ).
