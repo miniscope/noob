@@ -9,9 +9,7 @@ assets:
       - concat.value
 nodes:
   concat:
-    type: noob.testing.array_concat
-    params:
-      dim: z
+    type: noob.testing.array_add_to_left
     depends:
       - left: assets.basic_xarray
       - right: assets.basic_xarray

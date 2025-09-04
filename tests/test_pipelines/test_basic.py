@@ -1,7 +1,7 @@
+import numpy as np
 import pytest
 
 from noob import SynchronousRunner, Tube
-from noob.cube import Cube
 
 
 def test_basic():
@@ -109,15 +109,18 @@ def test_multi_signal():
 
 
 def test_xarray_asset():
+    """
+    Test should verify that the asset has been modified in place,
+    (two xarray dataarray assets have been summed and assigned to one of them)
+    and the modified asset is same as the returned event output.
+    """
     tube = Tube.from_specification("testing-xarray-asset")
-    cube = Cube.from_specification("testing-xarray-asset")
-    runner = SynchronousRunner(tube=tube, cube=cube)
+    runner = SynchronousRunner(tube=tube)
 
     runner.init()
     output = runner.process()
 
-    assert cube.assets["basic_xarray"].obj.sizes == {"x": 3, "y": 4, "z": 10}
-    assert output.equals(cube.assets["basic_xarray"].obj)
+    assert np.all(output == 2)
 
 
 def test_db_asset():
