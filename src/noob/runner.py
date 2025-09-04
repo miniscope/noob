@@ -103,9 +103,14 @@ class TubeRunner(ABC):
         event_inputs = self.store.collect(edges)
         inputs |= event_inputs if event_inputs else inputs
 
-        inputs = dict(sorted(inputs.items()))
-        args = [val for key, val in inputs.items() if isinstance(key, int | None)]
-        kwargs = {key: val for key, val in inputs.items() if isinstance(key, str)}
+        args = []
+        kwargs = {}
+        for k, v in inputs.items():
+            if isinstance(k, int | None):
+                args.append((k, v))
+            else:
+                kwargs[k] = v
+        args = [item[1] for item in sorted(args, key=lambda x: x[0])]
 
         return args, kwargs
 
