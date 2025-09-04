@@ -9,7 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
-from noob.types import PythonIdentifier
 from noob.utils import resolve_python_identifier
 
 TOutput = TypeVar("TOutput")
@@ -202,6 +201,7 @@ class Node(BaseModel):
 class WrapClassNode(Node):
     cls: type
     params: dict[str, Any] = Field(default_factory=dict)
+
     instance: type | None = None
     process_method: Callable | None = None
     _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)

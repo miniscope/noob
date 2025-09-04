@@ -1,11 +1,11 @@
-from typing import Any, Self
+from typing import Self
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from noob.asset import Asset, AssetSpecification
-from noob.node.base import Edge, Signal
-from noob.types import AssetRef, ConfigSource, PythonIdentifier
-from noob.yaml import ConfigYAMLMixin
+from noob.node.base import Edge
+from noob.types import PythonIdentifier
+
 
 class CubeSpecification(BaseModel):
     """

@@ -1,7 +1,7 @@
 import inspect
-from abc import abstractmethod
 from collections.abc import Callable
-from typing import Any, Literal
+from enum import StrEnum
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -82,7 +82,9 @@ class Asset(BaseModel):
     def update(self, obj: Any) -> None:
         self.obj = obj
 
+
 T = TypeVar("T")
+
 
 class WrapClassAsset(Asset):
     cls: type[T]

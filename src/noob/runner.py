@@ -8,7 +8,6 @@ from threading import Event as ThreadEvent
 from typing import TYPE_CHECKING, Any, Self
 
 from noob import init_logger
-from noob.cube import Cube
 from noob.event import Event
 from noob.exceptions import AlreadyRunningError
 from noob.node import Node
