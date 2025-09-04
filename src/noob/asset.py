@@ -35,7 +35,6 @@ class Asset(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    @abstractmethod
     def init(self) -> None:
         """
         Start producing, processing, or receiving data.
