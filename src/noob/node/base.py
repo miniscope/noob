@@ -102,6 +102,7 @@ class Signal(BaseModel):
 
 
 _PROCESS_METHOD_SENTINEL = "__is_process_method__"
+_GENERATOR_METHOD_SENTINEL = "__is_generator_method__"
 
 
 def process_method(func: Callable) -> Callable:
@@ -114,6 +115,8 @@ def process_method(func: Callable) -> Callable:
         return func(*args, **kwargs)
 
     setattr(wrapper, _PROCESS_METHOD_SENTINEL, True)
+    if inspect.isgeneratorfunction(func):
+        setattr(wrapper, _GENERATOR_METHOD_SENTINEL, True)
     return wrapper
 
 
@@ -200,33 +203,30 @@ class WrapClassNode(Node):
     cls: type
     params: dict[str, Any] = Field(default_factory=dict)
     instance: type | None = None
-    process_method: PythonIdentifier | None = None
+    process_method: Callable | None = None
     _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
 
     def model_post_init(self, context: Any, /) -> None:
-        self.process_method = self._get_process_method(self.cls)
         self.instance = self.cls(**self.params)
+        fn_name = self._get_process_method(self.cls)
+        fn = getattr(self.instance, fn_name)
+        if getattr(fn, _GENERATOR_METHOD_SENTINEL, False):
+            self._gen = fn()
+            self.process_method = lambda: next(self._gen)
+        else:
+            self.process_method = fn
 
     def process(self, *args: Any, **kwargs: Any) -> Any:
-        value = getattr(self.instance, self.process_method)(*args, **kwargs)
-        if inspect.isgenerator(value):
-            if self._gen is None:
-                self._gen = value
-            try:
-                value = next(self._gen)
-            except StopIteration as e:
-                # generator is exhausted
-                raise RuntimeError("Generator node stopped its iteration") from e
-        return value
+        return self.process_method(*args, **kwargs)
 
     def deinit(self) -> None:
         self.instance = None
 
     def _collect_signals(self) -> list[Signal]:
-        return Signal.from_callable(getattr(self.instance, self.process_method))
+        return Signal.from_callable(self.process_method)
 
     def _collect_slots(self) -> dict[str, Slot]:
-        return Slot.from_callable(getattr(self.instance, self.process_method))
+        return Slot.from_callable(self.process_method)
 
     def _get_process_method(self, cls: type) -> str:
         process_func = None
