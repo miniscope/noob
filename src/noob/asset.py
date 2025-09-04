@@ -79,9 +79,11 @@ class Asset(BaseModel):
     def update(self, obj: Any) -> None:
         self.obj = obj
 
+T = TypeVar("T")
 
 class WrapClassAsset(Asset):
-    cls: type
+    cls: type[T]
+    obj: T | None = None
 
     def init(self) -> None:
         self.obj = self.cls(**self.params)
