@@ -7,41 +7,48 @@ from noob.node.base import Edge, Signal
 from noob.types import AssetRef, ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
+class CubeSpecification(BaseModel):
+    """
+    Configuration for the assets within a cube.
 
-class CubeSpecification(ConfigYAMLMixin):
+    Representation of the yaml-form of a cube.
+    Converted to the runtime-form with :meth:`.Cube.from_specification`.
+
+    Not much, if any validation is performed here on the whole cube except
+    that the assets have the correct fields, ignoring validity of
+    e.g. type mismatches.
+    Those require importing and introspecting the specified assets classes,
+    which should only happen when we try and instantiate the cube -
+    this class is just a carrier for the yaml spec.
+    """
+
     assets: dict[str, AssetSpecification] = Field(default_factory=dict)
-    """The resources that this cube configures"""
-
-    @field_validator("assets", mode="before")
-    @classmethod
-    def fill_node_ids(cls, value: dict[str, dict]) -> dict[str, dict]:
-        """
-        Roll down the `id` from the key in the `assets` dictionary into the asset config
-        """
-        assert isinstance(value, dict)
-        for id_, asset in value.items():
-            if "id" not in asset:
-                asset["id"] = id_
-        return value
+    """The assets that this cube configures"""
 
 
 class Cube(BaseModel):  # or Pube
+    """
+    A collection of assets storing objects that persist through iterations of the tube.
+    The target demographics generally include database connections, large arrays and statistics
+    that traverse multiple processes of the tube.
+
+    The Cube model is a container for a set of assets that are fully instantiated.
+    It does not handle processing the assets -- that is handled by a TubeRunner.
+    """
+
     assets: dict[PythonIdentifier, Asset] = Field(default_factory=dict)
 
     @classmethod
-    def from_specification(cls, spec: CubeSpecification | ConfigSource) -> Self:
+    def from_specification(cls, spec: CubeSpecification) -> Self:
         """
         Instantiate a cube model from its configuration
 
         Args:
             spec (CubeSpecification): the cube config to instantiate
         """
-        spec = CubeSpecification.from_any(spec)
-
         assets = cls._init_assets(spec)
-        edges = cls._init_edges(spec.assets)
 
-        return cls(assets=assets, edges=edges)
+        return cls(assets=assets)
 
     @classmethod
     def _init_assets(cls, specs: CubeSpecification) -> dict[PythonIdentifier, Asset]:

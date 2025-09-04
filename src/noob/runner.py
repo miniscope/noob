@@ -34,12 +34,6 @@ class TubeRunner(ABC):
 
     tube: Tube
     store: EventStore = field(default_factory=EventStore)
-    cube: Cube = field(default_factory=Cube)
-    """
-    To prevent the assets from being copied into events and stored a bunch of times, 
-    if assets are emitted as events, when they are converted from raw returned values to events 
-    the resource instances are converted to references to the resource.
-    """
 
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
 
@@ -103,10 +97,10 @@ class TubeRunner(ABC):
 
         inputs = {}
 
-        cube_inputs = self.cube.gather(edges)
+        cube_inputs = self.tube.cube.collect(edges)
         inputs |= cube_inputs if cube_inputs else inputs
 
-        event_inputs = self.store.gather(edges)
+        event_inputs = self.store.collect(edges)
         inputs |= event_inputs if event_inputs else inputs
 
         inputs = dict(sorted(inputs.items()))
@@ -177,7 +171,7 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.nodes.values():
             node.init()
 
-        for asset in self.cube.assets.values():
+        for asset in self.tube.cube.assets.values():
             asset.init()
 
         return self
@@ -188,7 +182,7 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.nodes.values():
             node.deinit()
 
-        for asset in self.cube.assets.values():
+        for asset in self.tube.cube.assets.values():
             asset.deinit()
 
         self._running.clear()
@@ -227,7 +221,6 @@ class SynchronousRunner(TubeRunner):
 
                 # take the value from cube first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.
-                value = self.cube.add(node.signals, value, node_id)
                 events = self.store.add(node.signals, value, node_id)
                 self.update_graph(graph, node_id, events)
                 self._logger.debug("Node %s emitted %s", node_id, value)
