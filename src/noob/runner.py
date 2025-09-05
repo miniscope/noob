@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from logging import Logger
 from threading import Event as ThreadEvent
-from typing import TYPE_CHECKING, Any, Self, Callable
+from typing import TYPE_CHECKING, Any, Self
 
 from noob import init_logger
 from noob.event import Event

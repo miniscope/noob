@@ -1,4 +1,4 @@
-from noob import Tube, SynchronousRunner
+from noob import SynchronousRunner, Tube
 
 
 def test_process_callback() -> None:
@@ -9,7 +9,7 @@ def test_process_callback() -> None:
     runner.init()
     events = []
 
-    def _cb(event):
+    def _cb(event) -> None:
         nonlocal events
         events.append(event)
 
