@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from logging import Logger
 from threading import Event as ThreadEvent
@@ -33,6 +33,8 @@ class TubeRunner(ABC):
 
     tube: Tube
     store: EventStore = field(default_factory=EventStore)
+
+    _callbacks: list[Callable[[Event], None]] = field(default_factory=list)
 
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
 
@@ -141,6 +143,16 @@ class TubeRunner(ABC):
 
         graph.done(node_id)
 
+    def add_callback(self, callback: Callable[[Event], None]) -> None:
+        self._callbacks.append(callback)
+
+    def _call_callbacks(self, events: list[Event] | None) -> None:
+        if not events:
+            return
+        for event in events:
+            for callback in self._callbacks:
+                callback(event)
+
 
 @dataclass
 class SynchronousRunner(TubeRunner):
@@ -226,6 +238,7 @@ class SynchronousRunner(TubeRunner):
                 # take the value from cube first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.
                 events = self.store.add(node.signals, value, node_id)
+                self._call_callbacks(events)
                 self.update_graph(graph, node_id, events)
                 self._logger.debug("Node %s emitted %s", node_id, value)
 
