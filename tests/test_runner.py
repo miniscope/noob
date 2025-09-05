@@ -10,8 +10,6 @@ def test_process_callback() -> None:
     events = []
 
     def _cb(event):
-        if event["node_id"] == "whatever":
-            return
         nonlocal events
         events.append(event)
 
