@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from logging import Logger
 from threading import Event as ThreadEvent
@@ -14,7 +14,7 @@ from noob.node import Node
 from noob.node.return_ import Return
 from noob.store import EventStore
 from noob.tube import Tube
-from noob.types import ReturnNodeType
+from noob.types import PythonIdentifier, ReturnNodeType
 
 if TYPE_CHECKING:
     from graphlib import TopologicalSorter
@@ -33,6 +33,8 @@ class TubeRunner(ABC):
 
     tube: Tube
     store: EventStore = field(default_factory=EventStore)
+
+    _callbacks: list[Callable[[Event], None]] = field(default_factory=list)
 
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
 
@@ -78,7 +80,9 @@ class TubeRunner(ABC):
         """
         pass
 
-    def gather_input(self, node: Node) -> tuple[list[Any] | None, dict[str, Any] | None]:
+    def collect_input(
+        self, node: Node
+    ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None] | None:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
 
@@ -91,9 +95,27 @@ class TubeRunner(ABC):
             return None, None
 
         edges = self.tube.in_edges(node)
-        return self.store.gather(edges)
 
-    def gather_return(self) -> ReturnNodeType:
+        inputs = {}
+
+        cube_inputs = self.tube.cube.collect(edges)
+        inputs |= cube_inputs if cube_inputs else inputs
+
+        event_inputs = self.store.collect(edges)
+        inputs |= event_inputs if event_inputs else inputs
+
+        args = []
+        kwargs = {}
+        for k, v in inputs.items():
+            if isinstance(k, int | None):
+                args.append((k, v))
+            else:
+                kwargs[k] = v
+        args = [item[1] for item in sorted(args, key=lambda x: x[0])]
+
+        return args, kwargs
+
+    def collect_return(self) -> ReturnNodeType:
         """
         If any :class:`.Return` nodes are in the tube,
         gather their return values to return from :meth:`.TubeRunner.process`
@@ -120,6 +142,16 @@ class TubeRunner(ABC):
             return
 
         graph.done(node_id)
+
+    def add_callback(self, callback: Callable[[Event], None]) -> None:
+        self._callbacks.append(callback)
+
+    def _call_callbacks(self, events: list[Event] | None) -> None:
+        if not events:
+            return
+        for event in events:
+            for callback in self._callbacks:
+                callback(event)
 
 
 @dataclass
@@ -154,6 +186,10 @@ class SynchronousRunner(TubeRunner):
         self._running.set()
         for node in self.tube.nodes.values():
             node.init()
+
+        for asset in self.tube.cube.assets.values():
+            asset.init()
+
         return self
 
     def deinit(self) -> None:
@@ -161,6 +197,10 @@ class SynchronousRunner(TubeRunner):
         # TODO: lock to ensure we've been started
         for node in self.tube.nodes.values():
             node.deinit()
+
+        for asset in self.tube.cube.assets.values():
+            asset.deinit()
+
         self._running.clear()
 
     @property
@@ -183,19 +223,26 @@ class SynchronousRunner(TubeRunner):
             if not ready:
                 break
             for node_id in ready:
+                if node_id == "assets":
+                    # graph autogenerates "assets" node if something depends on it
+                    graph.done(node_id)
+                    continue
                 node = self.tube.nodes[node_id]
-                args, kwargs = self.gather_input(node)
+                args, kwargs = self.collect_input(node)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
                 args = [] if args is None else args
                 kwargs = {} if kwargs is None else kwargs
-
                 value = node.process(*args, **kwargs)
+
+                # take the value from cube first. if it's taken by an asset,
+                # the value is converted to its id, and returned again.
                 events = self.store.add(node.signals, value, node_id)
+                self._call_callbacks(events)
                 self.update_graph(graph, node_id, events)
                 self._logger.debug("Node %s emitted %s", node_id, value)
 
-        return self.gather_return()
+        return self.collect_return()
 
     def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
         """

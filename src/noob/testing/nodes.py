@@ -1,4 +1,5 @@
 import random
+import sqlite3
 import string
 from collections.abc import Generator
 from datetime import datetime
@@ -6,6 +7,7 @@ from itertools import count, cycle
 from typing import Annotated as A
 from typing import Any
 
+import xarray as xr
 from faker import Faker
 
 from noob import Name, process_method
@@ -120,11 +122,25 @@ class Now:
         return f"{prefix}{self.now.isoformat()}"
 
 
-class Comm:
-    def __init__(self, conn: Any):
-        self.conn = conn
+def array_add_to_left(left: xr.DataArray, right: xr.DataArray) -> xr.DataArray:
+    left += right
+    return left
+
+
+class GenClass:
+    def __init__(self, start: int) -> None:
+        self.gen = count(start=start)
 
     @process_method
-    async def ping(self, msg: str) -> A[str | bytes, Name("ping")]:
-        await self.conn.send(msg)
-        return await self.conn.recv()
+    def process(self) -> Generator[A[int, Name("count")], None, None]:
+        yield from self.gen
+
+
+def input_party(
+    one: int, two: float, three: str, four: bool, five: list, six: dict, seven: set
+) -> A[bool, Name("works")]:
+    return True
+
+
+def read_db(conn: sqlite3.Connection) -> A[tuple[int, str], Name("payload")]:
+    return conn.cursor().execute("SELECT * FROM users").fetchone()

@@ -1,12 +1,12 @@
 from collections.abc import Mapping
 from graphlib import TopologicalSorter
 from importlib import resources
-from typing import (
-    Self,
-)
+from typing import Self
 
 from pydantic import BaseModel, Field, field_validator
 
+from noob.asset import AssetSpecification
+from noob.cube import Cube, CubeSpecification
 from noob.node import Edge, Node, NodeSpecification
 from noob.types import ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
@@ -27,10 +27,13 @@ class TubeSpecification(ConfigYAMLMixin):
     this class is just a carrier for the yaml spec.
     """
 
+    assets: dict[str, AssetSpecification] = Field(default_factory=dict)
+    """The specs of the assets that comprise the cube of this tube"""
+
     nodes: dict[str, NodeSpecification] = Field(default_factory=dict)
     """The nodes that this tube configures"""
 
-    @field_validator("nodes", mode="before")
+    @field_validator("nodes", "assets", mode="before")
     @classmethod
     def fill_node_ids(cls, value: dict[str, dict]) -> dict[str, dict]:
         """
@@ -51,6 +54,8 @@ class Tube(BaseModel):
     (e.g. have their "passed" and "fill" keys processed) and connected.
     It does not handle running the tube -- that is handled by a TubeRunner.
     """
+
+    cube: Cube = Field(default_factory=Cube)
 
     nodes: dict[str, Node] = Field(default_factory=dict)
     """
@@ -131,7 +136,14 @@ class Tube(BaseModel):
         nodes = cls._init_nodes(spec)
         edges = cls._init_edges(spec.nodes, nodes)
 
-        return cls(nodes=nodes, edges=edges)
+        cube = cls._init_cube(spec.assets)
+
+        return cls(nodes=nodes, edges=edges, cube=cube)
+
+    @classmethod
+    def _init_cube(cls, spec: dict[str, AssetSpecification]) -> Cube:
+        cube_spec = CubeSpecification(assets=spec)
+        return Cube.from_specification(cube_spec)
 
     @classmethod
     def _init_nodes(cls, specs: TubeSpecification) -> dict[PythonIdentifier, Node]:

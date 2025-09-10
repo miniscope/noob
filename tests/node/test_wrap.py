@@ -7,7 +7,7 @@ from noob.node.base import Node, Signal
 
 
 @pytest.mark.parametrize(
-    "type, params, expected",
+    "type_, params, expected",
     [
         (
             "noob.testing.CountSource",
@@ -17,20 +17,16 @@ from noob.node.base import Node, Signal
         ("noob.testing.Multiply", {}, [Signal(name="product", type_=int)]),
     ],
 )
-def test_internal_class(type, params, expected):
+def test_subclass(type_, params, expected):
     node = Node.from_specification(
         spec=NodeSpecification(
-            id="test_node_subclass_signal",
-            type=type,
-            params=params,
-            depends=None,
+            id="test_node_subclass_signal", type=type_, params=params, depends=None
         )
     )
-
     assert node.signals == expected
 
 
-def test_process_method():
+def test_class_with_process():
     node = Node.from_specification(
         spec=NodeSpecification(
             id="test_node_process",
@@ -45,38 +41,27 @@ def test_process_method():
     assert node.signals == [Signal(name="volume", type_=int)]
 
 
-def test_basic_external_class():
+def test_class_without_process():
     node = Node.from_specification(
-        spec=NodeSpecification(
-            id="test-volume",
-            type="noob.testing.Volume",
-            params={"height": 5},
-        )
+        spec=NodeSpecification(id="test_volume", type="noob.testing.Volume", params={"height": 5})
     )
     node.init()
     assert node.process(width=2, depth=3) == 5 * 2 * 3
 
 
-def test_dep_external_class():
-    node = Node.from_specification(
-        spec=NodeSpecification(
-            id="test-now",
-            type="noob.testing.Now",
-        )
-    )
+def test_class_without_init_params():
+    node = Node.from_specification(spec=NodeSpecification(id="test_now", type="noob.testing.Now"))
     node.init()
     prefix = "What time is it?: "
     assert node.process(prefix=prefix) == f"{prefix}{datetime.datetime.now().isoformat()}"
 
 
-@pytest.mark.xfail(reason="resources not implemented")
-def test_resource_class():
+def test_gen_class():
     node = Node.from_specification(
         spec=NodeSpecification(
-            id="test-resource",
-            type="noob.testing.Comm",
+            id="test_gen_class", type="noob.testing.GenClass", params={"start": 5}
         )
     )
     node.init()
-    msg = "boom boom pow"
-    assert node.process(msg=msg) == msg
+    assert node.process() == 5
+    assert node.process() == 6

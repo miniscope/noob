@@ -1,22 +1,18 @@
 import functools
 import inspect
-from abc import abstractmethod
 from collections.abc import Callable, Generator
-from types import GenericAlias, NoneType, UnionType
-from typing import Annotated, Any, ParamSpec, TypeVar, get_args, get_origin
+from types import GeneratorType, GenericAlias, NoneType, UnionType
+from typing import Annotated, Any, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
-from noob.types import PythonIdentifier
 from noob.utils import resolve_python_identifier
 
-TOutput = TypeVar("TOutput")
 """
 Output Type typevar
 """
-PWrap = ParamSpec("PWrap")
 
 
 class Slot(BaseModel):
@@ -102,19 +98,17 @@ class Signal(BaseModel):
 
 
 _PROCESS_METHOD_SENTINEL = "__is_process_method__"
+_GENERATOR_METHOD_SENTINEL = "__is_generator_method__"
+
+_TProcess = TypeVar("_TProcess", bound=Callable | Generator)
 
 
-def process_method(func: Callable) -> Callable:
+def process_method(func: _TProcess) -> _TProcess:
     """
     Decorator to mark a method as the designated 'process' method for a class.
     """
-
-    @functools.wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        return func(*args, **kwargs)
-
-    setattr(wrapper, _PROCESS_METHOD_SENTINEL, True)
-    return wrapper
+    setattr(func, _PROCESS_METHOD_SENTINEL, True)
+    return func
 
 
 class Node(BaseModel):
@@ -126,8 +120,15 @@ class Node(BaseModel):
 
     _signals: list[Signal] = None
     _slots: dict[str, Slot] = None
+    _gen: GeneratorType | None = None
 
     model_config = ConfigDict(extra="forbid")
+
+    def model_post_init(self, __context: Any) -> None:
+        """See docstring of :meth:`.process` for description of post init wrapping of generators"""
+        if inspect.isgeneratorfunction(self.process):
+            self._gen = self.process()
+            self.__dict__["process"] = lambda: next(self._gen)
 
     def init(self) -> None:
         """
@@ -147,10 +148,25 @@ class Node(BaseModel):
         """
         pass
 
-    @abstractmethod
     def process(self, *args: Any, **kwargs: Any) -> Any | None:
-        """Process some input, emitting it. See subclasses for details"""
-        pass
+        """
+        Process some input, emitting it. See subclasses for details.
+
+        If the process method is a generator, when the Node class is instantiated,
+        this method is replaced by one that wraps creating and calling the generator.
+
+        something like this:
+
+        ```python
+        gen = self.process()
+        self.process = lambda: next(gen)
+        ```
+
+        Note that `send` handling is not implemented for generators,
+        so `process` methods that are generators cannot depend on events from any other nodes
+        (i.e. behave like source nodes).
+        """
+        raise NotImplementedError()
 
     @classmethod
     def from_specification(cls, spec: "NodeSpecification") -> "Node":
@@ -197,32 +213,61 @@ class Node(BaseModel):
 
 
 class WrapClassNode(Node):
+    """
+    Wrap a non-Node class that has annotated one of its methods as being the "process" method
+    using the :func:`process_method` decorator.
+
+    Wrapping allows us to use arbitrary classes as Nodes within noob,
+    which expects a `process` method,
+    but avoids the problem of potentially breaking the class if it has its own attribute or method
+    named `process`.
+
+    After instantiating the outer wrapping class,
+    instantiate the inner wrapped class using the `params` given to the outer wrapping class
+    during :meth:`.model_post_init` .
+    Then dynamically assign the discovered process method on the inner class to the
+    outer class as `process`.
+
+    Dynamic discovery at instantiation time, rather than statically defining an outer
+    `process` method that then calls the inner method annotated with `process_method`
+    does two things:
+
+    - Allows us to statically infer whether the method is a regular function that `return`s or
+      a generator using :func:`inspect.isgeneratorfunction` , which relies on a flag
+      set on a method at the time it is defined: e.g. a method that internally switches between
+      `return self._wrapped()` and `yield from self._wrapped()` would not be correctly detected.
+    - Avoids modifying the signature of the wrapped process method with generic args and kwargs
+    """
+
     cls: type
     params: dict[str, Any] = Field(default_factory=dict)
+
     instance: type | None = None
-    process_method: PythonIdentifier | None = None
+    _gen: Generator | None = PrivateAttr(default=None)
 
-    def init(self) -> None:
-        self.process_method = self._map_main_method(self.cls)
+    def model_post_init(self, context: Any, /) -> None:
+        """
+        Get the method decorated with :func:`.process_method`,
+        assign it to `process`, see class docstring.
+        """
         self.instance = self.cls(**self.params)
-
-    def process(self, *args: Any, **kwargs: Any) -> Any:
-        return getattr(self.instance, self.process_method)(*args, **kwargs)
+        fn_name = self._get_process_method(self.cls)
+        fn = getattr(self.instance, fn_name)
+        self.__dict__["process"] = fn
+        super().model_post_init(context)
 
     def deinit(self) -> None:
         self.instance = None
 
     def _collect_signals(self) -> list[Signal]:
-        return Signal.from_callable(self.instance.process)
+        return Signal.from_callable(self.process)
 
     def _collect_slots(self) -> dict[str, Slot]:
-        return Slot.from_callable(self.instance.process)
+        return Slot.from_callable(self.process)
 
-    def _map_main_method(self, cls: type) -> str:
+    def _get_process_method(self, cls: type) -> str:
         process_func = None
         for name, member in inspect.getmembers(cls, predicate=inspect.isfunction):
-            # inspect.isfunction for classmethod and staticmethod appears as
-            # wrapped methods. do we have to functools.unwrap them?
             if hasattr(member, _PROCESS_METHOD_SENTINEL):
                 if process_func:
                     raise TypeError(
@@ -241,30 +286,26 @@ class WrapClassNode(Node):
 
 
 class WrapFuncNode(Node):
-    fn: Callable[PWrap, TOutput]
+    fn: Callable
     params: dict = Field(default_factory=dict)
-    _gen: Generator[TOutput, None, None] = PrivateAttr(default=None)
+
+    def model_post_init(self, __context: Any) -> None:
+        """
+        Complete wrapping `fn` without calling `super()`
+        because we need to pass `params` to the function if it is a generator,
+        and create a :func:`functools.partial` of it if it is not.
+        """
+        if inspect.isgeneratorfunction(self.fn):
+            self._gen = self.fn(**self.params)
+            self.__dict__["process"] = lambda: next(self._gen)
+        else:
+            self.__dict__["process"] = functools.partial(self.fn, **self.params)
 
     def _collect_signals(self) -> list[Signal]:
         return Signal.from_callable(self.fn)
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.fn)
-
-    def process(self, *args: PWrap.args, **kwargs: PWrap.kwargs) -> TOutput | None:
-        kwargs.update(self.params)
-        value = self.fn(*args, **kwargs)
-
-        if inspect.isgenerator(value):
-            if self._gen is None:
-                self._gen = value
-            try:
-                value = next(self._gen)
-            except StopIteration as e:
-                # generator is exhausted
-                raise RuntimeError("Generator node stopped its iteration") from e
-
-        return value
 
 
 class Edge(BaseModel):

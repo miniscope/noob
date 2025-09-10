@@ -96,7 +96,7 @@ class NodeSpecification(BaseModel):
 
     Subclasses should override this with a default.
     """
-    id: str
+    id: PythonIdentifier
     """The unique identifier of the node"""
     depends: DependsType | None = None
     """Dependency specification for the node.

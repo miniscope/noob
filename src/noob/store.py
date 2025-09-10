@@ -69,7 +69,7 @@ class EventStore:
         event = [e for e in self.events if e["node_id"] == node_id and e["signal"] == signal]
         return None if len(event) == 0 else event[-1]
 
-    def gather(self, edges: list[Edge]) -> tuple[list | None, dict | None] | None:
+    def collect(self, edges: list[Edge]) -> dict | None:
         """
         Gather events into a form that can be consumed by a :meth:`.Node.process` method,
         given the collection of inbound edges (usually from :meth:`.Tube.in_edges` ).
@@ -86,33 +86,16 @@ class EventStore:
             Add an example
 
         """
-        args = []
-        kwargs = {}
-        edges = self._sort_edges(edges)
+        args = {}
         for edge in edges:
-            event = self.get(edge.source_node, edge.source_signal)
-            value = None if event is None else event["value"]
-            if edge.target_slot:
-                kwargs[edge.target_slot] = value
-            else:
-                args.append(value)
+            if edge.source_node != "assets":
+                event = self.get(edge.source_node, edge.source_signal)
+                value = None if event is None else event["value"]
+                args[edge.target_slot] = value
 
-        args = None if not args or all(arg is None for arg in args) else args
-        kwargs = None if not kwargs or all(val is None for val in kwargs.values()) else kwargs
+        args = None if not args or all(val is None for val in args.values()) else args
 
-        return args, kwargs
-
-    def _sort_edges(self, edges: list[Edge]) -> list[Edge]:
-        """
-        Sort edges such that
-        - positional arguments come first
-        - positional arguments are in order
-        - then kwargs come next and are also sorted
-        """
-        # FIXME: test this
-        return sorted(
-            edges, key=lambda item: (not isinstance(item.target_slot, int), item.target_slot)
-        )
+        return args
 
     def clear(self) -> None:
         """
