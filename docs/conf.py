@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 import importlib.metadata as metadata
-import warnings
+import logging
 
 project = "noob"
 copyright = "2025, raymond, jonny"
@@ -31,7 +31,7 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "notes.md"]
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
@@ -89,6 +89,21 @@ todo_link_only = True
 nb_render_markdown_format = "myst"
 nb_execution_show_tb = True
 
-# filter warnings that are NOT OUR FAULT
-warnings.filterwarnings("ignore", module=r"typing")
-warnings.filterwarnings("ignore", message=r".*typing.Annotated.*")
+
+class FuckTheSphinxFiltersFilter(logging.Filter):
+    """
+    A filter that goes like "fuck the sphinx logging filters that ignores our warning filters"
+
+    Use this whenever there are warnings that cause CI to fail but you can't actually
+    do normal python things to suppress the warnings because
+    """
+    def filter(self, record: logging.LogRecord):
+        # filter warnings that are NOT OUR FAULT
+        if hasattr(record, "location") and 'typing.Annotated' in record.location:
+            return False
+        return True
+
+
+def setup(app):
+    logger = logging.getLogger("sphinx")
+    logger.filters.insert(0, FuckTheSphinxFiltersFilter())
