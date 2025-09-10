@@ -7,6 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 import importlib.metadata as metadata
+import warnings
 
 project = "noob"
 copyright = "2025, raymond, jonny"
@@ -87,3 +88,7 @@ todo_link_only = True
 # myst-nb
 nb_render_markdown_format = "myst"
 nb_execution_show_tb = True
+
+# filter warnings that are NOT OUR FAULT
+warnings.filterwarnings("ignore", module=r"typing")
+warnings.filterwarnings("ignore", message=r".*typing.Annotated.*")
