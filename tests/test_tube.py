@@ -50,3 +50,15 @@ def test_tube_init_edges():
             assert edge.source_node == depends.split(".")[0]
             assert edge.source_signal == depends.split(".")[1]
             assert edge.target_slot is None
+
+
+def test_enable_nodes():
+    tube = Tube.from_specification("testing-basic")
+
+    assert list(tube.enabled_nodes.keys()) == ["a", "b", "c"]
+
+    tube.disable_node("c")
+    assert list(tube.enabled_nodes.keys()) == ["a", "b"]
+
+    tube.enable_node("c")
+    assert list(tube.enabled_nodes.keys()) == ["a", "b", "c"]

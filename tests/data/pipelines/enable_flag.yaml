@@ -1,0 +1,24 @@
+noob_id: testing-enable-flag
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev138+ge1b5e7f.d20250905
+nodes:
+  a:
+    type: noob.testing.count_source
+  b:
+    type: noob.testing.multiply
+    depends:
+      - left: a.index
+  c:
+    type: return
+    depends: b.value
+    enabled: False
+  sink_on:
+    type: noob.testing.divide
+    depends:
+      - b.value
+    enabled: True
+  sink_off:
+    type: noob.testing.divide
+    depends:
+      - b.value
+    enabled: False
