@@ -1,0 +1,18 @@
+noob_id: testing-xarray-asset
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
+
+assets:
+  basic_xarray:
+    type: noob.testing.xarray_asset
+    scope: runner
+
+nodes:
+  concat:
+    type: noob.testing.array_add_to_left
+    depends:
+      - left: assets.basic_xarray
+      - right: assets.basic_xarray
+  return:
+    type: return
+    depends: assets.basic_xarray

@@ -82,7 +82,6 @@ def init_logger(
     if mp.parent_process() is not None:
         handler_name = f"{name}_{mp.current_process().pid}"
         if not any([h.name == handler_name for h in logger.handlers]):
-
             logger.addHandler(
                 _file_handler(
                     name=f"{name}_{mp.current_process().pid}",

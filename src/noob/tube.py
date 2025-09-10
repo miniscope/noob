@@ -1,12 +1,12 @@
-import warnings
+from collections.abc import Mapping
 from graphlib import TopologicalSorter
 from importlib import resources
-from typing import (
-    Self,
-)
+from typing import Self
 
 from pydantic import BaseModel, Field, field_validator
 
+from noob.asset import AssetSpecification
+from noob.cube import Cube, CubeSpecification
 from noob.node import Edge, Node, NodeSpecification
 from noob.types import ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
@@ -27,19 +27,22 @@ class TubeSpecification(ConfigYAMLMixin):
     this class is just a carrier for the yaml spec.
     """
 
+    assets: dict[str, AssetSpecification] = Field(default_factory=dict)
+    """The specs of the assets that comprise the cube of this tube"""
+
     nodes: dict[str, NodeSpecification] = Field(default_factory=dict)
     """The nodes that this tube configures"""
 
-    @field_validator("nodes", mode="before")
+    @field_validator("nodes", "assets", mode="before")
     @classmethod
     def fill_node_ids(cls, value: dict[str, dict]) -> dict[str, dict]:
         """
         Roll down the `id` from the key in the `nodes` dictionary into the node config
         """
         assert isinstance(value, dict)
-        for id, node in value.items():
+        for id_, node in value.items():
             if "id" not in node:
-                node["id"] = id
+                node["id"] = id_
         return value
 
 
@@ -51,6 +54,8 @@ class Tube(BaseModel):
     (e.g. have their "passed" and "fill" keys processed) and connected.
     It does not handle running the tube -- that is handled by a TubeRunner.
     """
+
+    cube: Cube = Field(default_factory=Cube)
 
     nodes: dict[str, Node] = Field(default_factory=dict)
     """
@@ -68,12 +73,26 @@ class Tube(BaseModel):
     def graph(self) -> TopologicalSorter:
         """
         Produce a :class:`.TopologicalSorter` based on the graph induced by
-        :attr:`.Tube.nodes` and :attr:`.Tube.edges` that yields node ids
+        :attr:`.Tube.nodes` and :attr:`.Tube.edges` that yields node ids.
+
+        .. note:: Optional params
+
+            Dependency graph only includes edges where `required == True` -
+            aka even if we declare some dependency that passes a value to an
+            optional (type annotation is `type | None`), default == `None`
+            param, we still call that node even if that optional param is absent.
+
+            This behavior will likely change,
+            allowing explicit parameterization of how optional values are handled,
+            see: https://github.com/miniscope/noob/issues/26,
+
         """
         sorter = TopologicalSorter()
-        for node_id, node in self.nodes.items():
-            in_edges = [e.target_node.id for e in self.edges if e.target_node is node]
-            sorter.add(node_id, *in_edges)
+        for node_id in self.nodes:
+            required_edges = [
+                e.source_node for e in self.edges if e.target_node == node_id and e.required
+            ]
+            sorter.add(node_id, *required_edges)
         return sorter
 
     def in_edges(self, node: Node | str) -> list[Edge]:
@@ -88,7 +107,7 @@ class Tube(BaseModel):
         """
         if isinstance(node, Node):
             node = node.id
-        return [e for e in self.edges if e.target_node.id == node]
+        return [e for e in self.edges if e.target_node == node]
 
     def out_edges(self, node: Node | str) -> list[Edge]:
         """
@@ -102,7 +121,7 @@ class Tube(BaseModel):
         """
         if isinstance(node, Node):
             node = node.id
-        return [e for e in self.edges if e.source_node.id == node]
+        return [e for e in self.edges if e.source_node == node]
 
     @classmethod
     def from_specification(cls, spec: TubeSpecification | ConfigSource) -> Self:
@@ -115,19 +134,74 @@ class Tube(BaseModel):
         spec = TubeSpecification.from_any(spec)
 
         nodes = cls._init_nodes(spec)
-        edges = cls._init_edges(nodes, spec.nodes)
+        edges = cls._init_edges(spec.nodes, nodes)
 
-        return cls(nodes=nodes, edges=edges)
+        cube = cls._init_cube(spec.assets)
+
+        return cls(nodes=nodes, edges=edges, cube=cube)
 
     @classmethod
-    def _init_nodes(cls, config: TubeSpecification) -> dict[PythonIdentifier, Node]:
-        nodes = {spec.id: Node.from_specification(spec) for spec in config.nodes.values()}
+    def _init_cube(cls, spec: dict[str, AssetSpecification]) -> Cube:
+        cube_spec = CubeSpecification(assets=spec)
+        return Cube.from_specification(cube_spec)
+
+    @classmethod
+    def _init_nodes(cls, specs: TubeSpecification) -> dict[PythonIdentifier, Node]:
+        nodes = {spec.id: Node.from_specification(spec) for spec in specs.nodes.values()}
         return nodes
 
     @classmethod
-    def _init_edges(cls, nodes: dict[str, Node], spec: dict[str, NodeSpecification]) -> list[Edge]:
-        warnings.warn("Implement me!", stacklevel=2)
-        return []
+    def _init_edges(
+        cls, node_spec: dict[str, NodeSpecification], nodes: dict[str, Node]
+    ) -> list[Edge]:
+        edges = []
+
+        dependency_map = {id_: spec.depends for id_, spec in node_spec.items() if spec.depends}
+        for target_node, slot_inputs in dependency_map.items():
+            if isinstance(slot_inputs, str):
+                # handle scalar dependency like
+                # depends: node.slot
+                source_node, source_signal = slot_inputs.split(".")
+                edges.append(
+                    Edge(
+                        source_node=source_node,
+                        source_signal=source_signal,
+                        target_node=target_node,
+                        target_slot=None,
+                    )
+                )
+            else:
+                # handle arrays of dependencies, positional and kwargs
+                position_index = 0
+                for arrow in slot_inputs:
+                    required = True
+                    if isinstance(arrow, Mapping):  # keyword argument
+                        target_slot, source_signal = next(iter(arrow.items()))
+                        required = nodes[target_node].slots[target_slot].required
+
+                    elif isinstance(arrow, str):  # positional argument
+                        target_slot = position_index
+                        source_signal = arrow
+                        position_index += 1
+
+                    else:
+                        raise NotImplementedError(
+                            "Only supporting signal-slot mapping or node pointer."
+                        )
+
+                    source_node, source_signal = source_signal.split(".")
+
+                    edges.append(
+                        Edge(
+                            source_node=source_node,
+                            source_signal=source_signal,
+                            target_node=target_node,
+                            target_slot=target_slot,
+                            required=required,
+                        )
+                    )
+
+        return edges
 
 
 class TubeClassicEdition:

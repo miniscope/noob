@@ -37,7 +37,7 @@ Examples:
 
 """
 
-DependsType: TypeAlias = AbsoluteIdentifier | _DependsBasic
+DependsType: TypeAlias = list[AbsoluteIdentifier | _DependsBasic] | AbsoluteIdentifier
 """
 Either an absolute identifier (which is treated as a positional-only arg)
 or a dict mapping as described in _DependsBasic.
@@ -57,6 +57,29 @@ Examples:
         - a.value
         - another_arg: b.value
     ```
+    
+    When a dependency is a scalar value passed to the first positional argument,
+    it can be specified with a scalar reference to an absolute identifier.
+    For example, if one wanted to return a scalar value from a `return` node,
+    specify the dependency like this:
+    
+    ```yaml
+    nodes:
+      yyy:
+        type: return
+        depends: a.value
+    ```
+    
+    and to return the same value wrapped in a list...
+    
+    ```yaml
+    nodes:
+      yyy:
+        type: return
+        depends: 
+        - a.value
+    ```
+    
 """
 
 
@@ -73,9 +96,9 @@ class NodeSpecification(BaseModel):
 
     Subclasses should override this with a default.
     """
-    id: str
+    id: PythonIdentifier
     """The unique identifier of the node"""
-    depends: list[DependsType] | None = None
+    depends: DependsType | None = None
     """Dependency specification for the node.
     
     Can be specified as a simple mapping from this node's input slots 

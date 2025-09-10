@@ -9,12 +9,12 @@ nodes:
     params:
       n: 5
     depends:
-      value: a.letter
+      - value: a.letter
   c:
     type: noob.testing.concat
     depends:
-    - b.value
+      - b.value
   d:
     type: return
     depends:
-    - word: c.value
+      - word: c.value
