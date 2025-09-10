@@ -289,7 +289,9 @@ class SynchronousRunner(TubeRunner):
         return outputs if outputs else None
 
     def enable_node(self, node_id: str) -> None:
+        self.tube.nodes[node_id].init()
         self.tube.enable_node(node_id)
 
     def disable_node(self, node_id: str) -> None:
+        self.tube.nodes[node_id].deinit()
         self.tube.disable_node(node_id)
