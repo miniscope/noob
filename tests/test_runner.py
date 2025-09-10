@@ -27,6 +27,6 @@ def test_disabled_nodes() -> None:
     runner = SynchronousRunner(tube)
 
     runner.init()
-    assert set(runner.tube.on_nodes.keys()) == {"a", "b", "sink_on"}
+    assert set(runner.tube.enabled_nodes.keys()) == {"a", "b", "sink_on"}
     result = runner.process()
     assert result is None

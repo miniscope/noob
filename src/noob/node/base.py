@@ -118,7 +118,12 @@ class Node(BaseModel):
     """Unique identifier of the node"""
     spec: NodeSpecification
     enabled: bool
-    """Whether the node is enabled or not"""
+    """Starting state for a node being enabled. When a node is disabled, 
+    it will be deinitialized and removed from the processing graph, 
+    but the node object will still be kept by the Tube. Nodes can be disabled 
+    and enabled during a tube's operation without recreating the tube. 
+    When a node is disabled, other nodes that depend on it will not be disabled, 
+    but they may never be called since their dependencies will never be satisfied."""
 
     _signals: list[Signal] = None
     _slots: dict[str, Slot] = None

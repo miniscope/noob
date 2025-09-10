@@ -124,7 +124,7 @@ class TubeRunner(ABC):
             dict: of the Return sink's key mapped to the returned value,
             None: if there are no :class:`.Return` sinks in the tube
         """
-        ret_nodes = [n for n in self.tube.on_nodes.values() if isinstance(n, Return)]
+        ret_nodes = [n for n in self.tube.enabled_nodes.values() if isinstance(n, Return)]
         if not ret_nodes:
             return None
         ret_node = ret_nodes[0]
@@ -184,7 +184,7 @@ class SynchronousRunner(TubeRunner):
             raise AlreadyRunningError("Tube is already running!")
 
         self._running.set()
-        for node in self.tube.on_nodes.values():
+        for node in self.tube.enabled_nodes.values():
             node.init()
 
         for asset in self.tube.cube.assets.values():
@@ -195,7 +195,7 @@ class SynchronousRunner(TubeRunner):
     def deinit(self) -> None:
         """Stop all nodes processing"""
         # TODO: lock to ensure we've been started
-        for node in self.tube.on_nodes.values():
+        for node in self.tube.enabled_nodes.values():
             node.deinit()
 
         for asset in self.tube.cube.assets.values():
@@ -287,3 +287,9 @@ class SynchronousRunner(TubeRunner):
             self.deinit()
 
         return outputs if outputs else None
+
+    def enable_node(self, node_id: str) -> None:
+        self.tube.enable_node(node_id)
+
+    def disable_node(self, node_id: str) -> None:
+        self.tube.disable_node(node_id)

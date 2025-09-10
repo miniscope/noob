@@ -71,7 +71,7 @@ class Tube(BaseModel):
     """
 
     @property
-    def on_nodes(self) -> dict[str, Node]:
+    def enabled_nodes(self) -> dict[str, Node]:
         """
         Produce nodes that have :attr:`.Node.enabled` set to `True`.
         """
@@ -95,7 +95,7 @@ class Tube(BaseModel):
 
         """
         sorter = TopologicalSorter()
-        enabled_nodes = [node_id for node_id, node in self.nodes.items() if node.enabled]
+        enabled_nodes = [node_id for node_id, node in self.enabled_nodes.items()]
         for node_id in enabled_nodes:
             required_edges = [
                 e.source_node for e in self.edges if e.target_node == node_id and e.required
@@ -210,6 +210,12 @@ class Tube(BaseModel):
                     )
 
         return edges
+
+    def enable_node(self, node_id: str) -> None:
+        self.nodes[node_id].enabled = True
+
+    def disable_node(self, node_id: str) -> None:
+        self.nodes[node_id].enabled = False
 
 
 class TubeClassicEdition:
