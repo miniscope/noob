@@ -1,13 +1,15 @@
 import inspect
 from collections.abc import Callable
 from enum import StrEnum
-from typing import Any, TypeVar
+from typing import Any, ParamSpec, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from noob.node.base import PWrap, TOutput
 from noob.types import AbsoluteIdentifier, PythonIdentifier
 from noob.utils import resolve_python_identifier
+
+TOutput = TypeVar("TOutput")
+PWrap = ParamSpec("PWrap")
 
 
 class AssetScope(StrEnum):
