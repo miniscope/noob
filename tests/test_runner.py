@@ -29,4 +29,19 @@ def test_disabled_nodes() -> None:
     runner.init()
     assert set(runner.tube.enabled_nodes.keys()) == {"a", "b", "sink_on"}
     result = runner.process()
-    assert result is None
+    assert result is None  # Return node has been disabled
+
+
+def test_dynamic_switching_enabled_nodes() -> None:
+    tube = Tube.from_specification("testing-basic")
+    runner = SynchronousRunner(tube)
+
+    runner.disable_node("c")
+    runner.init()
+    result = runner.process()
+
+    assert result is None  # Return node has been disabled
+
+    runner.enable_node("c")
+    result = runner.process()
+    assert result == 2  # Return node has been restored

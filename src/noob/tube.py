@@ -70,12 +70,7 @@ class Tube(BaseModel):
     (i.e. ``edges[0].source_node is nodes[node_id]`` ).
     """
 
-    @property
-    def enabled_nodes(self) -> dict[str, Node]:
-        """
-        Produce nodes that have :attr:`.Node.enabled` set to `True`.
-        """
-        return {k: v for k, v in self.nodes.items() if v.enabled}
+    _enabled_nodes: dict[str, Node] | None = None
 
     def graph(self) -> TopologicalSorter:
         """
@@ -211,11 +206,22 @@ class Tube(BaseModel):
 
         return edges
 
+    @property
+    def enabled_nodes(self) -> dict[str, Node]:
+        """
+        Produce nodes that have :attr:`.Node.enabled` set to `True`.
+        """
+        if self._enabled_nodes is None:
+            self._enabled_nodes = {k: v for k, v in self.nodes.items() if v.enabled}
+        return self._enabled_nodes
+
     def enable_node(self, node_id: str) -> None:
         self.nodes[node_id].enabled = True
+        self._enabled_nodes = None  # Trigger recalculation in the next enabled_nodes call
 
     def disable_node(self, node_id: str) -> None:
         self.nodes[node_id].enabled = False
+        self._enabled_nodes = None  # Trigger recalculation in the next enabled_nodes call
 
 
 class TubeClassicEdition:
