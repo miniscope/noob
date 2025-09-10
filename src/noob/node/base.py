@@ -117,6 +117,8 @@ class Node(BaseModel):
     id: str
     """Unique identifier of the node"""
     spec: NodeSpecification
+    enabled: bool
+    """Whether the node is enabled or not"""
 
     _signals: list[Signal] = None
     _slots: dict[str, Slot] = None
@@ -180,16 +182,17 @@ class Node(BaseModel):
         obj = resolve_python_identifier(spec.type_)
 
         params = spec.params if spec.params is not None else {}
+        enabled = spec.enabled
 
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec, **params)
+                return obj(id=spec.id, spec=spec, enabled=enabled, **params)
             else:
-                return WrapClassNode(id=spec.id, cls=obj, spec=spec, params=params)
+                return WrapClassNode(id=spec.id, cls=obj, spec=spec, params=params, enabled=enabled)
         else:
-            return WrapFuncNode(id=spec.id, fn=obj, spec=spec, params=params)
+            return WrapFuncNode(id=spec.id, fn=obj, spec=spec, params=params, enabled=enabled)
 
     @property
     def signals(self) -> list[Signal]:

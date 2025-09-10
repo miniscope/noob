@@ -3,7 +3,9 @@ from collections.abc import Generator
 from noob.node import Node, NodeSpecification, process_method
 from noob.node.base import WrapClassNode, WrapFuncNode
 
-_annoying_kwargs = dict(id="gen-node", spec=NodeSpecification(type="a.b", id="zzz"))
+_annoying_kwargs = dict(
+    id="gen-node", enabled=True, spec=NodeSpecification(type="a.b", id="zzz", enabled=True)
+)
 
 
 def test_subclass_generator():

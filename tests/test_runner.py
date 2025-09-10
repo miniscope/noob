@@ -2,6 +2,9 @@ from noob import SynchronousRunner, Tube
 
 
 def test_process_callback() -> None:
+    """
+    callbacks must take place after each event emission.
+    """
 
     tube = Tube.from_specification("testing-basic")
     runner = SynchronousRunner(tube)
@@ -17,3 +20,13 @@ def test_process_callback() -> None:
     runner.process()
 
     assert len(events) == 2
+
+
+def test_disabled_nodes() -> None:
+    tube = Tube.from_specification("testing-enable-flag")
+    runner = SynchronousRunner(tube)
+
+    runner.init()
+    assert set(runner.tube.on_nodes.keys()) == {"a", "b", "sink_on"}
+    result = runner.process()
+    assert result is None

@@ -70,6 +70,13 @@ class Tube(BaseModel):
     (i.e. ``edges[0].source_node is nodes[node_id]`` ).
     """
 
+    @property
+    def on_nodes(self) -> dict[str, Node]:
+        """
+        Produce nodes that have :attr:`.Node.enabled` set to `True`.
+        """
+        return {k: v for k, v in self.nodes.items() if v.enabled}
+
     def graph(self) -> TopologicalSorter:
         """
         Produce a :class:`.TopologicalSorter` based on the graph induced by
@@ -88,7 +95,8 @@ class Tube(BaseModel):
 
         """
         sorter = TopologicalSorter()
-        for node_id in self.nodes:
+        enabled_nodes = [node_id for node_id, node in self.nodes.items() if node.enabled]
+        for node_id in enabled_nodes:
             required_edges = [
                 e.source_node for e in self.edges if e.target_node == node_id and e.required
             ]
