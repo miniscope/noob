@@ -97,9 +97,10 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
     Use this whenever there are warnings that cause CI to fail but you can't actually
     do normal python things to suppress the warnings because
     """
+
     def filter(self, record: logging.LogRecord):
         # filter warnings that are NOT OUR FAULT
-        if hasattr(record, "location") and 'typing.Annotated' in record.location:
+        if hasattr(record, "location") and "typing.Annotated" in record.location:
             return False
         return True
 
