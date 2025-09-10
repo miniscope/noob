@@ -249,7 +249,8 @@ class SynchronousRunner(TubeRunner):
         Treat the runner as an iterable.
 
         Calls :meth:`.TubeRunner.process` until it yields a result
-        (e.g. multiple times in the case of any `gather`s that change the cardinality of the graph.)
+        (e.g. multiple times in the case of any ``gather`` s
+        that change the cardinality of the graph.)
         """
 
         self.init()
