@@ -117,7 +117,7 @@ class Node(BaseModel):
     id: str
     """Unique identifier of the node"""
     spec: NodeSpecification
-    enabled: bool
+    enabled: bool = True
     """Starting state for a node being enabled. When a node is disabled, 
     it will be deinitialized and removed from the processing graph, 
     but the node object will still be kept by the Tube. Nodes can be disabled 
@@ -187,17 +187,18 @@ class Node(BaseModel):
         obj = resolve_python_identifier(spec.type_)
 
         params = spec.params if spec.params is not None else {}
-        enabled = spec.enabled
 
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec, enabled=enabled, **params)
+                return obj(id=spec.id, spec=spec, enabled=spec.enabled, **params)
             else:
-                return WrapClassNode(id=spec.id, cls=obj, spec=spec, params=params, enabled=enabled)
+                return WrapClassNode(
+                    id=spec.id, cls=obj, spec=spec, params=params, enabled=spec.enabled
+                )
         else:
-            return WrapFuncNode(id=spec.id, fn=obj, spec=spec, params=params, enabled=enabled)
+            return WrapFuncNode(id=spec.id, fn=obj, spec=spec, params=params, enabled=spec.enabled)
 
     @property
     def signals(self) -> list[Signal]:
@@ -306,6 +307,8 @@ class WrapFuncNode(Node):
         if inspect.isgeneratorfunction(self.fn):
             self._gen = self.fn(**self.params)
             self.__dict__["process"] = lambda: next(self._gen)
+        elif inspect.isasyncgenfunction(self.fn):
+            raise NotImplementedError("async generators not supported")
         else:
             self.__dict__["process"] = functools.partial(self.fn, **self.params)
 
