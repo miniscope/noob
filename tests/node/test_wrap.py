@@ -59,10 +59,10 @@ def test_class_without_init_params():
     datetime.datetime.fromisoformat(result.split(prefix)[-1])
 
 
-def test_gen_class():
+def test_general_class():
     node = Node.from_specification(
         spec=NodeSpecification(
-            id="test_gen_class", type="noob.testing.GenClass", params={"start": 5}
+            id="test_gen_class", type="noob.testing.CountSourceDecor", params={"start": 5}
         )
     )
     node.init()

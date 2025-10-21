@@ -1,7 +1,6 @@
-from collections.abc import Generator
-
-from noob.node import Node, NodeSpecification, process_method
+from noob.node import NodeSpecification
 from noob.node.base import WrapClassNode, WrapFuncNode
+from noob.testing import CountSource, CountSourceDecor, count_source
 
 _annoying_kwargs = dict(id="gen-node", spec=NodeSpecification(type="a.b", id="zzz", enabled=True))
 
@@ -12,36 +11,22 @@ def test_subclass_generator():
     have it wrapped at instantiation time so `process` can be called like a normal function
     """
 
-    class GenNode(Node):
-        def process(self) -> Generator[int, None, None]:
-            i = 9
-            while i < 15:
-                i += 1
-                yield i
-
-    node = GenNode(**_annoying_kwargs)
+    node = CountSource(**_annoying_kwargs)
     items = []
     for _ in range(5):
         items.append(node.process())
-    assert items == [10, 11, 12, 13, 14]
+    assert items == [0, 1, 2, 3, 4]
 
 
 def test_wrapped_fn_generator():
     """
     A wrapped fn that is a generator is ... as above
     """
-
-    def fn() -> Generator[int, None, None]:
-        i = 9
-        while i < 15:
-            i += 1
-            yield i
-
-    node = WrapFuncNode(fn=fn, **_annoying_kwargs)
+    node = WrapFuncNode(fn=count_source, **_annoying_kwargs)
     items = []
     for _ in range(5):
         items.append(node.process())
-    assert items == [10, 11, 12, 13, 14]
+    assert items == [0, 1, 2, 3, 4]
 
 
 def test_wrapped_cls_generator():
@@ -49,16 +34,8 @@ def test_wrapped_cls_generator():
     A wrapped class that is a generator is ... as above
     """
 
-    class NonSubclassNode:
-        @process_method
-        def not_process(self) -> Generator[int, None, None]:
-            i = 9
-            while i < 15:
-                i += 1
-                yield i
-
-    node = WrapClassNode(cls=NonSubclassNode, **_annoying_kwargs)
+    node = WrapClassNode(cls=CountSourceDecor, **_annoying_kwargs)
     items = []
     for _ in range(5):
         items.append(node.process())
-    assert items == [10, 11, 12, 13, 14]
+    assert items == [0, 1, 2, 3, 4]

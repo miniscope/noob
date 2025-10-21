@@ -4,7 +4,7 @@ from noob.testing.assets import (
 )
 from noob.testing.nodes import (
     CountSource,
-    GenClass,
+    CountSourceDecor,
     Multiply,
     Now,
     Volume,
@@ -47,7 +47,7 @@ __all__ = [
     "array_add_to_left",
     "xarray_asset",
     "db_connection",
-    "GenClass",
+    "CountSourceDecor",
     "input_party",
     "read_db",
 ]
