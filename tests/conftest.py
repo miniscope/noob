@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
+from noob import testing as _testing
+
 from .fixtures import *
 
 DATA_DIR = Path(__file__).parent / "data"
