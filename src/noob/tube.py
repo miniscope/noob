@@ -93,7 +93,9 @@ class Tube(BaseModel):
         enabled_nodes = [node_id for node_id, node in self.enabled_nodes.items()]
         for node_id in enabled_nodes:
             required_edges = [
-                e.source_node for e in self.edges if e.target_node == node_id and e.required
+                e.source_node
+                for e in self.edges
+                if e.target_node == node_id and e.required and e.source_node in enabled_nodes
             ]
             sorter.add(node_id, *required_edges)
         return sorter
