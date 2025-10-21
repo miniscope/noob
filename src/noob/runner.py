@@ -153,6 +153,20 @@ class TubeRunner(ABC):
             for callback in self._callbacks:
                 callback(event)
 
+    @abstractmethod
+    def enable_node(self, node_id: str) -> None:
+        """
+        A method for enabling a node during runtime
+        """
+        pass
+
+    @abstractmethod
+    def disable_node(self, node_id: str) -> None:
+        """
+        A method for disabling a node during runtime
+        """
+        pass
+
 
 @dataclass
 class SynchronousRunner(TubeRunner):
