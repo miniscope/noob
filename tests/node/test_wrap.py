@@ -53,7 +53,10 @@ def test_class_without_init_params():
     node = Node.from_specification(spec=NodeSpecification(id="test_now", type="noob.testing.Now"))
     node.init()
     prefix = "What time is it?: "
-    assert node.process(prefix=prefix) == f"{prefix}{datetime.datetime.now().isoformat()}"
+    result = node.process(prefix=prefix)
+    assert result.startswith(prefix)
+    # should throw if can't be parsed
+    datetime.datetime.fromisoformat(result.split(prefix)[-1])
 
 
 def test_gen_class():
