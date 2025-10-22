@@ -1,4 +1,5 @@
 import datetime
+from typing import Any
 
 import pytest
 
@@ -13,6 +14,11 @@ from noob.node.base import Node, Signal
             "noob.testing.CountSource",
             {"limit": 10, "start": 5},
             [Signal(name="index", type_=int)],
+        ),
+        (
+            "noob.testing.UnannotatedGenerator",
+            {"limit": 10, "start": 5},
+            [Signal(name="value", type_=Any)],
         ),
         ("noob.testing.Multiply", {}, [Signal(name="product", type_=int)]),
     ],

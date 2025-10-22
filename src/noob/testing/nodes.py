@@ -92,6 +92,16 @@ class CountSource(Node):
             yield val
 
 
+class UnannotatedGenerator(Node):
+    limit: int = 1000
+    start: int = 0
+
+    def process(self):  # noqa: ANN201
+        counter = count(start=self.start)
+        while (val := next(counter)) < self.limit:
+            yield val
+
+
 class Multiply(Node):
     def process(self, left: int, right: int = 2) -> A[int, Name("product")]:
         return multiply(left=left, right=right)

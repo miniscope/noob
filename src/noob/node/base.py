@@ -134,8 +134,7 @@ class Node(BaseModel):
     def model_post_init(self, __context: Any) -> None:
         """See docstring of :meth:`.process` for description of post init wrapping of generators"""
         if inspect.isgeneratorfunction(self.process):
-            self._gen = self.process()
-            self.__dict__["process"] = lambda: next(self._gen)
+            self._wrap_generator(self.process)
 
     def init(self) -> None:
         """
@@ -219,6 +218,24 @@ class Node(BaseModel):
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)
+
+    def _wrap_generator(self, proc: Callable[[], GeneratorType]) -> None:
+        """
+        Wrap a `process` method when it is a generator,
+        invoked in `model_post_init`
+        """
+        self._gen = proc()
+
+        def _process():  # noqa: ANN202
+            return next(self._gen)
+
+        signature = inspect.signature(self.process)
+
+        args = get_args(signature.return_annotation)
+        if args:
+            _process.__annotations__ = {"return": args[0]}
+
+        self.__dict__["process"] = _process
 
 
 class WrapClassNode(Node):
