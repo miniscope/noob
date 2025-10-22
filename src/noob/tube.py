@@ -17,6 +17,7 @@ from noob.cube import Cube, CubeSpecification
 from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope, InputSpecification
 from noob.node import Edge, Node, NodeSpecification
+from noob.scheduler import Scheduler
 from noob.types import ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
@@ -67,8 +68,6 @@ class Tube(BaseModel):
     It does not handle running the tube -- that is handled by a TubeRunner.
     """
 
-    cube: Cube = Field(default_factory=Cube)
-
     nodes: dict[str, Node] = Field(default_factory=dict)
     """
     Dictionary mapping all nodes from their ID to the instantiated node.
@@ -90,35 +89,17 @@ class Tube(BaseModel):
     Specifications declared by the tube to be supplied 
     """
 
+    cube: Cube = Field(default_factory=Cube)
+    scheduler: Scheduler = Field(default_factory=Scheduler)
+
     _enabled_nodes: dict[str, Node] | None = None
 
     def graph(self) -> TopologicalSorter:
         """
         Produce a :class:`.TopologicalSorter` based on the graph induced by
-        :attr:`.Tube.nodes` and :attr:`.Tube.edges` that yields node ids.
-
-        .. note:: Optional params
-
-            Dependency graph only includes edges where `required == True` -
-            aka even if we declare some dependency that passes a value to an
-            optional (type annotation is `type | None`), default == `None`
-            param, we still call that node even if that optional param is absent.
-
-            This behavior will likely change,
-            allowing explicit parameterization of how optional values are handled,
-            see: https://github.com/miniscope/noob/issues/26,
-
+        :attr:`.Tube.enabled_nodes` and :attr:`.Tube.edges` that yields node ids.
         """
-        sorter = TopologicalSorter()
-        enabled_nodes = [node_id for node_id, node in self.enabled_nodes.items()]
-        for node_id in enabled_nodes:
-            required_edges = [
-                e.source_node
-                for e in self.edges
-                if e.target_node == node_id and e.required and e.source_node in enabled_nodes
-            ]
-            sorter.add(node_id, *required_edges)
-        return sorter
+        return self.scheduler.graph(nodes=self.enabled_nodes, edges=self.edges)
 
     def in_edges(self, node: Node | str) -> list[Edge]:
         """
