@@ -23,7 +23,9 @@ class EventStore:
     events: MutableSequence = field(default_factory=list)
     counter: count = field(default_factory=count)
 
-    def add(self, signals: list[Signal], value: Any, node_id: str) -> list[Event] | None:
+    def add(
+        self, signals: list[Signal], value: Any, node_id: str, epoch: int
+    ) -> list[Event] | None:
         """
         Add the result of a :meth:`.Node.process` call to the event store.
 
@@ -37,6 +39,7 @@ class EventStore:
                 with a list in case the length of signals is 1. Otherwise, it's zipped
                 with :signals:
             node_id (str): ID of the node that emitted the events
+            epoch (int): Epoch count that the signal was emitted in
         """
         if value is None:
             return
@@ -50,6 +53,7 @@ class EventStore:
                 id=next(self.counter),
                 timestamp=timestamp,
                 node_id=node_id,
+                epoch=epoch,
                 signal=signal.name,
                 value=val,
             )

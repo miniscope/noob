@@ -17,6 +17,8 @@ class Event(TypedDict):
     """Unique ID for each event"""
     timestamp: datetime
     """Timestamp of when the event was received by the :class:`.TubeRunner`"""
+    epoch: int
+    """Epoch number the event was emitted in"""
     node_id: str
     """ID of node that emitted the event"""
     signal: str
