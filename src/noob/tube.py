@@ -1,9 +1,8 @@
 from collections.abc import Mapping
-from graphlib import TopologicalSorter
 from importlib import resources
 from typing import Self
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
 from noob.asset import AssetSpecification
 from noob.cube import Cube, CubeSpecification
@@ -70,16 +69,17 @@ class Tube(BaseModel):
     """
 
     cube: Cube = Field(default_factory=Cube)
-    scheduler: Scheduler = Field(default_factory=Scheduler)
 
+    _scheduler: Scheduler = PrivateAttr(default_factory=Scheduler)
     _enabled_nodes: dict[str, Node] | None = None
 
-    def graph(self) -> TopologicalSorter:
+    def scheduler(self) -> Scheduler:
         """
         Produce a :class:`.TopologicalSorter` based on the graph induced by
         :attr:`.Tube.enabled_nodes` and :attr:`.Tube.edges` that yields node ids.
         """
-        return self.scheduler.graph(nodes=self.enabled_nodes, edges=self.edges)
+        self._scheduler.add_graph(nodes=self.enabled_nodes, edges=self.edges)
+        return self._scheduler
 
     def in_edges(self, node: Node | str) -> list[Edge]:
         """

@@ -12,12 +12,13 @@ from noob.event import Event
 from noob.exceptions import AlreadyRunningError
 from noob.node import Node
 from noob.node.return_ import Return
+from noob.scheduler import Scheduler
 from noob.store import EventStore
 from noob.tube import Tube
 from noob.types import PythonIdentifier, ReturnNodeType
 
 if TYPE_CHECKING:
-    from graphlib import TopologicalSorter
+    pass
 
 
 @dataclass
@@ -131,7 +132,7 @@ class TubeRunner(ABC):
         return ret_node.get(keep=False)
 
     def update_graph(
-        self, graph: TopologicalSorter, node_id: str, events: list[Event] | None
+        self, scheduler: Scheduler, node_id: str, epoch: int, events: list[Event] | None
     ) -> None:
         """
         Update the state of the processing graph after events are emitted.
@@ -141,7 +142,7 @@ class TubeRunner(ABC):
         if not events:
             return
 
-        graph.done(node_id)
+        scheduler.done(node_id=node_id, epoch=epoch)
 
     def add_callback(self, callback: Callable[[Event], None]) -> None:
         self._callbacks.append(callback)
@@ -229,19 +230,18 @@ class SynchronousRunner(TubeRunner):
         """
         self.store.clear()
 
-        graph = self.tube.graph()
-        graph.prepare()
+        scheduler = self.tube.scheduler()
 
-        while graph.is_active():
-            ready = graph.get_ready()
+        while scheduler.is_active():
+            ready = scheduler.get_ready()
             if not ready:
                 break
-            for node_id in ready:
-                if node_id == "assets":
+            for node_info in ready:
+                if node_info.id == "assets":
                     # graph autogenerates "assets" node if something depends on it
-                    graph.done(node_id)
+                    scheduler.done(node_info.epoch, node_info.id)
                     continue
-                node = self.tube.nodes[node_id]
+                node = self.tube.nodes[node_info.id]
                 args, kwargs = self.collect_input(node)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
@@ -251,10 +251,10 @@ class SynchronousRunner(TubeRunner):
 
                 # take the value from cube first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.
-                events = self.store.add(node.signals, value, node_id)
+                events = self.store.add(node.signals, value, node_info.id, node_info.epoch)
                 self._call_callbacks(events)
-                self.update_graph(graph, node_id, events)
-                self._logger.debug("Node %s emitted %s", node_id, value)
+                self.update_graph(scheduler, node_info.id, node_info.epoch, events)
+                self._logger.debug("Node %s emitted %s", node_info, value)
 
         return self.collect_return()
 
