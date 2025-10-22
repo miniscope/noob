@@ -18,6 +18,7 @@ from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope, InputSpecification
 from noob.node import Edge, Node, NodeSpecification
 from noob.scheduler import Scheduler
+from noob.state import State, StateSpecification
 from noob.types import ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
@@ -89,7 +90,7 @@ class Tube(BaseModel):
     Specifications declared by the tube to be supplied 
     """
 
-    cube: Cube = Field(default_factory=Cube)
+    state: State = Field(default_factory=State)
 
     _scheduler: Scheduler = PrivateAttr(default_factory=Scheduler)
     _enabled_nodes: dict[str, Node] | None = None
@@ -155,13 +156,13 @@ class Tube(BaseModel):
 
         nodes = cls._init_nodes(spec, input_collection)
         edges = cls._init_edges(spec.nodes, nodes)
-        cube = cls._init_cube(spec.assets)
+        state = cls._init_state(spec.assets)
 
         return cls.model_validate(
             {
                 "nodes": nodes,
                 "edges": edges,
-                "cube": cube,
+                "state": state,
                 "input": input,
                 "input_collection": input_collection,
             },
@@ -169,9 +170,9 @@ class Tube(BaseModel):
         )
 
     @classmethod
-    def _init_cube(cls, spec: dict[str, AssetSpecification]) -> Cube:
-        cube_spec = CubeSpecification(assets=spec)
-        return Cube.from_specification(cube_spec)
+    def _init_state(cls, spec: dict[str, AssetSpecification]) -> State:
+        state_spec = StateSpecification(assets=spec)
+        return State.from_specification(state_spec)
 
     @classmethod
     def _init_nodes(
