@@ -47,7 +47,7 @@ class Scheduler(BaseModel):
         Scheduler remains active while it holds at least one graph that is active.
 
         """
-        return any(graph.is_active() for graph in self.graphs.values())
+        return any(graph.is_active() for graph in self._graphs.values())
 
     def get_ready(self) -> list[NodeCoord]:
         """
@@ -66,18 +66,19 @@ class Scheduler(BaseModel):
         return ready_nodes
 
     def done(self, epoch: int, node_id: str) -> None:
-        self.graphs[epoch].done(node_id)
+        self._graphs[epoch].done(node_id)
 
-    def evict_cache(self):
+    def evict_cache(self) -> Event:
         """
-        We can evict the cached event from the node once all nodes
-        that depend on the given node is marked "done."
+        We can evict the cached event from the node once all successors
+        are marked "done."
+
+        Not implemented in :class:`.Scheduler` while we're still utilizing
+        :class:`.TopologicalSorter`, since its API access to successors /
+        predecessors is limited.
 
         """
-
-    @property
-    def graphs(self) -> dict[int, TopologicalSorter]:
-        return self._graphs
+        raise NotImplementedError()
 
     def add_graph(self, nodes: dict[str, Node], edges: list[Edge]) -> None:
         """
@@ -89,6 +90,10 @@ class Scheduler(BaseModel):
         graph.prepare()
 
         self._graphs[next(self._clock)] = graph
+
+    @property
+    def graphs(self) -> dict[int, TopologicalSorter]:
+        return self._graphs
 
     @staticmethod
     def _init_graph(nodes: dict[str, Node], edges: list[Edge]) -> TopologicalSorter:
