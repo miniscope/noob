@@ -1,0 +1,14 @@
+noob_id: testing-disable-return
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev138+ge1b5e7f.d20250905
+nodes:
+  a:
+    type: noob.testing.count_source
+  b:
+    type: noob.testing.multiply
+    depends:
+      - left: a.index
+  c:
+    type: return
+    depends: b.value
+    enabled: False

@@ -110,3 +110,8 @@ class NodeSpecification(BaseModel):
     parameterized the signature of a function node, or
     by a TypedDict for a class node.
     """
+    enabled: bool = True
+    """
+    If this flag is False, the node will not be initialized 
+    or included in the `:meth:.Tube.graph`.
+    """

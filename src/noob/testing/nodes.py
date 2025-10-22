@@ -87,11 +87,22 @@ class CountSource(Node):
     start: int = 0
 
     def process(self) -> Generator[A[int, Name("index")], None, None]:
-        return count_source(limit=self.limit, start=self.start)
+        counter = count(start=self.start)
+        while (val := next(counter)) < self.limit:
+            yield val
+
+
+class UnannotatedGenerator(Node):
+    limit: int = 1000
+    start: int = 0
+
+    def process(self):  # noqa: ANN201
+        counter = count(start=self.start)
+        while (val := next(counter)) < self.limit:
+            yield val
 
 
 class Multiply(Node):
-
     def process(self, left: int, right: int = 2) -> A[int, Name("product")]:
         return multiply(left=left, right=right)
 
@@ -127,8 +138,8 @@ def array_add_to_left(left: xr.DataArray, right: xr.DataArray) -> xr.DataArray:
     return left
 
 
-class GenClass:
-    def __init__(self, start: int) -> None:
+class CountSourceDecor:
+    def __init__(self, start: int = 0) -> None:
         self.gen = count(start=start)
 
     @process_method

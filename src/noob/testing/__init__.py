@@ -4,9 +4,10 @@ from noob.testing.assets import (
 )
 from noob.testing.nodes import (
     CountSource,
-    GenClass,
+    CountSourceDecor,
     Multiply,
     Now,
+    UnannotatedGenerator,
     Volume,
     VolumeProcess,
     array_add_to_left,
@@ -44,10 +45,11 @@ __all__ = [
     "VolumeProcess",
     "Volume",
     "Now",
+    "UnannotatedGenerator",
     "array_add_to_left",
     "xarray_asset",
     "db_connection",
-    "GenClass",
+    "CountSourceDecor",
     "input_party",
     "read_db",
 ]

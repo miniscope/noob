@@ -1,7 +1,12 @@
+import pytest
+
 from noob import SynchronousRunner, Tube
 
 
 def test_process_callback() -> None:
+    """
+    callbacks must take place after each event emission.
+    """
 
     tube = Tube.from_specification("testing-basic")
     runner = SynchronousRunner(tube)
@@ -17,3 +22,66 @@ def test_process_callback() -> None:
     runner.process()
 
     assert len(events) == 2
+
+
+def test_disabled_node() -> None:
+    tube = Tube.from_specification("testing-disable-node")
+    runner = SynchronousRunner(tube)
+
+    assert set(runner.tube.enabled_nodes.keys()) == {"a", "c"}
+
+    # Return node is hanging and tries to index None
+    with pytest.raises(IndexError):
+        runner.run()
+
+
+def test_disabled_return() -> None:
+    tube = Tube.from_specification("testing-disable-return")
+    runner = SynchronousRunner(tube)
+
+    assert set(runner.tube.enabled_nodes.keys()) == {"a", "b"}
+
+    # Return node is disabled, so nothing comes out
+    result = runner.run(n=100)
+    assert result is None
+
+
+def test_dynamic_disable_node() -> None:
+    tube = Tube.from_specification("testing-basic")
+    runner = SynchronousRunner(tube)
+
+    iters = 100
+
+    first = runner.run(n=iters)
+    assert first == list(range(0, iters * 2, 2))
+
+    runner.disable_node("b")
+    with pytest.raises(IndexError):
+        runner.run(n=iters)
+
+    runner.enable_node("b")
+    result = runner.run(n=iters)
+    # continues from where it left off after the first run + one failure with disabled 'b' run.
+    start = max(first) + 4
+    expected = list(range(start, start + (iters * 2), 2))
+    assert result == expected
+
+
+def test_dynamic_disable_return() -> None:
+    tube = Tube.from_specification("testing-basic")
+    runner = SynchronousRunner(tube)
+
+    iters = 100
+
+    first = runner.run(n=iters)
+
+    runner.disable_node("c")
+    assert runner.run(n=iters) is None
+
+    runner.enable_node("c")
+    result = runner.run(n=iters)
+
+    # continues from where it left off after the two run
+    start = max(first) * 2 + 4
+    expected = list(range(start, start + (iters * 2), 2))
+    assert result == expected

@@ -117,6 +117,13 @@ class Node(BaseModel):
     id: str
     """Unique identifier of the node"""
     spec: NodeSpecification
+    enabled: bool = True
+    """Starting state for a node being enabled. When a node is disabled, 
+    it will be deinitialized and removed from the processing graph, 
+    but the node object will still be kept by the Tube. Nodes can be disabled 
+    and enabled during a tube's operation without recreating the tube. 
+    When a node is disabled, other nodes that depend on it will not be disabled, 
+    but they may never be called since their dependencies will never be satisfied."""
 
     _signals: list[Signal] = None
     _slots: dict[str, Slot] = None
@@ -127,8 +134,7 @@ class Node(BaseModel):
     def model_post_init(self, __context: Any) -> None:
         """See docstring of :meth:`.process` for description of post init wrapping of generators"""
         if inspect.isgeneratorfunction(self.process):
-            self._gen = self.process()
-            self.__dict__["process"] = lambda: next(self._gen)
+            self._wrap_generator(self.process)
 
     def init(self) -> None:
         """
@@ -185,11 +191,13 @@ class Node(BaseModel):
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec, **params)
+                return obj(id=spec.id, spec=spec, enabled=spec.enabled, **params)
             else:
-                return WrapClassNode(id=spec.id, cls=obj, spec=spec, params=params)
+                return WrapClassNode(
+                    id=spec.id, cls=obj, spec=spec, params=params, enabled=spec.enabled
+                )
         else:
-            return WrapFuncNode(id=spec.id, fn=obj, spec=spec, params=params)
+            return WrapFuncNode(id=spec.id, fn=obj, spec=spec, params=params, enabled=spec.enabled)
 
     @property
     def signals(self) -> list[Signal]:
@@ -210,6 +218,24 @@ class Node(BaseModel):
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)
+
+    def _wrap_generator(self, proc: Callable[[], GeneratorType]) -> None:
+        """
+        Wrap a `process` method when it is a generator,
+        invoked in `model_post_init`
+        """
+        self._gen = proc()
+
+        def _process():  # noqa: ANN202
+            return next(self._gen)
+
+        signature = inspect.signature(self.process)
+
+        args = get_args(signature.return_annotation)
+        if args:
+            _process.__annotations__ = {"return": args[0]}
+
+        self.__dict__["process"] = _process
 
 
 class WrapClassNode(Node):
@@ -298,6 +324,8 @@ class WrapFuncNode(Node):
         if inspect.isgeneratorfunction(self.fn):
             self._gen = self.fn(**self.params)
             self.__dict__["process"] = lambda: next(self._gen)
+        elif inspect.isasyncgenfunction(self.fn):
+            raise NotImplementedError("async generators not supported")
         else:
             self.__dict__["process"] = functools.partial(self.fn, **self.params)
 
