@@ -5,9 +5,9 @@ from typing import Self
 from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
 from noob.asset import AssetSpecification
-from noob.cube import Cube, CubeSpecification
 from noob.node import Edge, Node, NodeSpecification
 from noob.scheduler import Scheduler
+from noob.state import State, StateSpecification
 from noob.types import ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
@@ -28,7 +28,7 @@ class TubeSpecification(ConfigYAMLMixin):
     """
 
     assets: dict[str, AssetSpecification] = Field(default_factory=dict)
-    """The specs of the assets that comprise the cube of this tube"""
+    """The specs of the assets that comprise the :class:`.State` of this tube"""
 
     nodes: dict[str, NodeSpecification] = Field(default_factory=dict)
     """The nodes that this tube configures"""
@@ -68,7 +68,7 @@ class Tube(BaseModel):
     (i.e. ``edges[0].source_node is nodes[node_id]`` ).
     """
 
-    cube: Cube = Field(default_factory=Cube)
+    state: State = Field(default_factory=State)
 
     _scheduler: Scheduler = PrivateAttr(default_factory=Scheduler)
     _enabled_nodes: dict[str, Node] | None = None
@@ -122,14 +122,14 @@ class Tube(BaseModel):
         nodes = cls._init_nodes(spec)
         edges = cls._init_edges(spec.nodes, nodes)
 
-        cube = cls._init_cube(spec.assets)
+        state = cls._init_state(spec.assets)
 
-        return cls(nodes=nodes, edges=edges, cube=cube)
+        return cls(nodes=nodes, edges=edges, state=state)
 
     @classmethod
-    def _init_cube(cls, spec: dict[str, AssetSpecification]) -> Cube:
-        cube_spec = CubeSpecification(assets=spec)
-        return Cube.from_specification(cube_spec)
+    def _init_state(cls, spec: dict[str, AssetSpecification]) -> State:
+        state_spec = StateSpecification(assets=spec)
+        return State.from_specification(state_spec)
 
     @classmethod
     def _init_nodes(cls, specs: TubeSpecification) -> dict[PythonIdentifier, Node]:

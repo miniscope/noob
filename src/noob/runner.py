@@ -99,8 +99,8 @@ class TubeRunner(ABC):
 
         inputs = {}
 
-        cube_inputs = self.tube.cube.collect(edges)
-        inputs |= cube_inputs if cube_inputs else inputs
+        state_inputs = self.tube.state.collect(edges)
+        inputs |= state_inputs if state_inputs else inputs
 
         event_inputs = self.store.collect(edges)
         inputs |= event_inputs if event_inputs else inputs
@@ -202,7 +202,7 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             node.init()
 
-        for asset in self.tube.cube.assets.values():
+        for asset in self.tube.state.assets.values():
             asset.init()
 
         return self
@@ -213,7 +213,7 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             node.deinit()
 
-        for asset in self.tube.cube.assets.values():
+        for asset in self.tube.state.assets.values():
             asset.deinit()
 
         self._running.clear()
@@ -249,7 +249,7 @@ class SynchronousRunner(TubeRunner):
                 kwargs = {} if kwargs is None else kwargs
                 value = node.process(*args, **kwargs)
 
-                # take the value from cube first. if it's taken by an asset,
+                # take the value from State first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.
                 events = self.store.add(node.signals, value, node_info.id, node_info.epoch)
                 self._call_callbacks(events)
