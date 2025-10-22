@@ -82,7 +82,7 @@ class TubeRunner(ABC):
         pass
 
     def collect_input(
-        self, node: Node
+        self, node: Node, epoch: int
     ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None] | None:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
@@ -102,7 +102,7 @@ class TubeRunner(ABC):
         state_inputs = self.tube.state.collect(edges)
         inputs |= state_inputs if state_inputs else inputs
 
-        event_inputs = self.store.collect(edges)
+        event_inputs = self.store.collect(edges, epoch=epoch)
         inputs |= event_inputs if event_inputs else inputs
 
         args = []
@@ -237,12 +237,14 @@ class SynchronousRunner(TubeRunner):
             if not ready:
                 break
             for node_info in ready:
-                if node_info.id == "assets":
+                node_id, epoch = node_info.id, node_info.epoch
+
+                if node_id == "assets":
                     # graph autogenerates "assets" node if something depends on it
-                    scheduler.done(node_info.epoch, node_info.id)
+                    scheduler.done(epoch, node_id)
                     continue
-                node = self.tube.nodes[node_info.id]
-                args, kwargs = self.collect_input(node)
+                node = self.tube.nodes[node_id]
+                args, kwargs = self.collect_input(node, epoch)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
                 args = [] if args is None else args
@@ -251,10 +253,10 @@ class SynchronousRunner(TubeRunner):
 
                 # take the value from State first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.
-                events = self.store.add(node.signals, value, node_info.id, node_info.epoch)
+                events = self.store.add(node.signals, value, node_id, epoch)
                 self._call_callbacks(events)
-                self.update_graph(scheduler, node_info.id, node_info.epoch, events)
-                self._logger.debug("Node %s emitted %s", node_info, value)
+                self.update_graph(scheduler, node_id, epoch, events)
+                self._logger.debug(f"Node {node_id} emitted {value} in epoch {epoch}")
 
         return self.collect_return()
 

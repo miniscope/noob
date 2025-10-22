@@ -60,7 +60,7 @@ class EventStore:
             new_events.append(new_event)
         return new_events
 
-    def get(self, node_id: str, signal: str) -> Event | None:
+    def get(self, node_id: str, signal: str, epoch: int) -> Event | None:
         """
         Get the event with the matching node_id and signal name
 
@@ -70,10 +70,14 @@ class EventStore:
 
         ``None`` in the case that the event has not been emitted
         """
-        event = [e for e in self.events if e["node_id"] == node_id and e["signal"] == signal]
+        event = [
+            e
+            for e in self.events
+            if e["node_id"] == node_id and e["signal"] == signal and e["epoch"] == epoch
+        ]
         return None if len(event) == 0 else event[-1]
 
-    def collect(self, edges: list[Edge]) -> dict | None:
+    def collect(self, edges: list[Edge], epoch: int) -> dict | None:
         """
         Gather events into a form that can be consumed by a :meth:`.Node.process` method,
         given the collection of inbound edges (usually from :meth:`.Tube.in_edges` ).
@@ -93,7 +97,7 @@ class EventStore:
         args = {}
         for edge in edges:
             if edge.source_node != "assets":
-                event = self.get(edge.source_node, edge.source_signal)
+                event = self.get(edge.source_node, edge.source_signal, epoch)
                 value = None if event is None else event["value"]
                 args[edge.target_slot] = value
 

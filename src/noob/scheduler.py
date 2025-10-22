@@ -7,12 +7,13 @@ from noob.event import Event
 from noob.node import Edge, Node
 
 
-class ReadyNode(BaseModel):
+class NodeCoord(BaseModel):
     """
-    Nodes that are ready to process.
+    Coordinates of the nodes expressed with epoch and node ID.
 
     graphlib.TopologicalSorter can only "ready" node_ids of the same epoch.
     So, we add a way to track which epoch of the node_id is ready.
+
     """
 
     epoch: int
@@ -48,7 +49,7 @@ class Scheduler(BaseModel):
         """
         return any(graph.is_active() for graph in self.graphs.values())
 
-    def get_ready(self) -> list[ReadyNode]:
+    def get_ready(self) -> list[NodeCoord]:
         """
         Output the set of nodes that are ready across different graphs and epochs.
 
@@ -60,12 +61,19 @@ class Scheduler(BaseModel):
         for epoch, graph in self._graphs.items():
             # traverse each graph
             for node_id in graph.get_ready():
-                ready_nodes.append(ReadyNode(epoch=epoch, id=node_id))
+                ready_nodes.append(NodeCoord(epoch=epoch, id=node_id))
 
         return ready_nodes
 
     def done(self, epoch: int, node_id: str) -> None:
         self.graphs[epoch].done(node_id)
+
+    def evict_cache(self):
+        """
+        We can evict the cached event from the node once all nodes
+        that depend on the given node is marked "done."
+
+        """
 
     @property
     def graphs(self) -> dict[int, TopologicalSorter]:
