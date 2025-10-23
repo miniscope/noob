@@ -107,10 +107,14 @@ class EventStore:
 
         return args
 
-    def clear(self) -> None:
+    def clear(self, epoch: int | None = None) -> None:
         """
-        Clear events for this round of processing.
+        Clear events for a specific or all epochs.
 
         Does not reset the counter (to continue giving unique ids to the next round's events)
         """
-        self.events = []
+
+        if epoch is None:
+            self.events = []
+        else:
+            self.events = [e for e in self.events if e["epoch"] != epoch]
