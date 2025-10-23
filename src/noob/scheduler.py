@@ -57,11 +57,7 @@ class Scheduler(BaseModel):
         Output the set of nodes that are ready across different graphs and epochs.
 
         """
-        if epoch is None:
-            # Check all available epochs
-            graphs = self._graphs.items()
-        else:
-            graphs = [(epoch, self._graphs[epoch])]
+        graphs = self._graphs.items() if epoch is None else [(epoch, self._graphs[epoch])]
 
         ready_nodes = [
             NodeCoord(epoch=e, id=node_id) for e, graph in graphs for node_id in graph.get_ready()
