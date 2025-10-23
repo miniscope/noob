@@ -5,7 +5,7 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from logging import Logger
 from threading import Event as ThreadEvent
-from typing import TYPE_CHECKING, Any, Self
+from typing import Any, Self
 
 from noob import init_logger
 from noob.event import Event
@@ -16,9 +16,6 @@ from noob.scheduler import Scheduler
 from noob.store import EventStore
 from noob.tube import Tube
 from noob.types import PythonIdentifier, ReturnNodeType
-
-if TYPE_CHECKING:
-    pass
 
 
 @dataclass
