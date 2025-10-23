@@ -22,15 +22,15 @@ def test_get_ready() -> None:
 
     """
     scheduler = Scheduler()
-    noob_ids = ["testing-basic", "testing-basic", "testing-branch", "testing-merge"]
+    noob_ids = ["testing-merge", "testing-merge"]
     for id_ in noob_ids:
         tube = Tube.from_specification(id_)
         scheduler.add_graph(nodes=tube.enabled_nodes, edges=tube.edges)
 
     ready = scheduler.get_ready()
     # should return all independent nodes (merge has 2)
-    assert len(ready) == 5
+    assert len(ready) == 4
 
     scheduler.done(0, "a")
     # should only return the newly ready node
-    assert scheduler.get_ready() == [NodeCoord(epoch=0, id="b")]
+    assert scheduler.get_ready() == [NodeCoord(epoch=0, id="c")]

@@ -42,26 +42,30 @@ class Scheduler(BaseModel):
         for event in events:
             self.done(epoch=event["epoch"], node_id=event["node_id"])
 
-    def is_active(self) -> bool:
+    def is_active(self, epoch: int | None = None) -> bool:
         """
         Scheduler remains active while it holds at least one graph that is active.
 
         """
-        return any(graph.is_active() for graph in self._graphs.values())
+        if epoch is not None:
+            return self._graphs[epoch].is_active()
+        else:
+            return any(graph.is_active() for graph in self._graphs.values())
 
-    def get_ready(self) -> list[NodeCoord]:
+    def get_ready(self, epoch: int | None = None) -> list[NodeCoord]:
         """
         Output the set of nodes that are ready across different graphs and epochs.
 
         """
+        if epoch is None:
+            # Check all available epochs
+            graphs = self._graphs.items()
+        else:
+            graphs = [(epoch, self._graphs[epoch])]
 
-        ready_nodes = []
-
-        # traverse different epochs
-        for epoch, graph in self._graphs.items():
-            # traverse each graph
-            for node_id in graph.get_ready():
-                ready_nodes.append(NodeCoord(epoch=epoch, id=node_id))
+        ready_nodes = [
+            NodeCoord(epoch=e, id=node_id) for e, graph in graphs for node_id in graph.get_ready()
+        ]
 
         return ready_nodes
 
