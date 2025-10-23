@@ -7,26 +7,26 @@ from noob.node.base import Edge
 from noob.types import PythonIdentifier
 
 
-class CubeSpecification(BaseModel):
+class StateSpecification(BaseModel):
     """
-    Configuration for the assets within a cube.
+    Configuration for the assets within a :class:`.State`.
 
-    Representation of the yaml-form of a cube.
+    Representation of the yaml-form of a :class:`.State`.
     Converted to the runtime-form with :meth:`.Cube.from_specification`.
 
-    Not much, if any validation is performed here on the whole cube except
+    Not much, if any validation is performed here on the whole :class:`.State` except
     that the assets have the correct fields, ignoring validity of
     e.g. type mismatches.
     Those require importing and introspecting the specified assets classes,
-    which should only happen when we try and instantiate the cube -
+    which should only happen when we try and instantiate the :class:`.State` -
     this class is just a carrier for the yaml spec.
     """
 
     assets: dict[str, AssetSpecification] = Field(default_factory=dict)
-    """The assets that this cube configures"""
+    """The assets that this :class:`.State` configures"""
 
 
-class Cube(BaseModel):  # or Pube
+class State(BaseModel):  # or Pube
     """
     A collection of assets storing objects that persist through iterations of the tube.
     The target demographics generally include database connections, large arrays and statistics
@@ -39,19 +39,19 @@ class Cube(BaseModel):  # or Pube
     assets: dict[PythonIdentifier, Asset] = Field(default_factory=dict)
 
     @classmethod
-    def from_specification(cls, spec: CubeSpecification) -> Self:
+    def from_specification(cls, spec: StateSpecification) -> Self:
         """
-        Instantiate a cube model from its configuration
+        Instantiate a :class:`.State` model from its configuration
 
         Args:
-            spec (CubeSpecification): the cube config to instantiate
+            spec (StateSpecification): the :class:`.State` config to instantiate
         """
         assets = cls._init_assets(spec)
 
         return cls(assets=assets)
 
     @classmethod
-    def _init_assets(cls, specs: CubeSpecification) -> dict[PythonIdentifier, Asset]:
+    def _init_assets(cls, specs: StateSpecification) -> dict[PythonIdentifier, Asset]:
         assets = {spec.id: Asset.from_specification(spec) for spec in specs.assets.values()}
         return assets
 

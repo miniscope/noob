@@ -5,19 +5,17 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from logging import Logger
 from threading import Event as ThreadEvent
-from typing import TYPE_CHECKING, Any, Self
+from typing import Any, Self
 
 from noob import init_logger
 from noob.event import Event
 from noob.exceptions import AlreadyRunningError
 from noob.node import Node
 from noob.node.return_ import Return
+from noob.scheduler import Scheduler
 from noob.store import EventStore
 from noob.tube import Tube
 from noob.types import PythonIdentifier, ReturnNodeType
-
-if TYPE_CHECKING:
-    from graphlib import TopologicalSorter
 
 
 @dataclass
@@ -81,7 +79,7 @@ class TubeRunner(ABC):
         pass
 
     def collect_input(
-        self, node: Node
+        self, node: Node, epoch: int
     ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None] | None:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
@@ -98,10 +96,10 @@ class TubeRunner(ABC):
 
         inputs = {}
 
-        cube_inputs = self.tube.cube.collect(edges)
-        inputs |= cube_inputs if cube_inputs else inputs
+        state_inputs = self.tube.state.collect(edges)
+        inputs |= state_inputs if state_inputs else inputs
 
-        event_inputs = self.store.collect(edges)
+        event_inputs = self.store.collect(edges, epoch=epoch)
         inputs |= event_inputs if event_inputs else inputs
 
         args = []
@@ -131,7 +129,7 @@ class TubeRunner(ABC):
         return ret_node.get(keep=False)
 
     def update_graph(
-        self, graph: TopologicalSorter, node_id: str, events: list[Event] | None
+        self, scheduler: Scheduler, node_id: str, epoch: int, events: list[Event] | None
     ) -> None:
         """
         Update the state of the processing graph after events are emitted.
@@ -141,7 +139,7 @@ class TubeRunner(ABC):
         if not events:
             return
 
-        graph.done(node_id)
+        scheduler.done(node_id=node_id, epoch=epoch)
 
     def add_callback(self, callback: Callable[[Event], None]) -> None:
         self._callbacks.append(callback)
@@ -201,7 +199,7 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             node.init()
 
-        for asset in self.tube.cube.assets.values():
+        for asset in self.tube.state.assets.values():
             asset.init()
 
         return self
@@ -212,7 +210,7 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             node.deinit()
 
-        for asset in self.tube.cube.assets.values():
+        for asset in self.tube.state.assets.values():
             asset.deinit()
 
         self._running.clear()
@@ -229,32 +227,33 @@ class SynchronousRunner(TubeRunner):
         """
         self.store.clear()
 
-        graph = self.tube.graph()
-        graph.prepare()
+        scheduler = self.tube.scheduler()
 
-        while graph.is_active():
-            ready = graph.get_ready()
+        while scheduler.is_active():
+            ready = scheduler.get_ready()
             if not ready:
                 break
-            for node_id in ready:
+            for node_info in ready:
+                node_id, epoch = node_info.id, node_info.epoch
+
                 if node_id == "assets":
                     # graph autogenerates "assets" node if something depends on it
-                    graph.done(node_id)
+                    scheduler.done(epoch, node_id)
                     continue
                 node = self.tube.nodes[node_id]
-                args, kwargs = self.collect_input(node)
+                args, kwargs = self.collect_input(node, epoch)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
                 args = [] if args is None else args
                 kwargs = {} if kwargs is None else kwargs
                 value = node.process(*args, **kwargs)
 
-                # take the value from cube first. if it's taken by an asset,
+                # take the value from State first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.
-                events = self.store.add(node.signals, value, node_id)
+                events = self.store.add(node.signals, value, node_id, epoch)
                 self._call_callbacks(events)
-                self.update_graph(graph, node_id, events)
-                self._logger.debug("Node %s emitted %s", node_id, value)
+                self.update_graph(scheduler, node_id, epoch, events)
+                self._logger.debug(f"Node {node_id} emitted {value} in epoch {epoch}")
 
         return self.collect_return()
 
