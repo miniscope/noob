@@ -2,7 +2,7 @@ import functools
 import inspect
 from collections.abc import Callable, Generator
 from types import GeneratorType, GenericAlias, NoneType, UnionType
-from typing import Annotated, Any, TypeVar, get_args, get_origin
+from typing import TYPE_CHECKING, Annotated, Any, TypeVar, Union, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -10,9 +10,8 @@ from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
 from noob.utils import resolve_python_identifier
 
-"""
-Output Type typevar
-"""
+if TYPE_CHECKING:
+    from noob.input import InputCollection
 
 
 class Slot(BaseModel):
@@ -175,7 +174,9 @@ class Node(BaseModel):
         raise NotImplementedError()
 
     @classmethod
-    def from_specification(cls, spec: "NodeSpecification") -> "Node":
+    def from_specification(
+        cls, spec: "NodeSpecification", input_collection: Union["InputCollection", None] = None
+    ) -> "Node":
         """
         Create a node from its spec
 
@@ -186,6 +187,8 @@ class Node(BaseModel):
         obj = resolve_python_identifier(spec.type_)
 
         params = spec.params if spec.params is not None else {}
+        if input_collection:
+            params = input_collection.get_node_params(params)
 
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable

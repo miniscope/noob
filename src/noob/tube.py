@@ -1,12 +1,22 @@
+from collections import defaultdict
 from collections.abc import Mapping
 from graphlib import TopologicalSorter
 from importlib import resources
 from typing import Self
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from noob.asset import AssetSpecification
 from noob.cube import Cube, CubeSpecification
+from noob.exceptions import InputMissingError
+from noob.input import InputCollection, InputScope, InputSpecification
 from noob.node import Edge, Node, NodeSpecification
 from noob.types import ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
@@ -27,13 +37,16 @@ class TubeSpecification(ConfigYAMLMixin):
     this class is just a carrier for the yaml spec.
     """
 
-    assets: dict[str, AssetSpecification] = Field(default_factory=dict)
+    assets: dict[PythonIdentifier, AssetSpecification] = Field(default_factory=dict)
     """The specs of the assets that comprise the cube of this tube"""
 
-    nodes: dict[str, NodeSpecification] = Field(default_factory=dict)
+    input: dict[PythonIdentifier, InputSpecification] = Field(default_factory=dict)
+    """Inputs provided at runtime"""
+
+    nodes: dict[PythonIdentifier, NodeSpecification] = Field(default_factory=dict)
     """The nodes that this tube configures"""
 
-    @field_validator("nodes", "assets", mode="before")
+    @field_validator("nodes", "assets", "input", mode="before")
     @classmethod
     def fill_node_ids(cls, value: dict[str, dict]) -> dict[str, dict]:
         """
@@ -68,6 +81,14 @@ class Tube(BaseModel):
     The nodes within :attr:`.Edge.source_node` and :attr:`.Edge.target_node` must
     be the same objects as those in :attr:`.Tube.nodes`
     (i.e. ``edges[0].source_node is nodes[node_id]`` ).
+    """
+    input: dict = Field(default_factory=dict)
+    """
+    tube-scoped inputs provided to nodes as parameters
+    """
+    input_collection: InputCollection = Field(default_factory=InputCollection)
+    """
+    Specifications declared by the tube to be supplied 
     """
 
     _enabled_nodes: dict[str, Node] | None = None
@@ -129,21 +150,42 @@ class Tube(BaseModel):
         return [e for e in self.edges if e.source_node == node]
 
     @classmethod
-    def from_specification(cls, spec: TubeSpecification | ConfigSource) -> Self:
+    def from_specification(
+        cls, spec: TubeSpecification | ConfigSource, input: dict | None = None
+    ) -> Self:
         """
         Instantiate a tube model from its configuration
 
         Args:
             spec (TubeSpecification): the tube config to instantiate
+
+        Raises:
+            InputMissingError if requested tube-scoped input is not present.
         """
+        if input is None:
+            input = {}
+
         spec = TubeSpecification.from_any(spec)
 
-        nodes = cls._init_nodes(spec)
-        edges = cls._init_edges(spec.nodes, nodes)
+        # check inputs first to avoid doing work if the input is invalid
+        input_collection = cls._init_inputs(spec)
+        # adding the input validates presence of required inputs
+        input_collection.validate_presence(InputScope.tube, input)
 
+        nodes = cls._init_nodes(spec, input_collection)
+        edges = cls._init_edges(spec.nodes, nodes)
         cube = cls._init_cube(spec.assets)
 
-        return cls(nodes=nodes, edges=edges, cube=cube)
+        return cls.model_validate(
+            {
+                "nodes": nodes,
+                "edges": edges,
+                "cube": cube,
+                "input": input,
+                "input_collection": input_collection,
+            },
+            context={"skip_input_presence": True},
+        )
 
     @classmethod
     def _init_cube(cls, spec: dict[str, AssetSpecification]) -> Cube:
@@ -151,8 +193,13 @@ class Tube(BaseModel):
         return Cube.from_specification(cube_spec)
 
     @classmethod
-    def _init_nodes(cls, specs: TubeSpecification) -> dict[PythonIdentifier, Node]:
-        nodes = {spec.id: Node.from_specification(spec) for spec in specs.nodes.values()}
+    def _init_nodes(
+        cls, specs: TubeSpecification, input_collection: InputCollection
+    ) -> dict[PythonIdentifier, Node]:
+        nodes = {
+            spec.id: Node.from_specification(spec, input_collection)
+            for spec in specs.nodes.values()
+        }
         return nodes
 
     @classmethod
@@ -208,6 +255,13 @@ class Tube(BaseModel):
 
         return edges
 
+    @classmethod
+    def _init_inputs(cls, spec: TubeSpecification) -> InputCollection:
+        specs = defaultdict(dict)
+        for input_spec in spec.input.values():
+            specs[input_spec.scope][input_spec.id] = input_spec
+        return InputCollection(specs=specs)
+
     @property
     def enabled_nodes(self) -> dict[str, Node]:
         """
@@ -224,6 +278,24 @@ class Tube(BaseModel):
     def disable_node(self, node_id: str) -> None:
         self.nodes[node_id].enabled = False
         self._enabled_nodes = None  # Trigger recalculation in the next enabled_nodes call
+
+    @model_validator(mode="after")
+    def input_present(self, info: ValidationInfo) -> Self:
+        """
+        Validate the presence of required tube-scoped inputs.
+
+        Though tubes are usually instantiated from specs,
+        this catches the case when they are constructed directly.
+        """
+        if info.context and info.context.get("skip_input_presence", False):
+            return self
+
+        try:
+            self.input_collection.add_input(InputScope.tube, self.input)
+        except InputMissingError as e:
+            raise ValidationError("Required input missing") from e
+
+        return self
 
 
 class TubeClassicEdition:
