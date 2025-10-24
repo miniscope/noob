@@ -8,6 +8,7 @@ from datetime import datetime
 from itertools import count
 from typing import Any
 
+from noob.const import RESERVED_IDS
 from noob.event import Event
 from noob.node import Edge
 from noob.node.base import Signal
@@ -88,7 +89,8 @@ class EventStore:
         """
         args = {}
         for edge in edges:
-            if edge.source_node != "assets":
+            # FIXME: use reserved names in validation so we don't need this check
+            if edge.source_node not in RESERVED_IDS:
                 event = self.get(edge.source_node, edge.source_signal)
                 value = None if event is None else event["value"]
                 args[edge.target_slot] = value

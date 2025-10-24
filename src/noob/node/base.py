@@ -189,6 +189,15 @@ class Node(BaseModel):
         params = spec.params if spec.params is not None else {}
         if input_collection:
             params = input_collection.get_node_params(params)
+        elif params:
+            from noob.input import InputCollection
+
+            if any(
+                InputCollection.INPUT_PATTERN.fullmatch(v)
+                for v in params.values()
+                if isinstance(v, str)
+            ):
+                raise ValueError("No input collection supplied, but inputs specified in params")
 
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable

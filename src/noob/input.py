@@ -71,14 +71,37 @@ class InputCollection(BaseModel):
         """Get a value from the inputs at any scope, if present"""
         if input is None:
             input = {}
+
         return self.chain.new_child(input)[key]
 
     def get_node_params(self, params: dict) -> dict:
         """Get tube-scoped params specified as inputs needed when instantiating a node"""
-        raise NotImplementedError()
+        for k, v in params.items():
+            if not isinstance(v, str):
+                continue
+            if match := InputCollection.INPUT_PATTERN.fullmatch(v):
+                input_key = match.groupdict()["key"]
+                try:
+                    params[k] = self.get(input_key)
+                except KeyError as e:
+                    raise InputMissingError(
+                        f"Node params requested {input_key}, but not present in input"
+                    ) from e
+        return params
 
     def collect(self, edges: list[Edge], input: dict) -> dict:
-        raise NotImplementedError()
+        args = {}
+        for edge in edges:
+            if edge.source_node != "input":
+                continue
+            try:
+                args[edge.target_slot] = self.get(edge.source_signal, input)
+            except KeyError as e:
+                raise InputMissingError(
+                    f"Node depends on input {edge.source_signal}, "
+                    "but not provided in any input scope"
+                ) from e
+        return args
 
     def add_input(self, scope: InputScope, input: dict) -> None:
         """Add some scope's input to the input collection."""
@@ -98,6 +121,10 @@ class InputCollection(BaseModel):
 
     def validate_presence(self, scope: InputScope, *args: dict) -> None:
         """Check that the required inputs are present in one of several input dicts"""
+        if scope not in self.specs:
+            # no input specs for this scope
+            return
+
         chain = self.chain.new_child()
         for input in args:
             chain = chain.new_child(input)
