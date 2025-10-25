@@ -1,11 +1,12 @@
 import re
+import warnings
 from collections import ChainMap, defaultdict
 from enum import StrEnum
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field, PrivateAttr
 
-from noob.exceptions import InputMissingError
+from noob.exceptions import ExtraInputWarning, InputMissingError
 from noob.node.base import Edge
 from noob.types import AbsoluteIdentifier, PythonIdentifier
 
@@ -115,22 +116,56 @@ class InputCollection(BaseModel):
             raise ValueError(f"Unknown scope: {scope}")
 
         new = {**self._input[scope], **input}
-        self.validate_presence(scope, new)
+        new = self.validate_input(scope, new)
+
         self._input[scope] = new
         self._chain = None
 
-    def validate_presence(self, scope: InputScope, *args: dict) -> None:
-        """Check that the required inputs are present in one of several input dicts"""
+    def validate_input(self, scope: InputScope, input: dict) -> dict:
+        """
+        Check that the required inputs are present in one of several input dicts,
+        and then filter to only specified input
+        """
         if scope not in self.specs:
             # no input specs for this scope
-            return
+            if input:
+                warnings.warn(
+                    f"Ignoring extra input for a scope `{scope.value}` "
+                    "without any input specifications.",
+                    ExtraInputWarning,
+                    stacklevel=3,
+                )
+            return {}
 
-        chain = self.chain.new_child()
-        for input in args:
-            chain = chain.new_child(input)
+        input = self.filter_input(scope, input)
+
+        chain = self.chain.new_child(input)
 
         for spec in self.specs[scope].values():
             if spec.id not in chain:
                 raise InputMissingError(
                     f"Requested input {spec.id} not present in inputs at scope {scope.value}"
                 )
+        return input
+
+    def filter_input(self, scope: InputScope, input: dict) -> dict:
+        """filter input to only specified keys, emitting an ExtraInput warning if found."""
+        if scope not in self.specs:
+            warnings.warn(
+                f"Ignoring extra input for a scope `{scope.value}` "
+                "without any input specifications.",
+                ExtraInputWarning,
+                stacklevel=3,
+            )
+            return {}
+
+        filtered = {k: v for k, v in input.items() if k in self.specs[scope]}
+        if len(input) > len(filtered):
+            extra = set(input.keys()) - set(filtered.keys())
+            warnings.warn(
+                f"Ignoring extra input without a specification provided to scope "
+                f"`{scope.value}`: {extra}",
+                ExtraInputWarning,
+                stacklevel=3,
+            )
+        return filtered

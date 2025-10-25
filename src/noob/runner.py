@@ -40,13 +40,15 @@ class TubeRunner(ABC):
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
 
     @abstractmethod
-    def process(self) -> ReturnNodeType:
+    def process(self, **kwargs: Any) -> ReturnNodeType:
         """
         Process one step of data from each of the sources,
         passing intermediate data to any subscribed nodes in a chain.
 
         The `process` method normally does not return anything,
         except when using the special :class:`.Return` node
+
+        Process-scoped `input`s can be passed as kwargs.
         """
 
     @abstractmethod
@@ -228,14 +230,14 @@ class SynchronousRunner(TubeRunner):
         """Whether the tube is currently running"""
         return self._running.is_set()
 
-    def process(self, input: dict | None = None) -> ReturnNodeType:
+    def process(self, **kwargs: Any) -> ReturnNodeType:
         """
         Iterate through nodes in topological order,
         calling their process method and passing events as they are emitted.
+
+        Process-scoped `input`s can be passed as kwargs.
         """
-        if input is None:
-            input = {}
-        self.tube.input_collection.validate_presence(InputScope.process, input)
+        input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
         self.store.clear()
 
         graph = self.tube.graph()

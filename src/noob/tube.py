@@ -170,7 +170,7 @@ class Tube(BaseModel):
         # check inputs first to avoid doing work if the input is invalid
         input_collection = cls._init_inputs(spec)
         # adding the input validates presence of required inputs
-        input_collection.validate_presence(InputScope.tube, input)
+        input_collection.add_input(InputScope.tube, input)
 
         nodes = cls._init_nodes(spec, input_collection)
         edges = cls._init_edges(spec.nodes, nodes)
