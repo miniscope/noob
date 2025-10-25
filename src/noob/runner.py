@@ -48,7 +48,7 @@ class TubeRunner(ABC):
         The `process` method normally does not return anything,
         except when using the special :class:`.Return` node
 
-        Process-scoped `input`s can be passed as kwargs.
+        Process-scoped ``input`` s can be passed as kwargs.
         """
 
     @abstractmethod
@@ -235,7 +235,7 @@ class SynchronousRunner(TubeRunner):
         Iterate through nodes in topological order,
         calling their process method and passing events as they are emitted.
 
-        Process-scoped `input`s can be passed as kwargs.
+        Process-scoped ``input`` s can be passed as kwargs.
         """
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
         self.store.clear()
