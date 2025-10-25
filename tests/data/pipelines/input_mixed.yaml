@@ -1,0 +1,31 @@
+noob_id: testing-input-mixed
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1.dev155+g2f9639f
+input:
+  start:
+    scope: tube
+    type: int
+  multiply_tube:
+    scope: tube
+    type: int
+  multiply_process:
+    scope: process
+    type: int
+nodes:
+  a:
+    type: noob.testing.count_source
+    params:
+      start: input.start
+  b:
+    type: noob.testing.multiply
+    depends:
+    - left: a.index
+    - right: input.multiply_tube
+  c:
+    type: noob.testing.multiply
+    depends:
+    - left: b.value
+    - right: input.multiply_process
+  d:
+    type: return
+    depends: c.value

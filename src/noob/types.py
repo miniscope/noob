@@ -1,17 +1,25 @@
+from __future__ import annotations
+
 import builtins
 import re
 import sys
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Annotated, Any, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, TypedDict
 
 from pydantic import AfterValidator, Field, TypeAdapter
+
+from noob.const import RESERVED_IDS
 
 if sys.version_info < (3, 13):
     from typing_extensions import TypeIs
 else:
     from typing import TypeIs
+
+if TYPE_CHECKING:
+    from noob import Tube
+    from noob.runner import TubeRunner
 
 CONFIG_ID_PATTERN = r"[\w\-\/#]+"
 """
@@ -50,10 +58,17 @@ def _is_absolute_identifier(val: str) -> str:
     return val
 
 
+def _not_reserved(val: str) -> str:
+    assert val not in RESERVED_IDS, f"Cannot used reserved ID {val}"
+    return val
+
+
 Range: TypeAlias = tuple[int, int] | tuple[float, float]
-PythonIdentifier: TypeAlias = Annotated[str, AfterValidator(_is_identifier)]
+PythonIdentifier: TypeAlias = Annotated[
+    str, AfterValidator(_is_identifier), AfterValidator(_not_reserved)
+]
 """
-A single valid python identifier.
+A single valid python identifier and not one of the reserved identifiers.
 
 See: https://docs.python.org/3.13/library/stdtypes.html#str.isidentifier
 """
@@ -72,6 +87,8 @@ ConfigSource: TypeAlias = Path | PathLike[str] | ConfigID
 """
 Union of all types of config sources
 """
+NodeID: TypeAlias = Annotated[str, AfterValidator(_is_identifier)]
+
 ReturnNodeType: TypeAlias = None | dict[str, Any] | Any
 
 
@@ -99,3 +116,8 @@ def valid_config_id(val: Any) -> TypeIs[ConfigID]:
 # --------------------------------------------------
 
 AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)
+
+
+class RunnerContext(TypedDict):
+    runner: TubeRunner
+    tube: Tube

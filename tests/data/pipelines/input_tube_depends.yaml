@@ -1,0 +1,19 @@
+noob_id: testing-input-tube-depends
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1.dev155+g2f9639f
+input:
+  multiply_right:
+    scope: tube
+    type: int
+
+nodes:
+  a:
+    type: noob.testing.count_source
+  b:
+    type: noob.testing.multiply
+    depends:
+    - left: a.index
+    - right: input.multiply_right
+  c:
+    type: return
+    depends: b.value
