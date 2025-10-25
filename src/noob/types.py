@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import builtins
 import re
 import sys
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Annotated, Any, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, TypedDict
 
 from pydantic import AfterValidator, Field, TypeAdapter
 
@@ -14,6 +16,10 @@ if sys.version_info < (3, 13):
     from typing_extensions import TypeIs
 else:
     from typing import TypeIs
+
+if TYPE_CHECKING:
+    from noob import Tube
+    from noob.runner import TubeRunner
 
 CONFIG_ID_PATTERN = r"[\w\-\/#]+"
 """
@@ -110,3 +116,8 @@ def valid_config_id(val: Any) -> TypeIs[ConfigID]:
 # --------------------------------------------------
 
 AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)
+
+
+class RunnerContext(TypedDict):
+    runner: TubeRunner
+    tube: Tube
