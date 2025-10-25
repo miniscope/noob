@@ -7,10 +7,12 @@ def test_recursive_pipeline():
     parent_start = 3
     child_multiply = 5
     parent_multiply = 7
+
     tube = Tube.from_specification(
         "testing-recursive-parent", input={"child_start": child_start, "parent_start": parent_start}
     )
     runner = SynchronousRunner(tube)
+
     for i, parent, child in zip(range(5), range(5, 10), range(10, 15)):
         res = runner.process(
             child_multiply=child + child_multiply, parent_multiply=parent + parent_multiply
