@@ -1,0 +1,15 @@
+noob_id: testing-input-process-params
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1.dev155+g2f9639f
+input:
+  start:
+    scope: process
+    type: int
+nodes:
+  a:
+    type: noob.testing.count_source
+    params:
+      start: input.start
+  return:
+    type: return
+    depends: a.index

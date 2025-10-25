@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Self
 from noob import init_logger
 from noob.event import Event
 from noob.exceptions import AlreadyRunningError
+from noob.input import InputScope
 from noob.node import Node
 from noob.node.return_ import Return
 from noob.store import EventStore
@@ -39,13 +40,15 @@ class TubeRunner(ABC):
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
 
     @abstractmethod
-    def process(self) -> ReturnNodeType:
+    def process(self, **kwargs: Any) -> ReturnNodeType:
         """
         Process one step of data from each of the sources,
         passing intermediate data to any subscribed nodes in a chain.
 
         The `process` method normally does not return anything,
         except when using the special :class:`.Return` node
+
+        Process-scoped ``input`` s can be passed as kwargs.
         """
 
     @abstractmethod
@@ -81,7 +84,7 @@ class TubeRunner(ABC):
         pass
 
     def collect_input(
-        self, node: Node
+        self, node: Node, input: dict | None = None
     ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None] | None:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
@@ -93,6 +96,8 @@ class TubeRunner(ABC):
         """
         if not node.spec.depends:
             return None, None
+        if input is None:
+            input = {}
 
         edges = self.tube.in_edges(node)
 
@@ -103,6 +108,9 @@ class TubeRunner(ABC):
 
         event_inputs = self.store.collect(edges)
         inputs |= event_inputs if event_inputs else inputs
+
+        input_inputs = self.tube.input_collection.collect(edges, input)
+        inputs |= input_inputs if input_inputs else inputs
 
         args = []
         kwargs = {}
@@ -222,11 +230,14 @@ class SynchronousRunner(TubeRunner):
         """Whether the tube is currently running"""
         return self._running.is_set()
 
-    def process(self) -> ReturnNodeType:
+    def process(self, **kwargs: Any) -> ReturnNodeType:
         """
         Iterate through nodes in topological order,
         calling their process method and passing events as they are emitted.
+
+        Process-scoped ``input`` s can be passed as kwargs.
         """
+        input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
         self.store.clear()
 
         graph = self.tube.graph()
@@ -242,7 +253,7 @@ class SynchronousRunner(TubeRunner):
                     graph.done(node_id)
                     continue
                 node = self.tube.nodes[node_id]
-                args, kwargs = self.collect_input(node)
+                args, kwargs = self.collect_input(node, input)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
                 args = [] if args is None else args
