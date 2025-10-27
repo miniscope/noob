@@ -2,17 +2,17 @@ import functools
 import inspect
 from collections.abc import Callable, Generator
 from types import GeneratorType, GenericAlias, NoneType, UnionType
-from typing import Annotated, Any, TypeVar, get_args, get_origin
+from typing import TYPE_CHECKING, Annotated, Any, TypeVar, Union, get_args, get_origin, overload
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
+from noob.types import RunnerContext
 from noob.utils import resolve_python_identifier
 
-"""
-Output Type typevar
-"""
+if TYPE_CHECKING:
+    from noob.input import InputCollection
 
 
 class Slot(BaseModel):
@@ -136,12 +136,21 @@ class Node(BaseModel):
         if inspect.isgeneratorfunction(self.process):
             self._wrap_generator(self.process)
 
+    @overload
+    def init(self) -> None: ...
+
+    @overload
+    def init(self, context: RunnerContext) -> None: ...
+
     def init(self) -> None:
         """
         Start producing, processing, or receiving data.
 
         Default is a no-op.
         Subclasses do not need to override if they have no initialization logic.
+
+        Subclasses MAY add a `context: RunnerContext` param to request information
+        about the enclosing runner while initializing
         """
         pass
 
@@ -175,7 +184,9 @@ class Node(BaseModel):
         raise NotImplementedError()
 
     @classmethod
-    def from_specification(cls, spec: "NodeSpecification") -> "Node":
+    def from_specification(
+        cls, spec: "NodeSpecification", input_collection: Union["InputCollection", None] = None
+    ) -> "Node":
         """
         Create a node from its spec
 
@@ -186,6 +197,17 @@ class Node(BaseModel):
         obj = resolve_python_identifier(spec.type_)
 
         params = spec.params if spec.params is not None else {}
+        if input_collection:
+            params = input_collection.get_node_params(params)
+        elif params:
+            from noob.input import InputCollection
+
+            if any(
+                InputCollection.INPUT_PATTERN.fullmatch(v)
+                for v in params.values()
+                if isinstance(v, str)
+            ):
+                raise ValueError("No input collection supplied, but inputs specified in params")
 
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable

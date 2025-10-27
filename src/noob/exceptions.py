@@ -2,6 +2,10 @@ class NoobError(Exception):
     """Base exception type"""
 
 
+class NoobWarning(UserWarning):
+    """Base warning type"""
+
+
 # -----------------------------------------------------
 # Top-level error categories
 # use these as a mixin with another base exception type
@@ -24,6 +28,14 @@ class RunnerError(NoobError):
     """Base runner error type"""
 
 
+class InputError(NoobError):
+    """Error with tube input"""
+
+
+class InputWarning(NoobWarning):
+    """Warning with tube input"""
+
+
 # --------------------------------------------------
 # Actual error types you should use
 # --------------------------------------------------
@@ -38,4 +50,23 @@ class ConfigMismatchError(ConfigError, ValueError):
 class AlreadyRunningError(RunnerError, RuntimeError):
     """
     A tube is already running!
+    """
+
+
+class InputMissingError(InputError, ValueError):
+    """
+    A requested input was not provided in the given scope
+    """
+
+
+class ExtraInputError(InputError, ValueError):
+    """
+    Extra input was provided in some scope where it was not specified
+    """
+
+
+class ExtraInputWarning(InputWarning, RuntimeWarning):
+    """
+    Extra input was provided in some scope where it was not specified,
+    but it was ignorable
     """

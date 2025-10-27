@@ -1,0 +1,31 @@
+noob_id: testing-recursive-child
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1.dev155+g2f9639f
+input:
+  child_start:
+    scope: tube
+    type: int
+  child_multiply_inner:
+    scope: process
+    type: int
+  child_multiply_input:
+    scope: process
+    type: int
+nodes:
+  a:
+    type: noob.testing.count_source
+    params:
+      start: input.child_start
+  b:
+    type: noob.testing.multiply
+    depends:
+      - left: a.index
+      - right: input.child_multiply_inner
+  c:
+    type: noob.testing.multiply
+    depends:
+    - left: b.value
+    - right: input.child_multiply_input
+  d:
+    type: return
+    depends: c.value
