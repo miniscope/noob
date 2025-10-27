@@ -12,7 +12,7 @@ class StateSpecification(BaseModel):
     Configuration for the assets within a :class:`.State`.
 
     Representation of the yaml-form of a :class:`.State`.
-    Converted to the runtime-form with :meth:`.Cube.from_specification`.
+    Converted to the runtime-form with :meth:`.State.from_specification`.
 
     Not much, if any validation is performed here on the whole :class:`.State` except
     that the assets have the correct fields, ignoring validity of
@@ -26,13 +26,13 @@ class StateSpecification(BaseModel):
     """The assets that this :class:`.State` configures"""
 
 
-class State(BaseModel):  # or Pube
+class State(BaseModel):
     """
     A collection of assets storing objects that persist through iterations of the tube.
     The target demographics generally include database connections, large arrays and statistics
     that traverse multiple processes of the tube.
 
-    The Cube model is a container for a set of assets that are fully instantiated.
+    The :class:`.State` model is a container for a set of assets that are fully instantiated.
     It does not handle processing the assets -- that is handled by a TubeRunner.
     """
 

@@ -5,13 +5,13 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from functools import partial
-from graphlib import TopologicalSorter
 from logging import Logger
 from typing import Any, TypeVar
 
 from noob import Tube, init_logger
 from noob.event import Event
 from noob.node import Node, Return
+from noob.scheduler import Scheduler
 from noob.store import EventStore
 from noob.types import PythonIdentifier, ReturnNodeType, RunnerContext
 
@@ -81,7 +81,7 @@ class TubeRunner(ABC):
         pass
 
     def collect_input(
-        self, node: Node, input: dict | None = None
+        self, node: Node, epoch: int, input: dict | None = None
     ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None] | None:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
@@ -100,10 +100,10 @@ class TubeRunner(ABC):
 
         inputs = {}
 
-        cube_inputs = self.tube.cube.collect(edges)
-        inputs |= cube_inputs if cube_inputs else inputs
+        state_inputs = self.tube.state.collect(edges)
+        inputs |= state_inputs if state_inputs else inputs
 
-        event_inputs = self.store.collect(edges)
+        event_inputs = self.store.collect(edges, epoch)
         inputs |= event_inputs if event_inputs else inputs
 
         input_inputs = self.tube.input_collection.collect(edges, input)
@@ -136,7 +136,7 @@ class TubeRunner(ABC):
         return ret_node.get(keep=False)
 
     def update_graph(
-        self, graph: TopologicalSorter, node_id: str, events: list[Event] | None
+        self, scheduler: Scheduler, node_id: str, epoch: int, events: list[Event] | None
     ) -> None:
         """
         Update the state of the processing graph after events are emitted.
@@ -146,7 +146,7 @@ class TubeRunner(ABC):
         if not events:
             return
 
-        graph.done(node_id)
+        scheduler.done(node_id=node_id, epoch=epoch)
 
     def add_callback(self, callback: Callable[[Event], None]) -> None:
         self._callbacks.append(callback)

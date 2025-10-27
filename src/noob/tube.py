@@ -13,7 +13,6 @@ from pydantic import (
 )
 
 from noob.asset import AssetSpecification
-from noob.cube import Cube, CubeSpecification
 from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope, InputSpecification
 from noob.node import Edge, Node, NodeSpecification
@@ -39,7 +38,7 @@ class TubeSpecification(ConfigYAMLMixin):
     """
 
     assets: dict[PythonIdentifier, AssetSpecification] = Field(default_factory=dict)
-    """The specs of the assets that comprise the cube of this tube"""
+    """The specs of the assets that comprise the state of this tube"""
 
     input: dict[PythonIdentifier, InputSpecification] = Field(default_factory=dict)
     """Inputs provided at runtime"""

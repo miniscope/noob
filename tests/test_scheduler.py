@@ -33,4 +33,4 @@ def test_get_ready() -> None:
 
     scheduler.done(0, "a")
     # should only return the newly ready node
-    assert scheduler.get_ready() == [ReadyNode(epoch=0, id="c")]
+    assert scheduler.get_ready() == [ReadyNode(epoch=0, node_id="c")]
