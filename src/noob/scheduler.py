@@ -7,7 +7,7 @@ from noob.event import Event
 from noob.node import Edge, Node
 
 
-class NodeCoord(BaseModel):
+class ReadyNode(Event):
     """
     Coordinates of the nodes expressed with epoch and node ID.
 
@@ -17,7 +17,7 @@ class NodeCoord(BaseModel):
     """
 
     epoch: int
-    id: str
+    node_id: str
 
 
 class Scheduler(BaseModel):
@@ -29,7 +29,7 @@ class Scheduler(BaseModel):
     """
 
     _clock: count = PrivateAttr(default_factory=count)
-    _graphs: dict[int, TopologicalSorter] = PrivateAttr(default_factory=dict)
+    _epochs: dict[int, TopologicalSorter] = PrivateAttr(default_factory=dict)
 
     def update(self, events: list[Event]) -> None:
         """
@@ -48,25 +48,27 @@ class Scheduler(BaseModel):
 
         """
         if epoch is not None:
-            return self._graphs[epoch].is_active()
+            return self._epochs[epoch].is_active()
         else:
-            return any(graph.is_active() for graph in self._graphs.values())
+            return any(graph.is_active() for graph in self._epochs.values())
 
-    def get_ready(self, epoch: int | None = None) -> list[NodeCoord]:
+    def get_ready(self, epoch: int | None = None) -> list[ReadyNode]:
         """
         Output the set of nodes that are ready across different graphs and epochs.
 
         """
-        graphs = self._graphs.items() if epoch is None else [(epoch, self._graphs[epoch])]
+        graphs = self._epochs.items() if epoch is None else [(epoch, self._epochs[epoch])]
 
         ready_nodes = [
-            NodeCoord(epoch=e, id=node_id) for e, graph in graphs for node_id in graph.get_ready()
+            ReadyNode(epoch=e, node_id=node_id)
+            for e, graph in graphs
+            for node_id in graph.get_ready()
         ]
 
         return ready_nodes
 
     def done(self, epoch: int, node_id: str) -> None:
-        self._graphs[epoch].done(node_id)
+        self._epochs[epoch].done(node_id)
 
     def evict_cache(self) -> Event:
         """
@@ -89,11 +91,11 @@ class Scheduler(BaseModel):
         graph = self._init_graph(nodes, edges)
         graph.prepare()
 
-        self._graphs[next(self._clock)] = graph
+        self._epochs[next(self._clock)] = graph
 
     @property
-    def graphs(self) -> dict[int, TopologicalSorter]:
-        return self._graphs
+    def epochs(self) -> dict[int, TopologicalSorter]:
+        return self._epochs
 
     @staticmethod
     def _init_graph(nodes: dict[str, Node], edges: list[Edge]) -> TopologicalSorter:
@@ -119,7 +121,7 @@ class Scheduler(BaseModel):
 
         """
         sorter = TopologicalSorter()
-        enabled_nodes = [node_id for node_id, node in nodes.items()]
+        enabled_nodes = [node_id for node_id, node in nodes.items() if node.enabled]
         for node_id in enabled_nodes:
             required_edges = [
                 e.source_node

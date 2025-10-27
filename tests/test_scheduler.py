@@ -1,5 +1,5 @@
 from noob import Tube
-from noob.scheduler import NodeCoord, Scheduler
+from noob.scheduler import ReadyNode, Scheduler
 
 
 def test_append_graphs() -> None:
@@ -13,7 +13,7 @@ def test_append_graphs() -> None:
         tube = Tube.from_specification(id_)
         scheduler.add_graph(nodes=tube.enabled_nodes, edges=tube.edges)
 
-    assert len(scheduler.graphs) == len(noob_ids)
+    assert len(scheduler.epochs) == len(noob_ids)
 
 
 def test_get_ready() -> None:
@@ -33,4 +33,4 @@ def test_get_ready() -> None:
 
     scheduler.done(0, "a")
     # should only return the newly ready node
-    assert scheduler.get_ready() == [NodeCoord(epoch=0, id="c")]
+    assert scheduler.get_ready() == [ReadyNode(epoch=0, id="c")]

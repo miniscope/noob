@@ -95,7 +95,7 @@ class Tube(BaseModel):
     _scheduler: Scheduler = PrivateAttr(default_factory=Scheduler)
     _enabled_nodes: dict[str, Node] | None = None
 
-    def scheduler(self) -> Scheduler:
+    def get_scheduler(self) -> Scheduler:
         """
         Produce a :class:`.TopologicalSorter` based on the graph induced by
         :attr:`.Tube.enabled_nodes` and :attr:`.Tube.edges` that yields node ids.
