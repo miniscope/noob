@@ -3,15 +3,12 @@ from __future__ import annotations
 from collections.abc import Generator
 from dataclasses import dataclass
 from threading import Event as ThreadEvent
-from typing import TYPE_CHECKING, Any, Self
+from typing import Any, Self
 
 from noob.exceptions import AlreadyRunningError
 from noob.input import InputScope
 from noob.runner.base import TubeRunner
 from noob.types import ReturnNodeType
-
-if TYPE_CHECKING:
-    pass
 
 
 @dataclass
