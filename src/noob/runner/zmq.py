@@ -7,12 +7,13 @@
 import multiprocessing as mp
 import threading
 from collections.abc import Callable
+from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import count
-from typing import Any, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 import zmq
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Discriminator, Field, TypeAdapter
 from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 
@@ -22,7 +23,20 @@ from noob.node import Node, NodeSpecification, Signal, Slot
 from noob.store import EventStore
 
 
-class NodeAnnounce(TypedDict):
+class Callbacks(TypedDict, total=False):
+    on_inbox: Callable[[Event], Any]
+    on_command: Callable[[Event], Any]
+
+
+class MessageType(StrEnum):
+    announce = "announce"
+    identify = "identify"
+    start = "start"
+    stop = "stop"
+    event = "event"
+
+
+class NodeIdentifyMessage(TypedDict):
     node_id: str
     outbox: str
     signals: list[Signal] | None
@@ -33,25 +47,14 @@ class AnnounceMessage(TypedDict):
     """Command node 'announces' identities of other peers and the events they emit"""
 
     inbox: str
-    nodes: dict[str, NodeAnnounce]
-
-
-class Callbacks(TypedDict, total=False):
-    on_inbox: Callable[[Event], Any]
-    on_command: Callable[[Event], Any]
-
-
-class MessageType(StrEnum):
-    announce = "announce"
-    start = "start"
-    stop = "stop"
-    event = "event"
+    nodes: dict[str, NodeIdentifyMessage]
 
 
 class Message(BaseModel):
     type_: MessageType = Field(..., alias="type")
     node_id: str
-    value: Event | AnnounceMessage | str | None = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    value: dict | str | None = None
 
     @classmethod
     def from_bytes(cls, msg: list[bytes]) -> "Message":
@@ -59,6 +62,37 @@ class Message(BaseModel):
 
     def to_bytes(self) -> list[bytes]:
         raise NotImplementedError()
+
+
+class AnnounceMsg(Message):
+    type_: Literal[MessageType.announce] = Field(MessageType.announce, alias="type")
+    value: AnnounceMessage
+
+
+class IdentifyMsg(Message):
+    type_: Literal[MessageType.identify] = Field(MessageType.identify, alias="type")
+    value: NodeIdentifyMessage
+
+
+class StartMsg(Message):
+    type_: Literal[MessageType.start] = Field(MessageType.start, alias="type")
+    value: None = None
+
+
+class StopMsg(Message):
+    type_: Literal[MessageType.stop] = Field(MessageType.stop, alias="type")
+    value: None = None
+
+
+class EventMsg(Message):
+    type_: Literal[MessageType.event] = Field(MessageType.event, alias="type")
+    value: Event
+
+
+MessageUnion = Annotated[
+    AnnounceMessage | IdentifyMsg | StartMsg | StopMsg | EventMsg | Message, Discriminator("type")
+]
+MessageAdapter = TypeAdapter(MessageUnion)
 
 
 class NetworkMixin:
@@ -134,7 +168,7 @@ class CommandNode(NetworkMixin):
         self._loop = None
         self._thread: threading.Thread | None = None
         self._quitting = threading.Event()
-        self._nodes: dict[str, NodeAnnounce] = {}
+        self._nodes: dict[str, NodeIdentifyMessage] = {}
 
     @property
     def pub_address(self) -> str:
@@ -179,9 +213,25 @@ class CommandNode(NetworkMixin):
         router.on_recv(self.on_inbox)
         return router
 
+    def announce(self) -> None:
+        msg = AnnounceMsg(
+            node_id="command", value=AnnounceMessage(inbox=self.router_address, nodes=self._nodes)
+        )
+        self._pub.send_multipart(msg.to_bytes())
+
     def on_inbox(self, msg: list[bytes]) -> None:
+
         print("INBOX")
         print(msg)
+        msg = Message.from_bytes(msg)
+        if msg.type_ == MessageType.identify:
+            self.on_identify(msg)
+        else:
+            raise NotImplementedError()
+
+    def on_identify(self, msg: IdentifyMsg) -> None:
+        self._nodes[msg.node_id] = msg.value
+        self.announce()
 
 
 class NodeRunner(NetworkMixin):
@@ -216,10 +266,12 @@ class NodeRunner(NetworkMixin):
         else:
             self.callbacks = callbacks
 
-        self._dealer = None
-        self._pub = None
+        self._dealer: zmq.Socket | ZMQStream | None = None
+        self._pub: zmq.Socket | None = None
         self._sub = None
         self._node: Node | None = None
+        self._depends: tuple[tuple[str, str], ...] | None = None
+        self._nodes: dict[str, NodeIdentifyMessage] = {}
         self._counter = count()
         self._process_quitting = mp.Event()
 
@@ -230,6 +282,17 @@ class NodeRunner(NetworkMixin):
         else:
             raise NotImplementedError()
 
+    @property
+    def depends(self) -> tuple[tuple[str, str], ...] | None:
+        if self._depends is not None:
+            return self._depends
+        elif self._node is None:
+            return None
+        else:
+            self._depends = tuple(
+                (edge.source_node, edge.source_signal) for edge in self._node.edges
+            )
+
     @classmethod
     def run(cls, spec: NodeSpecification, **kwargs: Any) -> None:
         """
@@ -239,6 +302,22 @@ class NodeRunner(NetworkMixin):
         runner = NodeRunner(spec=spec, **kwargs)
         runner.start_sockets()
         runner.init_node()
+        runner.identify()
+
+    def identify(self) -> None:
+        """
+        Send the command node an announce to say we're alive
+        """
+        ann = IdentifyMsg(
+            node_id=self.spec.id,
+            value=NodeIdentifyMessage(
+                node_id=self.spec.id,
+                outbox=self.pub_address,
+                signals=self._node.signals,
+                slots=list(self._node.slots.values()),
+            ),
+        )
+        self._dealer.send_multipart(ann.to_bytes())
 
     def start_sockets(self) -> None:
         self.init_sockets()
@@ -281,6 +360,7 @@ class NodeRunner(NetworkMixin):
         """
         sub = self.context.socket(zmq.SUB)
         sub.setsockopt_string(zmq.IDENTITY, self.spec.id)
+        sub.connect(self.command_outbox)
         sub = ZMQStream(sub, self.loop)
         sub.on_recv(self.on_inbox)
         return sub
@@ -290,5 +370,32 @@ class NodeRunner(NetworkMixin):
         print(msg)
 
     def on_inbox(self, msg: list[bytes]) -> None:
+        msg = Message.from_bytes(msg)
+
         print(f"INBOX {self.spec.id}")
         print(msg)
+        if msg.type_ == MessageType.announce:
+            self.on_announce(msg)
+        elif msg.type_ == MessageType.event:
+            self.on_event(msg)
+        else:
+            raise NotImplementedError()
+
+    def on_announce(self, msg: AnnounceMsg) -> None:
+        """
+        Store map, connect to the nodes we depend on
+        """
+        for node_id in msg.value["nodes"]:
+            if (
+                node_id in {edge.source_node for edge in self._node.edges}
+                and node_id not in self._nodes
+            ):
+                # TODO: a way to check if we're already connected, without storing it locally?
+                self._sub.connect(msg.value["nodes"][node_id]["outbox"])
+        self._nodes = msg.value["nodes"]
+
+    def on_event(self, msg: EventMsg) -> None:
+        event = msg.value
+        if (event["node_id"], event["signal"]) not in self.depends:
+            return
+        self.store.add(self._nodes[event["node_id"]]["signals"], event["value"], event["node_id"])
