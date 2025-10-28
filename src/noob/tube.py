@@ -1,5 +1,4 @@
 from collections import defaultdict
-from collections.abc import Mapping
 from graphlib import TopologicalSorter
 from importlib import resources
 from typing import Self
@@ -207,52 +206,8 @@ class Tube(BaseModel):
         cls, node_spec: dict[str, NodeSpecification], nodes: dict[str, Node]
     ) -> list[Edge]:
         edges = []
-
-        dependency_map = {id_: spec.depends for id_, spec in node_spec.items() if spec.depends}
-        for target_node, slot_inputs in dependency_map.items():
-            if isinstance(slot_inputs, str):
-                # handle scalar dependency like
-                # depends: node.slot
-                source_node, source_signal = slot_inputs.split(".")
-                edges.append(
-                    Edge(
-                        source_node=source_node,
-                        source_signal=source_signal,
-                        target_node=target_node,
-                        target_slot=None,
-                    )
-                )
-            else:
-                # handle arrays of dependencies, positional and kwargs
-                position_index = 0
-                for arrow in slot_inputs:
-                    required = True
-                    if isinstance(arrow, Mapping):  # keyword argument
-                        target_slot, source_signal = next(iter(arrow.items()))
-                        required = nodes[target_node].slots[target_slot].required
-
-                    elif isinstance(arrow, str):  # positional argument
-                        target_slot = position_index
-                        source_signal = arrow
-                        position_index += 1
-
-                    else:
-                        raise NotImplementedError(
-                            "Only supporting signal-slot mapping or node pointer."
-                        )
-
-                    source_node, source_signal = source_signal.split(".")
-
-                    edges.append(
-                        Edge(
-                            source_node=source_node,
-                            source_signal=source_signal,
-                            target_node=target_node,
-                            target_slot=target_slot,
-                            required=required,
-                        )
-                    )
-
+        for node in nodes.values():
+            edges.extend(node.edges)
         return edges
 
     @classmethod
