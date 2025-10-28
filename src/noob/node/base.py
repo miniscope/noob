@@ -1,6 +1,6 @@
 import functools
 import inspect
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Mapping
 from types import GeneratorType, GenericAlias, NoneType, UnionType
 from typing import TYPE_CHECKING, Annotated, Any, TypeVar, Union, get_args, get_origin, overload
 
@@ -97,6 +97,23 @@ class Signal(BaseModel):
         return names
 
 
+class Edge(BaseModel):
+    """
+    Directed connection between an output slot a node and an input slot in another node
+    """
+
+    source_node: str
+    source_signal: str | None = None
+    target_node: str
+    target_slot: str | int | None = None
+    """
+    - For kwargs, target_slot is the name of the kwarg that the value is passed to.
+    - For positional arguments, target_slot is an integer that indicates the index of the arg
+    - For scalar arguments, target slot is None 
+    """
+    required: bool = True
+
+
 _PROCESS_METHOD_SENTINEL = "__is_process_method__"
 _GENERATOR_METHOD_SENTINEL = "__is_generator_method__"
 
@@ -116,7 +133,7 @@ class Node(BaseModel):
 
     id: str
     """Unique identifier of the node"""
-    spec: NodeSpecification
+    spec: NodeSpecification | None = None
     enabled: bool = True
     """Starting state for a node being enabled. When a node is disabled, 
     it will be deinitialized and removed from the processing graph, 
@@ -238,6 +255,63 @@ class Node(BaseModel):
             self._slots = self._collect_slots()
         return self._slots
 
+    @property
+    def edges(self) -> list[Edge]:
+        """
+        The dependencies this node has declared, express as edges between
+        another node's signals and our slots
+        """
+        if not self.spec:
+            raise ValueError("Node has no dependency specification, edges are undefined")
+        if not self.spec.depends:
+            return []
+
+        edges = []
+        if isinstance(self.spec.depends, str):
+            # handle scalar dependency like
+            # depends: node.slot
+            source_node, source_signal = self.spec.depends.split(".")
+            edges.append(
+                Edge(
+                    source_node=source_node,
+                    source_signal=source_signal,
+                    target_node=self.id,
+                    target_slot=None,
+                )
+            )
+        else:
+            # handle arrays of dependencies, positional and kwargs
+            position_index = 0
+            for arrow in self.spec.depends:
+                required = True
+                if isinstance(arrow, Mapping):  # keyword argument
+                    target_slot, source_signal = next(iter(arrow.items()))
+                    required = self.slots[target_slot].required
+
+                elif isinstance(arrow, str):  # positional argument
+                    target_slot = position_index
+                    source_signal = arrow
+                    position_index += 1
+
+                else:
+                    raise NotImplementedError(
+                        "Only supporting signal-slot mapping or node pointer."
+                    )
+
+                source_node, source_signal = source_signal.split(".")
+
+                edges.append(
+                    Edge(
+                        source_node=source_node,
+                        source_signal=source_signal,
+                        target_node=self.id,
+                        target_slot=target_slot,
+                        required=required,
+                    )
+                )
+
+        return edges
+
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)
 
@@ -356,20 +430,3 @@ class WrapFuncNode(Node):
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.fn)
-
-
-class Edge(BaseModel):
-    """
-    Directed connection between an output slot a node and an input slot in another node
-    """
-
-    source_node: str
-    source_signal: str | None = None
-    target_node: str
-    target_slot: str | int | None = None
-    """
-    - For kwargs, target_slot is the name of the kwarg that the value is passed to.
-    - For positional arguments, target_slot is an integer that indicates the index of the arg
-    - For scalar arguments, target slot is None 
-    """
-    required: bool = True
