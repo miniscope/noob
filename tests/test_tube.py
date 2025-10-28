@@ -1,12 +1,6 @@
 from noob.tube import Tube, TubeSpecification
 
 
-def test_tube_does_nothing():
-    tube = Tube()
-    # hope nothing happened
-    assert True
-
-
 def test_tube_init_edges():
     """
     See if we can handle list / dict / scalar type slot inputs

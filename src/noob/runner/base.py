@@ -11,7 +11,6 @@ from typing import Any, TypeVar
 from noob import Tube, init_logger
 from noob.event import Event
 from noob.node import Node, Return
-from noob.scheduler import Scheduler
 from noob.store import EventStore
 from noob.types import PythonIdentifier, ReturnNodeType, RunnerContext
 
@@ -134,19 +133,6 @@ class TubeRunner(ABC):
             return None
         ret_node = ret_nodes[0]
         return ret_node.get(keep=False)
-
-    def update_graph(
-        self, scheduler: Scheduler, node_id: str, epoch: int, events: list[Event] | None
-    ) -> None:
-        """
-        Update the state of the processing graph after events are emitted.
-
-        Largely a placeholder method until we write our own graph processor.
-        """
-        if not events:
-            return
-
-        scheduler.done(node_id=node_id, epoch=epoch)
 
     def add_callback(self, callback: Callable[[Event], None]) -> None:
         self._callbacks.append(callback)

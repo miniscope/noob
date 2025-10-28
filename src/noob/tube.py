@@ -5,7 +5,6 @@ from typing import Self
 from pydantic import (
     BaseModel,
     Field,
-    PrivateAttr,
     ValidationError,
     ValidationInfo,
     field_validator,
@@ -68,11 +67,11 @@ class Tube(BaseModel):
     It does not handle running the tube -- that is handled by a TubeRunner.
     """
 
-    nodes: dict[str, Node] = Field(default_factory=dict)
+    nodes: dict[str, Node]
     """
     Dictionary mapping all nodes from their ID to the instantiated node.
     """
-    edges: list[Edge] = Field(default_factory=list)
+    edges: list[Edge]
     """
     Edges connecting slots within nodes.
 
@@ -91,16 +90,18 @@ class Tube(BaseModel):
 
     state: State = Field(default_factory=State)
 
-    _scheduler: Scheduler = PrivateAttr(default_factory=Scheduler)
+    scheduler: Scheduler = None
+
     _enabled_nodes: dict[str, Node] | None = None
 
-    def get_scheduler(self) -> Scheduler:
-        """
-        Produce a :class:`.TopologicalSorter` based on the graph induced by
-        :attr:`.Tube.enabled_nodes` and :attr:`.Tube.edges` that yields node ids.
-        """
-        self._scheduler.add_graph(nodes=self.enabled_nodes, edges=self.edges)
-        return self._scheduler
+    @field_validator("scheduler", mode="before")
+    @classmethod
+    def _create_scheduler(cls, value: Scheduler | None, info: ValidationInfo) -> Scheduler:
+        if value is None:
+            scheduler = cls._init_scheduler(info.data["nodes"], info.data["edges"])
+        else:
+            scheduler = value
+        return scheduler
 
     def in_edges(self, node: Node | str) -> list[Edge]:
         """
@@ -156,12 +157,14 @@ class Tube(BaseModel):
         nodes = cls._init_nodes(spec, input_collection)
         edges = cls._init_edges(spec.nodes, nodes)
         state = cls._init_state(spec.assets)
+        scheduler = cls._init_scheduler(spec.nodes, edges)
 
         return cls.model_validate(
             {
                 "nodes": nodes,
                 "edges": edges,
                 "state": state,
+                "scheduler": scheduler,
                 "input": input,
                 "input_collection": input_collection,
             },
@@ -193,6 +196,16 @@ class Tube(BaseModel):
         return edges
 
     @classmethod
+    def _init_scheduler(
+        cls, nodes: dict[str, NodeSpecification | Node], edges: list[Edge]
+    ) -> Scheduler:
+        node_specs = {
+            id_: node if isinstance(node, NodeSpecification) else node.spec
+            for id_, node in nodes.items()
+        }
+        return Scheduler.from_specification(node_specs, edges)
+
+    @classmethod
     def _init_inputs(cls, spec: TubeSpecification) -> InputCollection:
         specs = defaultdict(dict)
         for input_spec in spec.input.values():
@@ -210,10 +223,12 @@ class Tube(BaseModel):
 
     def enable_node(self, node_id: str) -> None:
         self.nodes[node_id].enabled = True
+        self.scheduler.enable_node(node_id)
         self._enabled_nodes = None  # Trigger recalculation in the next enabled_nodes call
 
     def disable_node(self, node_id: str) -> None:
         self.nodes[node_id].enabled = False
+        self.scheduler.disable_node(node_id)
         self._enabled_nodes = None  # Trigger recalculation in the next enabled_nodes call
 
     @model_validator(mode="after")

@@ -78,7 +78,8 @@ class SynchronousRunner(TubeRunner):
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
         self.store.clear()
 
-        scheduler = self.tube.get_scheduler()
+        scheduler = self.tube.scheduler
+        scheduler.add_epoch()
 
         while scheduler.is_active():
             ready = scheduler.get_ready()
@@ -103,7 +104,7 @@ class SynchronousRunner(TubeRunner):
                 # the value is converted to its id, and returned again.
                 events = self.store.add(node.signals, value, node_id, epoch)
                 self._call_callbacks(events)
-                self.update_graph(scheduler, node_id, epoch, events)
+                scheduler.update(events)
                 self._logger.debug(f"Node {node_id} emitted {value} in epoch {epoch}")
 
         return self.collect_return()
