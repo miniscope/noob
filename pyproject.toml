@@ -53,6 +53,9 @@ repository = "https://github.com/miniscope/noob"
 changelog = "https://noob.readthedocs.io/en/latest/changelog.html"
 
 [project.optional-dependencies]
+zmq = [
+    "pyzmq>=27.1.0",
+]
 tests = [
     "pytest>=8.3.5",
     "pytest-cov>=6.0.0",
@@ -81,6 +84,7 @@ dev = [
     "ruff>=0.11.0",
     "black>=25.1.0",
 ]
+
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
