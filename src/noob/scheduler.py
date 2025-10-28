@@ -1,10 +1,13 @@
-from graphlib import TopologicalSorter
+from collections import OrderedDict
+from graphlib import _NODE_DONE, TopologicalSorter
 from itertools import count
+from typing import Self
 
 from pydantic import BaseModel, PrivateAttr
 
 from noob.event import Event
-from noob.node import Edge, Node
+from noob.node import Edge, NodeSpecification
+from noob.types import NodeID
 
 
 class ReadyNode(Event):
@@ -21,30 +24,42 @@ class ReadyNode(Event):
 
 
 class Scheduler(BaseModel):
-    """
-    Extends the functionality of :class:`.TopologicalSorter`, by wrapping
-    a set of epoch-assigned :class:`.TopologicalSorter`, so that each graph
-    (and the nodes within) can be linked to an epoch.
-
-    """
-
+    nodes: dict[str, NodeSpecification]
+    edges: list[Edge]
+    source_nodes: list[NodeID]
     _clock: count = PrivateAttr(default_factory=count)
-    _epochs: dict[int, TopologicalSorter] = PrivateAttr(default_factory=dict)
+    _epochs: OrderedDict[int, TopologicalSorter] = PrivateAttr(default_factory=OrderedDict)
 
-    def update(self, events: list[Event]) -> None:
+    @classmethod
+    def from_specification(cls, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> Self:
         """
-        When a set of events are received, update the graphs within the scheduler.
+        Create an instance of a Scheduler from :class:`.NodeSpecification` and :class:`.Edge`
 
         """
-        if not events:
-            return
+        graph = cls._init_graph(nodes=nodes, edges=edges)
+        source_nodes = cls.get_sources(graph)
+        return cls(nodes=nodes, edges=edges, source_nodes=source_nodes)
 
-        for event in events:
-            self.done(epoch=event["epoch"], node_id=event["node_id"])
+    @classmethod
+    def get_sources(cls, graph: TopologicalSorter) -> list[NodeID]:
+        """
+        Get the IDs of the nodes that do not depend on other nodes.
+
+        """
+        return [id_ for id_, info in graph._node2info.items() if info.npredecessors == 0]
+
+    def add_epoch(self) -> None:
+        """
+        Add another epoch with a prepared graph to the scheduler.
+
+        """
+        graph = self._init_graph(nodes=self.nodes, edges=self.edges)
+        graph.prepare()
+        self._epochs[next(self._clock)] = graph
 
     def is_active(self, epoch: int | None = None) -> bool:
         """
-        Scheduler remains active while it holds at least one graph that is active.
+        Graph remains active while it holds at least one epoch that is active.
 
         """
         if epoch is not None:
@@ -54,9 +69,10 @@ class Scheduler(BaseModel):
 
     def get_ready(self, epoch: int | None = None) -> list[ReadyNode]:
         """
-        Output the set of nodes that are ready across different graphs and epochs.
+        Output the set of nodes that are ready across different epochs.
 
         """
+
         graphs = self._epochs.items() if epoch is None else [(epoch, self._epochs[epoch])]
 
         ready_nodes = [
@@ -67,38 +83,51 @@ class Scheduler(BaseModel):
 
         return ready_nodes
 
+    def sources_finished(self, epoch: int | None = None) -> bool:
+        """
+        Check the source nodes of the given epoch have been processed.
+        If epoch is None, check the source nodes of the latest epoch.
+
+        """
+        graph = next(reversed(self._epochs.values())) if epoch is None else self._epochs[epoch]
+        return all(graph._node2info[src].npredecessors == _NODE_DONE for src in self.source_nodes)
+
+    def update(self, events: list[Event]) -> None:
+        """
+        When a set of events are received, update the graphs within the scheduler.
+        Currently only has :method:`TopologicalSorter.done` implemented.
+
+        """
+        if not events:
+            return
+
+        self.done(epoch=events[0]["epoch"], node_id=events[0]["node_id"])
+
     def done(self, epoch: int, node_id: str) -> None:
+        """
+        Mark a node in a given epoch as done.
+
+        """
         self._epochs[epoch].done(node_id)
 
-    def evict_cache(self) -> Event:
+    def enable_node(self, node_id: str) -> None:
         """
-        We can evict the cached event from the node once all successors
-        are marked "done."
-
-        Not implemented in :class:`.Scheduler` while we're still utilizing
-        :class:`.TopologicalSorter`, since its API access to successors /
-        predecessors is limited.
+        Enable edges attached to the node and the
+        NodeSpecification enable switches to True
 
         """
-        raise NotImplementedError()
+        self.nodes[node_id].enabled = True
 
-    def add_graph(self, nodes: dict[str, Node], edges: list[Edge]) -> None:
+    def disable_node(self, node_id: str) -> None:
         """
-        Builds a topological sorter from nodes and edges, saves it
-        into :attr:`.Scheduler.graphs` with the epoch.
+        Disable edges attached to the node and the
+        NodeSpecification enable switches to False
 
         """
-        graph = self._init_graph(nodes, edges)
-        graph.prepare()
-
-        self._epochs[next(self._clock)] = graph
-
-    @property
-    def epochs(self) -> dict[int, TopologicalSorter]:
-        return self._epochs
+        self.nodes[node_id].enabled = False
 
     @staticmethod
-    def _init_graph(nodes: dict[str, Node], edges: list[Edge]) -> TopologicalSorter:
+    def _init_graph(nodes: dict[str, NodeSpecification], edges: list[Edge]) -> TopologicalSorter:
         """
         Produce a :class:`.TopologicalSorter` based on the graph induced by
         a set of :class:`.Node` and a set of :class:`.Edge` that yields node ids.
@@ -126,7 +155,22 @@ class Scheduler(BaseModel):
             required_edges = [
                 e.source_node
                 for e in edges
-                if e.target_node == node_id and e.required and e.source_node in enabled_nodes
+                if e.target_node == node_id
+                and e.required
+                and e.source_node in enabled_nodes
+                and e.target_node in enabled_nodes
             ]
             sorter.add(node_id, *required_edges)
         return sorter
+
+    def evict_cache(self) -> Event:
+        """
+        We can evict the cached event from the node once all successors
+        are marked "done."
+
+        Not implemented in :class:`.Scheduler` while we're still utilizing
+        :class:`.TopologicalSorter`, since its API access to successors /
+        predecessors is limited.
+
+        """
+        raise NotImplementedError()
