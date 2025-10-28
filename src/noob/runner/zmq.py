@@ -304,6 +304,14 @@ class NodeRunner(NetworkMixin):
         runner.init_node()
         runner.identify()
 
+        # TODO: Now just need the while loop in here to process messages
+        # pseudocode:
+        #
+        # while runner.running():
+        #     inputs = runner.store.await_inputs()
+        #     returns = runner.process(**inputs)
+        #     runner.publish_events(returns)
+
     def identify(self) -> None:
         """
         Send the command node an announce to say we're alive
