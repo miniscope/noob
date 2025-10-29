@@ -180,15 +180,3 @@ class Scheduler(BaseModel):
             ]
             sorter.add(node_id, *required_edges)
         return sorter
-
-    def evict_cache(self) -> Event:
-        """
-        We can evict the cached event from the node once all successors
-        are marked "done."
-
-        Not implemented in :class:`.Scheduler` while we're still utilizing
-        :class:`.TopologicalSorter`, since its API access to successors /
-        predecessors is limited.
-
-        """
-        raise NotImplementedError()
