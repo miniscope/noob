@@ -4,7 +4,7 @@ from itertools import count
 from typing import Self
 from uuid import uuid4
 
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from noob.event import Event, MetaEvent
 from noob.node import Edge, NodeSpecification
@@ -14,7 +14,7 @@ from noob.types import NodeID
 class Scheduler(BaseModel):
     nodes: dict[str, NodeSpecification]
     edges: list[Edge]
-    source_nodes: list[NodeID]
+    source_nodes: list[NodeID] = Field(default_factory=list)
     _clock: count = PrivateAttr(default_factory=count)
     _epochs: dict[int, TopologicalSorter] = PrivateAttr(default_factory=dict)
 
@@ -24,17 +24,23 @@ class Scheduler(BaseModel):
         Create an instance of a Scheduler from :class:`.NodeSpecification` and :class:`.Edge`
 
         """
-        graph = cls._init_graph(nodes=nodes, edges=edges)
-        source_nodes = cls.get_sources(graph)
-        return cls(nodes=nodes, edges=edges, source_nodes=source_nodes)
+        return cls(nodes=nodes, edges=edges)
 
-    @classmethod
-    def get_sources(cls, graph: TopologicalSorter) -> list[NodeID]:
+    @model_validator(mode="after")
+    def get_sources(self) -> Self:
         """
         Get the IDs of the nodes that do not depend on other nodes.
 
+        * `input` nodes are special implicit source nodes. Other nodes
+        * CAN depend on it and still be a source node.
+
         """
-        return [id_ for id_, info in graph._node2info.items() if info.npredecessors == 0]
+        if not self.source_nodes:
+            graph = self._init_graph(nodes=self.nodes, edges=self.edges)
+            self.source_nodes = [
+                id_ for id_, info in graph._node2info.items() if info.npredecessors == 0
+            ]
+        return self
 
     def add_epoch(self) -> None:
         """
@@ -112,8 +118,8 @@ class Scheduler(BaseModel):
         Mark a node in a given epoch as done.
 
         """
-        self._epochs[epoch].done(node_id)
-        if not self._epochs[epoch].is_active():
+        self[epoch].done(node_id)
+        if not self[epoch].is_active():
             self._end_epoch(epoch)
             return MetaEvent(
                 id=uuid4().int,
