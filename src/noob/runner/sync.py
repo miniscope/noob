@@ -86,7 +86,7 @@ class SynchronousRunner(TubeRunner):
             if not ready:
                 break
             for node_info in ready:
-                node_id, epoch = node_info["node_id"], node_info["epoch"]
+                node_id, epoch = node_info["value"], node_info["epoch"]
 
                 if node_id == "assets":
                     # graph autogenerates "assets" node if something depends on it
@@ -103,9 +103,9 @@ class SynchronousRunner(TubeRunner):
                 # take the value from state first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.
                 events = self.store.add(node.signals, value, node_id, epoch)
+                events = scheduler.update(events)
                 self._call_callbacks(events)
-                scheduler.update(events)
-                self._logger.debug(f"Node {node_id} emitted {value} in epoch {epoch}")
+                self._logger.debug("Node %s emitted %s in epoch %s", node_id, value, epoch)
 
         return self.collect_return()
 

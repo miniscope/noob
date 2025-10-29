@@ -1,26 +1,14 @@
-from collections import OrderedDict
+from datetime import datetime
 from graphlib import _NODE_DONE, TopologicalSorter
 from itertools import count
 from typing import Self
+from uuid import uuid4
 
 from pydantic import BaseModel, PrivateAttr
 
-from noob.event import Event
+from noob.event import Event, MetaEvent
 from noob.node import Edge, NodeSpecification
 from noob.types import NodeID
-
-
-class ReadyNode(Event):
-    """
-    Coordinates of the nodes expressed with epoch and node ID.
-
-    graphlib.TopologicalSorter can only "ready" node_ids of the same epoch.
-    So, we add a way to track which epoch of the node_id is ready.
-
-    """
-
-    epoch: int
-    node_id: str
 
 
 class Scheduler(BaseModel):
@@ -28,7 +16,7 @@ class Scheduler(BaseModel):
     edges: list[Edge]
     source_nodes: list[NodeID]
     _clock: count = PrivateAttr(default_factory=count)
-    _epochs: OrderedDict[int, TopologicalSorter] = PrivateAttr(default_factory=OrderedDict)
+    _epochs: dict[int, TopologicalSorter] = PrivateAttr(default_factory=dict)
 
     @classmethod
     def from_specification(cls, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> Self:
@@ -67,7 +55,7 @@ class Scheduler(BaseModel):
         else:
             return any(graph.is_active() for graph in self._epochs.values())
 
-    def get_ready(self, epoch: int | None = None) -> list[ReadyNode]:
+    def get_ready(self, epoch: int | None = None) -> list[MetaEvent]:
         """
         Output the set of nodes that are ready across different epochs.
 
@@ -76,12 +64,24 @@ class Scheduler(BaseModel):
         graphs = self._epochs.items() if epoch is None else [(epoch, self._epochs[epoch])]
 
         ready_nodes = [
-            ReadyNode(epoch=e, node_id=node_id)
-            for e, graph in graphs
+            MetaEvent(
+                id=uuid4().int,
+                timestamp=datetime.now(),
+                node_id="meta",
+                signal="NodeReady",
+                epoch=epoch,
+                value=node_id,
+            )
+            for epoch, graph in graphs
             for node_id in graph.get_ready()
         ]
 
         return ready_nodes
+
+    def __getitem__(self, epoch: int) -> TopologicalSorter:
+        if epoch == -1:
+            return next(reversed(self._epochs.values()))
+        return self._epochs[epoch]
 
     def sources_finished(self, epoch: int | None = None) -> bool:
         """
@@ -89,26 +89,40 @@ class Scheduler(BaseModel):
         If epoch is None, check the source nodes of the latest epoch.
 
         """
-        graph = next(reversed(self._epochs.values())) if epoch is None else self._epochs[epoch]
+        graph = self[-1] if epoch is None else self._epochs[epoch]
         return all(graph._node2info[src].npredecessors == _NODE_DONE for src in self.source_nodes)
 
-    def update(self, events: list[Event]) -> None:
+    def update(self, events: list[Event]) -> list[Event]:
         """
         When a set of events are received, update the graphs within the scheduler.
         Currently only has :method:`TopologicalSorter.done` implemented.
 
         """
         if not events:
-            return
+            return events
 
-        self.done(epoch=events[0]["epoch"], node_id=events[0]["node_id"])
+        epoch_ended = self.done(epoch=events[0]["epoch"], node_id=events[0]["node_id"])
+        if epoch_ended:
+            events.append(epoch_ended)
 
-    def done(self, epoch: int, node_id: str) -> None:
+        return events
+
+    def done(self, epoch: int, node_id: str) -> MetaEvent | None:
         """
         Mark a node in a given epoch as done.
 
         """
         self._epochs[epoch].done(node_id)
+        if not self._epochs[epoch].is_active():
+            return MetaEvent(
+                id=uuid4().int,
+                timestamp=datetime.now(),
+                node_id="meta",
+                signal="EpochEnded",
+                epoch=epoch,
+                value=epoch,
+            )
+        return None
 
     def enable_node(self, node_id: str) -> None:
         """
