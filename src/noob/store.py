@@ -4,7 +4,7 @@ Tube runners for running tubes
 
 from collections.abc import MutableSequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from itertools import count
 from typing import Any
 
@@ -43,7 +43,7 @@ class EventStore:
         """
         if value is None:
             return
-        timestamp = datetime.now()
+        timestamp = datetime.now(UTC)
 
         values = [value] if len(signals) == 1 else value
 

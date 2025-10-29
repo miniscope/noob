@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from graphlib import _NODE_DONE, TopologicalSorter
 from itertools import count
 from typing import Self
