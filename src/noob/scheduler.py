@@ -117,7 +117,7 @@ class Scheduler(BaseModel):
             self._end_epoch(epoch)
             return MetaEvent(
                 id=uuid4().int,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(UTC),
                 node_id="meta",
                 signal="EpochEnded",
                 epoch=epoch,
