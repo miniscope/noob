@@ -6,11 +6,11 @@
 
 import multiprocessing as mp
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import count
-from typing import Annotated, Any, Literal, TypedDict
+from typing import Annotated, Any, Literal, TypedDict, cast
 
 import zmq
 from pydantic import BaseModel, Discriminator, Field, TypeAdapter
@@ -86,7 +86,7 @@ class StopMsg(Message):
 
 class EventMsg(Message):
     type_: Literal[MessageType.event] = Field(MessageType.event, alias="type")
-    value: Event
+    value: list[Event]
 
 
 MessageUnion = Annotated[
@@ -274,6 +274,7 @@ class NodeRunner(NetworkMixin):
         self._nodes: dict[str, NodeIdentifyMessage] = {}
         self._counter = count()
         self._process_quitting = mp.Event()
+        self._event_block: mp.Event = mp.Event()
 
     @property
     def pub_address(self) -> str:
@@ -304,13 +305,30 @@ class NodeRunner(NetworkMixin):
         runner.init_node()
         runner.identify()
 
-        # TODO: Now just need the while loop in here to process messages
-        # pseudocode:
-        #
-        # while runner.running():
-        #     inputs = runner.store.await_inputs()
-        #     returns = runner.process(**inputs)
-        #     runner.publish_events(returns)
+        runner._process_quitting.clear()
+        for args, kwargs, epoch in runner.await_inputs():
+            value = runner._node.process(*args, **kwargs)
+            events = runner.store.add_value(
+                runner._node.signals, value, runner._node.node_id, epoch
+            )
+            runner.update_graph(events)
+            runner.publish_events(events)
+
+    def await_inputs(self) -> Generator[tuple[list[Any], dict[Any], int]]:
+        while not self._process_quitting.is_set():
+            # TODO: once scheduler is merged, check if we have all the dependencies satisfied
+            # and yield if so, otherwise wait until the _event_block is cleared
+            yield NotImplementedError()
+
+            # wait at the end so we yield eagerly
+            self._event_block.wait()
+            self._event_block.clear()
+
+    def update_graph(self, events: list[Event]) -> None:
+        raise NotImplementedError()
+
+    def publish_events(self, events: list[Event]) -> None:
+        raise NotImplementedError()
 
     def identify(self) -> None:
         """
@@ -348,7 +366,7 @@ class NodeRunner(NetworkMixin):
         dealer.on_recv(self.on_outbox)
         return dealer
 
-    def init_pub(self) -> zmq.Socket:
+    def init_pub(self) -> ZMQStream:
         pub = self.context.socket(zmq.PUB)
         pub = pub.setsockopt_string(zmq.IDENTITY, self.spec.id)
         if self.protocol == "ipc":
@@ -360,6 +378,7 @@ class NodeRunner(NetworkMixin):
 
         pub = ZMQStream(pub, self.loop)
         pub.on_recv(self.on_inbox)
+        return pub
 
     def init_sub(self) -> ZMQStream:
         """
@@ -383,8 +402,10 @@ class NodeRunner(NetworkMixin):
         print(f"INBOX {self.spec.id}")
         print(msg)
         if msg.type_ == MessageType.announce:
+            msg = cast(AnnounceMsg, msg)
             self.on_announce(msg)
         elif msg.type_ == MessageType.event:
+            msg = cast(EventMsg, msg)
             self.on_event(msg)
         else:
             raise NotImplementedError()
@@ -403,7 +424,24 @@ class NodeRunner(NetworkMixin):
         self._nodes = msg.value["nodes"]
 
     def on_event(self, msg: EventMsg) -> None:
-        event = msg.value
-        if (event["node_id"], event["signal"]) not in self.depends:
-            return
-        self.store.add(self._nodes[event["node_id"]]["signals"], event["value"], event["node_id"])
+        events = msg.value
+        to_add = [e for e in events if (e["node_id"], e["signal"]) in self.depends]
+        for event in to_add:
+            self.store.add_value(
+                self._nodes[event["node_id"]]["signals"], event["value"], event["node_id"]
+            )
+
+        if to_add:
+            # notify that new events that may be ready to process have been received.
+            self._event_block.set()
+
+        for event in events:
+            if (event["node_id"], event["signal"]) in self.depends:
+                self.store.add_value(
+                    self._nodes[event["node_id"]]["signals"], event["value"], event["node_id"]
+                )
+                added_any = True
+
+        if added_any:
+
+            self._event_block.set()
