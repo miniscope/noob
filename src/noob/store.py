@@ -63,18 +63,18 @@ class EventStore:
 
     def get(self, node_id: str, signal: str, epoch: int) -> Event | None:
         """
-        Get the event with the matching node_id and signal name
+        Get the event with the matching node_id and signal name from a given epoch.
 
-        Returns the most recent matching event, as for now we assume that
-        each combination of `node_id` and `signal` is emitted only once per processing cycle,
-        and we assume processing cycles are independent (and thus our events are cleared)
+        If epoch is `-1`, return the most recent event.
 
         ``None`` in the case that the event has not been emitted
         """
         event = [
             e
             for e in self.events
-            if e["node_id"] == node_id and e["signal"] == signal and e["epoch"] == epoch
+            if e["node_id"] == node_id
+            and e["signal"] == signal
+            and (epoch == -1 or e["epoch"] == epoch)
         ]
         return None if len(event) == 0 else event[-1]
 
