@@ -8,6 +8,7 @@ from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, TypedDict
 
+from annotated_types import Ge
 from pydantic import AfterValidator, Field, TypeAdapter
 
 from noob.const import RESERVED_IDS
@@ -105,7 +106,11 @@ ConfigSource: TypeAlias = Path | PathLike[str] | ConfigID
 """
 Union of all types of config sources
 """
-NodeID: TypeAlias = Annotated[str, AfterValidator(_is_identifier)]
+
+# type aliases, mostly for documentation's sake
+NodeID: TypeAlias = Annotated[str, AfterValidator(_is_identifier), AfterValidator(_not_reserved)]
+Epoch: TypeAlias = Annotated[int, Ge(0)]
+SignalName: TypeAlias = Annotated[str, AfterValidator(_is_identifier)]
 
 ReturnNodeType: TypeAlias = None | dict[str, Any] | Any
 
