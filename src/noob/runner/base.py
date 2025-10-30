@@ -108,6 +108,7 @@ class TubeRunner(ABC):
         input_inputs = self.tube.input_collection.collect(edges, input)
         inputs |= input_inputs if input_inputs else inputs
 
+        # TODO: Move this to `EventStore.transform_events`
         args = []
         kwargs = {}
         for k, v in inputs.items():

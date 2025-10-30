@@ -20,6 +20,7 @@ from zmq.eventloop.zmqstream import ZMQStream
 from noob.event import Event
 from noob.input import InputCollection
 from noob.node import Node, NodeSpecification, Signal, Slot
+from noob.scheduler import Scheduler
 from noob.store import EventStore
 
 
@@ -261,6 +262,7 @@ class NodeRunner(NetworkMixin):
         self.command_inbox = command_inbox
         self.protocol = protocol
         self.store = EventStore()
+        self.scheduler: Scheduler | None = None
         if callbacks is None:
             self.callbacks = Callbacks()
         else:
@@ -301,9 +303,7 @@ class NodeRunner(NetworkMixin):
         init the class and start it!
         """
         runner = NodeRunner(spec=spec, **kwargs)
-        runner.start_sockets()
-        runner.init_node()
-        runner.identify()
+        runner.init()
 
         runner._process_quitting.clear()
         for args, kwargs, epoch in runner.await_inputs():
@@ -314,21 +314,41 @@ class NodeRunner(NetworkMixin):
             runner.update_graph(events)
             runner.publish_events(events)
 
-    def await_inputs(self) -> Generator[tuple[list[Any], dict[Any], int]]:
-        while not self._process_quitting.is_set():
-            # TODO: once scheduler is merged, check if we have all the dependencies satisfied
-            # and yield if so, otherwise wait until the _event_block is cleared
-            yield NotImplementedError()
+        runner.deinit()
 
-            # wait at the end so we yield eagerly
-            self._event_block.wait()
-            self._event_block.clear()
+    def await_inputs(self) -> Generator[tuple[list[Any], dict[Any], int]]:
+
+        while not self._process_quitting.is_set():
+            ready = self.scheduler.await_node(self.spec.id)
+            edges = self._node.edges
+            inputs = self.store.collect(edges, ready["epoch"])
+
+            # TODO: Move this to `EventStore.transform_events`
+            args = []
+            kwargs = {}
+            for k, v in inputs.items():
+                if isinstance(k, int | None):
+                    args.append((k, v))
+                else:
+                    kwargs[k] = v
+            args = [item[1] for item in sorted(args, key=lambda x: x[0])]
+            yield args, kwargs, ready["epoch"]
 
     def update_graph(self, events: list[Event]) -> None:
-        raise NotImplementedError()
+        self.scheduler.update(events)
 
     def publish_events(self, events: list[Event]) -> None:
         raise NotImplementedError()
+
+    def init(self) -> None:
+        self.start_sockets()
+        self.init_node()
+        self.identify()
+
+    def deinit(self) -> None:
+        self._node.deinit()
+        self.stop_loop()
+        self.context.destroy()
 
     def identify(self) -> None:
         """
@@ -352,6 +372,8 @@ class NodeRunner(NetworkMixin):
     def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
         self._node.init()
+        self.scheduler = Scheduler(nodes={self.spec.id: self.spec}, edges=self._node.edges)
+        self.scheduler.add_epoch()
 
     def init_sockets(self) -> None:
         self._dealer = self.init_dealer()
