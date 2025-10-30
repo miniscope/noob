@@ -4,11 +4,7 @@ import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
 from .fixtures import *
-
-DATA_DIR = Path(__file__).parent / "data"
-CONFIG_DIR = DATA_DIR / "config"
-PIPELINE_DIR = DATA_DIR / "pipelines"
-MOCK_DIR = Path(__file__).parent / "mock"
+from .fixtures.paths import CONFIG_DIR, PIPELINE_DIR
 
 
 @pytest.fixture(scope="session", autouse=True)

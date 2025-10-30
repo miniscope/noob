@@ -1,5 +1,4 @@
 from collections import defaultdict
-from graphlib import TopologicalSorter
 from importlib import resources
 from typing import Self
 
@@ -13,10 +12,11 @@ from pydantic import (
 )
 
 from noob.asset import AssetSpecification
-from noob.cube import Cube, CubeSpecification
 from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope, InputSpecification
 from noob.node import Edge, Node, NodeSpecification
+from noob.scheduler import Scheduler
+from noob.state import State, StateSpecification
 from noob.types import ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
@@ -37,7 +37,7 @@ class TubeSpecification(ConfigYAMLMixin):
     """
 
     assets: dict[PythonIdentifier, AssetSpecification] = Field(default_factory=dict)
-    """The specs of the assets that comprise the cube of this tube"""
+    """The specs of the assets that comprise the state of this tube"""
 
     input: dict[PythonIdentifier, InputSpecification] = Field(default_factory=dict)
     """Inputs provided at runtime"""
@@ -67,13 +67,11 @@ class Tube(BaseModel):
     It does not handle running the tube -- that is handled by a TubeRunner.
     """
 
-    cube: Cube = Field(default_factory=Cube)
-
-    nodes: dict[str, Node] = Field(default_factory=dict)
+    nodes: dict[str, Node]
     """
     Dictionary mapping all nodes from their ID to the instantiated node.
     """
-    edges: list[Edge] = Field(default_factory=list)
+    edges: list[Edge]
     """
     Edges connecting slots within nodes.
 
@@ -90,35 +88,20 @@ class Tube(BaseModel):
     Specifications declared by the tube to be supplied 
     """
 
+    state: State = Field(default_factory=State)
+
+    scheduler: Scheduler = None
+
     _enabled_nodes: dict[str, Node] | None = None
 
-    def graph(self) -> TopologicalSorter:
-        """
-        Produce a :class:`.TopologicalSorter` based on the graph induced by
-        :attr:`.Tube.nodes` and :attr:`.Tube.edges` that yields node ids.
-
-        .. note:: Optional params
-
-            Dependency graph only includes edges where `required == True` -
-            aka even if we declare some dependency that passes a value to an
-            optional (type annotation is `type | None`), default == `None`
-            param, we still call that node even if that optional param is absent.
-
-            This behavior will likely change,
-            allowing explicit parameterization of how optional values are handled,
-            see: https://github.com/miniscope/noob/issues/26,
-
-        """
-        sorter = TopologicalSorter()
-        enabled_nodes = [node_id for node_id, node in self.enabled_nodes.items()]
-        for node_id in enabled_nodes:
-            required_edges = [
-                e.source_node
-                for e in self.edges
-                if e.target_node == node_id and e.required and e.source_node in enabled_nodes
-            ]
-            sorter.add(node_id, *required_edges)
-        return sorter
+    @field_validator("scheduler", mode="before")
+    @classmethod
+    def _create_scheduler(cls, value: Scheduler | None, info: ValidationInfo) -> Scheduler:
+        if value is None:
+            scheduler = cls._init_scheduler(info.data["nodes"], info.data["edges"])
+        else:
+            scheduler = value
+        return scheduler
 
     def in_edges(self, node: Node | str) -> list[Edge]:
         """
@@ -173,13 +156,15 @@ class Tube(BaseModel):
 
         nodes = cls._init_nodes(spec, input_collection)
         edges = cls._init_edges(spec.nodes, nodes)
-        cube = cls._init_cube(spec.assets)
+        state = cls._init_state(spec.assets)
+        scheduler = cls._init_scheduler(spec.nodes, edges)
 
         return cls.model_validate(
             {
                 "nodes": nodes,
                 "edges": edges,
-                "cube": cube,
+                "state": state,
+                "scheduler": scheduler,
                 "input": input,
                 "input_collection": input_collection,
             },
@@ -187,9 +172,9 @@ class Tube(BaseModel):
         )
 
     @classmethod
-    def _init_cube(cls, spec: dict[str, AssetSpecification]) -> Cube:
-        cube_spec = CubeSpecification(assets=spec)
-        return Cube.from_specification(cube_spec)
+    def _init_state(cls, spec: dict[str, AssetSpecification]) -> State:
+        state_spec = StateSpecification(assets=spec)
+        return State.from_specification(state_spec)
 
     @classmethod
     def _init_nodes(
@@ -211,6 +196,16 @@ class Tube(BaseModel):
         return edges
 
     @classmethod
+    def _init_scheduler(
+        cls, nodes: dict[str, NodeSpecification | Node], edges: list[Edge]
+    ) -> Scheduler:
+        node_specs = {
+            id_: node if isinstance(node, NodeSpecification) else node.spec
+            for id_, node in nodes.items()
+        }
+        return Scheduler.from_specification(node_specs, edges)
+
+    @classmethod
     def _init_inputs(cls, spec: TubeSpecification) -> InputCollection:
         specs = defaultdict(dict)
         for input_spec in spec.input.values():
@@ -228,10 +223,12 @@ class Tube(BaseModel):
 
     def enable_node(self, node_id: str) -> None:
         self.nodes[node_id].enabled = True
+        self.scheduler.enable_node(node_id)
         self._enabled_nodes = None  # Trigger recalculation in the next enabled_nodes call
 
     def disable_node(self, node_id: str) -> None:
         self.nodes[node_id].enabled = False
+        self.scheduler.disable_node(node_id)
         self._enabled_nodes = None  # Trigger recalculation in the next enabled_nodes call
 
     @model_validator(mode="after")

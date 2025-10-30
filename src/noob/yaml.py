@@ -163,20 +163,17 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         """
         if isinstance(source, cls):
             return source
-        elif valid_config_id(source):
+        elif isinstance(source, str) and valid_config_id(source):
             return cls.from_id(source)
         else:
-            from noob import Config
+            from noob.config import config
 
             source = Path(source)
             if source.suffix in (".yaml", ".yml"):
                 if source.exists():
                     # either relative to cwd or absolute
                     return cls.from_yaml(source)
-                elif (
-                    not source.is_absolute()
-                    and (user_source := Config().config_dir / source).exists()
-                ):
+                elif not source.is_absolute() and (user_source := config / source).exists():
                     return cls.from_yaml(user_source)
 
         raise ValueError(

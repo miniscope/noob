@@ -1,9 +1,9 @@
 # ruff: noqa: I001 - import order meaningful to avoid cycles
 
 from noob.config import config as cfg
-from noob.cube import Cube
 from noob.logging import init_logger
 from noob.node import process_method
+from noob.state import State
 from noob.tube import Tube, TubeClassicEdition
 from noob.runner import SynchronousRunner
 from noob.types import Name
@@ -16,5 +16,5 @@ __all__ = [
     "cfg",
     "init_logger",
     "process_method",
-    "Cube",
+    "State",
 ]

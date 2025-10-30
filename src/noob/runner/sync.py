@@ -44,7 +44,7 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             self.inject_context(node.init)()
 
-        for asset in self.tube.cube.assets.values():
+        for asset in self.tube.state.assets.values():
             self.inject_context(asset.init)()
 
         return self
@@ -55,7 +55,7 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             node.deinit()
 
-        for asset in self.tube.cube.assets.values():
+        for asset in self.tube.state.assets.values():
             asset.deinit()
 
         self._running.clear()
@@ -78,32 +78,34 @@ class SynchronousRunner(TubeRunner):
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
         self.store.clear()
 
-        graph = self.tube.graph()
-        graph.prepare()
+        scheduler = self.tube.scheduler
+        scheduler.add_epoch()
 
-        while graph.is_active():
-            ready = graph.get_ready()
+        while scheduler.is_active():
+            ready = scheduler.get_ready()
             if not ready:
                 break
-            for node_id in ready:
+            for node_info in ready:
+                node_id, epoch = node_info["value"], node_info["epoch"]
+
                 if node_id == "assets":
                     # graph autogenerates "assets" node if something depends on it
-                    graph.done(node_id)
+                    scheduler.done(epoch, node_id)
                     continue
                 node = self.tube.nodes[node_id]
-                args, kwargs = self.collect_input(node, input)
+                args, kwargs = self.collect_input(node, epoch, input)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
                 args = [] if args is None else args
                 kwargs = {} if kwargs is None else kwargs
                 value = node.process(*args, **kwargs)
 
-                # take the value from cube first. if it's taken by an asset,
+                # take the value from state first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.
-                events = self.store.add(node.signals, value, node_id)
+                events = self.store.add(node.signals, value, node_id, epoch)
+                events = scheduler.update(events)
                 self._call_callbacks(events)
-                self.update_graph(graph, node_id, events)
-                self._logger.debug("Node %s emitted %s", node_id, value)
+                self._logger.debug("Node %s emitted %s in epoch %s", node_id, value, epoch)
 
         return self.collect_return()
 
@@ -143,7 +145,7 @@ class SynchronousRunner(TubeRunner):
                 if out is not None:
                     outputs.append(out)
                 current_iter += 1
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, StopIteration):
             # fine, just return
             pass
         finally:

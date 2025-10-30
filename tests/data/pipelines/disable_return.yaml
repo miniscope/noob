@@ -4,6 +4,8 @@ noob_version: 0.1.1.dev138+ge1b5e7f.d20250905
 nodes:
   a:
     type: noob.testing.count_source
+    params:
+      limit: 10
   b:
     type: noob.testing.multiply
     depends:

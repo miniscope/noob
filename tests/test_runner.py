@@ -30,9 +30,15 @@ def test_disabled_node() -> None:
 
     assert set(runner.tube.enabled_nodes.keys()) == {"a", "c"}
 
-    # Return node is hanging and tries to index None
-    with pytest.raises(IndexError):
-        runner.run()
+    all_events = []
+
+    def _cb(event) -> None:
+        nonlocal all_events
+        all_events.append(event)
+
+    runner.add_callback(_cb)
+    runner.run()
+    assert "b" not in {e["node_id"] for e in all_events}
 
 
 def test_disabled_return() -> None:
@@ -56,13 +62,12 @@ def test_dynamic_disable_node() -> None:
     assert first == list(range(0, iters * 2, 2))
 
     runner.disable_node("b")
-    with pytest.raises(IndexError):
-        runner.run(n=iters)
+    assert runner.run(n=iters) is None
 
     runner.enable_node("b")
     result = runner.run(n=iters)
-    # continues from where it left off after the first run + one failure with disabled 'b' run.
-    start = max(first) + 4
+    # the tube has been running, just not returning anything
+    start = 400
     expected = list(range(start, start + (iters * 2), 2))
     assert result == expected
 

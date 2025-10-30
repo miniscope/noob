@@ -35,7 +35,7 @@ class Return(Node):
         """
         try:
             # FIXME: what a nightmare - make all of these derive from the spec
-            if isinstance(self.spec.depends, str):
+            if self._args and isinstance(self.spec.depends, str):
                 return self._args[0]
             elif self._args and self._kwargs:
                 return self._args, self._kwargs
