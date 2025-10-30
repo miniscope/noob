@@ -57,6 +57,10 @@ class Scheduler(BaseModel):
 
         """
         if epoch is not None:
+            if epoch not in self._epochs:
+                # if an epoch has been completed and had its graph cleared, it's no longer active
+                # if an epoch has not been started, it is also not active.
+                return False
             return self._epochs[epoch].is_active()
         else:
             return any(graph.is_active() for graph in self._epochs.values())
