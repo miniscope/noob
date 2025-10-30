@@ -145,7 +145,7 @@ class SynchronousRunner(TubeRunner):
                 if out is not None:
                     outputs.append(out)
                 current_iter += 1
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, StopIteration):
             # fine, just return
             pass
         finally:
