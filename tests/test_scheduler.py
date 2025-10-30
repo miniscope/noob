@@ -26,6 +26,21 @@ def test_epoch_increment():
         assert isinstance(scheduler[i], TopologicalSorter)
 
 
+def test_tube_increments_epoch(no_input_tubes):
+    """
+    Multiple runs of a tube should increment the epoch
+    """
+    tube = Tube.from_specification(no_input_tubes)
+    runner = SynchronousRunner(tube)
+
+    for i in range(5):
+        _ = runner.process()
+        events = runner.store.events
+        # we haven't cleared events
+        assert len(events) > 0
+        assert all(e["epoch"] == i for e in events)
+
+
 def test_event_store_filter():
     """
     Must be able to filter events in EventStore by epoch.
@@ -38,29 +53,33 @@ def test_event_store_filter():
         assert runner.store.get(node_id="b", signal="value", epoch=i)["value"] == out
 
 
-def test_epoch_completion():
+def test_epoch_completion(no_input_tubes):
     """
     When all nodes within an epoch are complete, the Scheduler
     must emit an end-of-epoch event.
 
     """
-    tube = Tube.from_specification("testing-basic")
+    tube = Tube.from_specification(no_input_tubes)
     scheduler = tube.scheduler
     scheduler.add_epoch()
-    for node_id in scheduler.nodes:
-        scheduler.get_ready()
-        eoe = scheduler.done(epoch=0, node_id=node_id)
-        if node_id != "c":
+
+    eoe = None
+    while scheduler.is_active(0):
+        ready_nodes = scheduler.get_ready()
+        for ready in ready_nodes:
+            # until we're done, eoe should have been None in the last iteration
             assert eoe is None
-        else:
-            assert (
-                isinstance(eoe["id"], int)
-                and isinstance(eoe["timestamp"], datetime)
-                and eoe["node_id"] == "meta"
-                and eoe["signal"] == MetaEventType("EpochEnded")
-                and eoe["epoch"] == 0
-                and eoe["value"] == 0
-            )
+            # marking the very last one as done should emit the end of epoch event
+            # (we should also break out of the while loop after the last assignment)
+            eoe = scheduler.done(epoch=0, node_id=ready["value"])
+
+    assert (
+        isinstance(eoe["id"], int)
+        and isinstance(eoe["timestamp"], datetime)
+        and eoe["node_id"] == "meta"
+        and eoe["signal"] == MetaEventType("EpochEnded")
+        and eoe["epoch"] == 0
+    )
 
 
 def test_tube_disable_node():
@@ -182,4 +201,5 @@ def test_metaevents():
     runner.run(5)
     event = queue.get_nowait()
     assert event["node_id"] == "meta"
+    assert len(runner.store.events) > 0
     assert all(event["node_id"] != "meta" for event in runner.store.events)
