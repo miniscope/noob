@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import inspect
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from functools import partial
 from logging import Logger
-from typing import Any
+from typing import Any, Self, TypeVar
 
 from noob import Tube, init_logger
 from noob.event import Event, MetaEvent
@@ -28,10 +30,21 @@ class TubeRunner(ABC):
 
     tube: Tube
     store: EventStore = field(default_factory=EventStore)
+    MAX_ITER_LOOPS: int = 100
+    """The max number of times that `iter` will call `process` to try and get a result"""
 
     _callbacks: list[Callable[[Event | MetaEvent], None]] = field(default_factory=list)
 
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
+    _runner_id: str | None = None
+
+    @property
+    def runner_id(self) -> str:
+        if self._runner_id is None:
+            hasher = hashlib.blake2b(digest_size=4)
+            hasher.update(str(datetime.now(UTC).timestamp()).encode("utf-8"))
+            self._runner_id = f"{hasher.hexdigest()}.{self.tube.tube_id}"
+        return self._runner_id
 
     @abstractmethod
     def process(self, **kwargs: Any) -> ReturnNodeType:
@@ -62,12 +75,50 @@ class TubeRunner(ABC):
         Stop processing data with the tube graph
         """
 
-    def run(self, n: int | None = None) -> None | list[ReturnNodeType]:
-        """Run the tube either indefinitely or for a fixed number of complete iterations!"""
-        raise NotImplementedError()
-
     def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
-        raise NotImplementedError()
+        """
+        Treat the runner as an iterable.
+
+        Calls :meth:`.TubeRunner.process` until it yields a result
+        (e.g. multiple times in the case of any ``gather`` s
+        that change the cardinality of the graph.)
+        """
+
+        self.init()
+        current_iter = 0
+        try:
+            while n is None or current_iter < n:
+                ret = None
+                loop = 0
+                while ret is None:
+                    ret = self.process()
+                    loop += 1
+                    if loop > self.MAX_ITER_LOOPS:
+                        raise RuntimeError("Reached maximum process calls per iteration")
+
+                yield ret
+                current_iter += 1
+        finally:
+            self.deinit()
+
+    def run(self, n: int | None = None) -> None | list[ReturnNodeType]:
+        outputs = []
+        current_iter = 0
+        if not self.running:
+            self.init()
+        try:
+            while n is None or current_iter < n:
+                out = self.process()
+                if out is not None:
+                    outputs.append(out)
+                current_iter += 1
+        except (KeyboardInterrupt, StopIteration):
+            # fine, just return
+            pass
+        finally:
+            self.deinit()
+
+        return outputs if outputs else None
 
     @property
     @abstractmethod
@@ -118,7 +169,8 @@ class TubeRunner(ABC):
 
         return args, kwargs
 
-    def collect_return(self) -> ReturnNodeType:
+    @abstractmethod
+    def collect_return(self, epoch: int | None = None) -> ReturnNodeType:
         """
         If any :class:`.Return` nodes are in the tube,
         gather their return values to return from :meth:`.TubeRunner.process`
@@ -127,11 +179,6 @@ class TubeRunner(ABC):
             dict: of the Return sink's key mapped to the returned value,
             None: if there are no :class:`.Return` sinks in the tube
         """
-        ret_nodes = [n for n in self.tube.enabled_nodes.values() if isinstance(n, Return)]
-        if not ret_nodes:
-            return None
-        ret_node = ret_nodes[0]
-        return ret_node.get(keep=False)
 
     def add_callback(self, callback: Callable[[Event | MetaEvent], None]) -> None:
         self._callbacks.append(callback)
@@ -170,3 +217,10 @@ class TubeRunner(ABC):
             return partial(fn, **{ctx_key[0]: self.get_context()})
         else:
             return fn
+
+    def __enter__(self) -> Self:
+        self.init()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: ANN001
+        self.deinit()
