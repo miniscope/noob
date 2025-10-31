@@ -174,3 +174,4 @@ cython_debug/
 .pypirc
 
 *.bak
+noob_config.yaml

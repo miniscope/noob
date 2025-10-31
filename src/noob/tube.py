@@ -14,7 +14,7 @@ from pydantic import (
 from noob.asset import AssetSpecification
 from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope, InputSpecification
-from noob.node import Edge, Node, NodeSpecification
+from noob.node import Edge, Node, NodeSpecification, Return
 from noob.scheduler import Scheduler
 from noob.state import State, StateSpecification
 from noob.types import ConfigSource, PythonIdentifier
@@ -57,6 +57,18 @@ class TubeSpecification(ConfigYAMLMixin):
                 node["id"] = id_
         return value
 
+    @field_validator("nodes", mode="after")
+    @classmethod
+    def only_one_return(
+        cls, value: dict[PythonIdentifier, NodeSpecification]
+    ) -> dict[PythonIdentifier, NodeSpecification]:
+        return_nodes = set(node_id for node_id, node in value.items() if node.type_ == "return")
+        if len(return_nodes) > 1:
+            raise ValueError(
+                f"Only one return node is allowed per tube, instead got {return_nodes}"
+            )
+        return value
+
 
 class Tube(BaseModel):
     """
@@ -67,6 +79,10 @@ class Tube(BaseModel):
     It does not handle running the tube -- that is handled by a TubeRunner.
     """
 
+    tube_id: str
+    """
+    Locally unique identifier for this tube
+    """
     nodes: dict[str, Node]
     """
     Dictionary mapping all nodes from their ID to the instantiated node.
@@ -161,6 +177,7 @@ class Tube(BaseModel):
 
         return cls.model_validate(
             {
+                "tube_id": spec.noob_id,
                 "nodes": nodes,
                 "edges": edges,
                 "state": state,
@@ -248,6 +265,20 @@ class Tube(BaseModel):
             raise ValidationError("Required input missing") from e
 
         return self
+
+    @field_validator("nodes", mode="after")
+    def only_one_return(cls, value: dict[str, Node]) -> dict[str, Node]:
+        """
+        Only one return node is allowed.
+
+        Validate both here and in the spec because tubes can be created programmatically
+        """
+        return_nodes = set({node_id for node_id, node in value.items() if isinstance(node, Return)})
+        if len(return_nodes) > 1:
+            raise ValueError(
+                f"Only one return node is allowed in a tube, instead got {return_nodes}"
+            )
+        return value
 
 
 class TubeClassicEdition:
