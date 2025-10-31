@@ -1,6 +1,8 @@
 import pytest
 import yaml
 
+from noob.tube import Tube
+
 from .paths import PIPELINE_DIR
 
 # all tubes except special cases
@@ -31,3 +33,8 @@ def no_input_tubes(request: pytest.FixtureRequest) -> str:
     if "map" in request.param.name:
         pytest.xfail("map not implemented")
     return request.param
+
+
+@pytest.fixture()
+def loaded_tube(request: pytest.FixtureRequest) -> Tube:
+    return Tube.from_specification(request.param)

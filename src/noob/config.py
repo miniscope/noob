@@ -79,12 +79,13 @@ class Config(BaseSettings):
 
     logs: LogConfig = LogConfig()
     user_dir: Path = Field(default=Path(_dirs.user_data_dir))
+    tmp_dir: Path = Field(default=Path(_dirs.user_runtime_dir))
     config_dir: Path = Field(
         default=Path(_dirs.user_data_dir) / "config",
         description="Directory where config yaml files are stored",
     )
 
-    @field_validator("user_dir", "config_dir", mode="after")
+    @field_validator("user_dir", "config_dir", "tmp_dir", mode="after")
     def create_dir(cls, value: Path) -> Path:
         value.mkdir(parents=True, exist_ok=True)
         return value

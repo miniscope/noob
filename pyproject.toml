@@ -117,7 +117,11 @@ addopts = [
     "--cov=noob",
     "--cov-append",
 ]
-markers = []
+markers = [
+    "sync_runner: uses the sync runner",
+    "zmq_runner: uses the zmq runner"
+
+]
 
 [tool.black]
 target-version = ["py311", "py312", "py313"]
