@@ -145,6 +145,7 @@ class Node(BaseModel):
     _signals: list[Signal] = None
     _slots: dict[str, Slot] = None
     _gen: GeneratorType | None = None
+    _edges: list[Edge] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -266,6 +267,9 @@ class Node(BaseModel):
         if not self.spec.depends:
             return []
 
+        if self._edges is not None:
+            return self._edges
+
         edges = []
         if isinstance(self.spec.depends, str):
             # handle scalar dependency like
@@ -310,7 +314,8 @@ class Node(BaseModel):
                     )
                 )
 
-        return edges
+        self._edges = edges
+        return self._edges
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)

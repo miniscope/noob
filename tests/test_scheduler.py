@@ -37,8 +37,8 @@ def test_tube_increments_epoch(no_input_tubes):
         _ = runner.process()
         events = runner.store.events
         # we haven't cleared events
-        assert len(events) > 0
-        assert all(e["epoch"] == i for e in events)
+        assert len(events) == 1
+        assert list(events.keys())[0] == i
 
 
 def test_event_store_filter():
