@@ -10,6 +10,10 @@
   - good discussion of [design](https://kafka.apache.org/documentation/#theproducer),
     even if a very different application - massive scale, simple one-step processing
     replicated over many machines.
+- [Apache Storm](https://storm.apache.org)
+- [streamparse](https://streamparse.readthedocs.io)
+  - [Toplogy DSL](https://streamparse.readthedocs.io/en/latest/topologies.html#topology-dsl)
+
 
 ## Batch-based
 
@@ -21,3 +25,4 @@
   - some analogies in division of labor: op -> node, graph -> tube, 
     job -> tube + runner (not sure), i/o manager -> store...
 - [luigi](https://github.com/spotify/luigi)
+- [dask.distributed](https://distributed.dask.org/en/stable/)
