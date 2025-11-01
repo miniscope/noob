@@ -21,6 +21,7 @@ TubeClassicEdition()
 :maxdepth: 2
 :caption: Contents:
 
+usage/index
 examples/index
 api/index
 related_projects
