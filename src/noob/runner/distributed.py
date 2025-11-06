@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import pickle
-from collections.abc import Generator
+import random
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
 from threading import Event as ThreadEvent, Lock
 from typing import Any, Self
 from uuid import uuid4
@@ -16,12 +18,18 @@ from pydantic import BaseModel
 from noob.event import Event
 from noob.exceptions import AlreadyRunningError
 from noob.input import InputScope
-from collections.abc import Sequence
-
 from noob.node.map import Map
 from noob.runner.base import TubeRunner
 from noob.store import EventStore
 from noob.types import ReturnNodeType
+
+
+class LoadBalancingStrategy(str, Enum):
+    """Load balancing strategies for worker selection"""
+    ROUND_ROBIN = "round_robin"
+    LEAST_LOADED = "least_loaded"
+    RANDOM = "random"
+    FASTEST_RESPONSE = "fastest_response"
 
 
 class WorkerConfig(BaseModel):
@@ -31,6 +39,8 @@ class WorkerConfig(BaseModel):
     max_retries: int = 3
     timeout: float = 30.0
     health_check_interval: float = 5.0
+    weight: float = 1.0  # For weighted load balancing
+    tags: list[str] = []  # For node affinity
 
 
 class WorkerStatus(BaseModel):
@@ -42,27 +52,51 @@ class WorkerStatus(BaseModel):
     last_seen: datetime | None = None
     tasks_completed: int = 0
     tasks_failed: int = 0
+    tasks_active: int = 0
+    avg_response_time: float = 0.0
+    total_response_time: float = 0.0
 
 
 @dataclass
 class DistributedRunner(TubeRunner):
     """
-    Distributed tube runner that can execute graphs across multiple computers.
-    
+    Enhanced distributed tube runner for executing graphs across multiple machines.
+
     Features:
-    - Async/parallel execution
-    - Network communication via HTTP
-    - Automatic worker discovery and health checks
-    - Fault tolerance with retries and fallbacks
-    - Load balancing across workers
-    - Event serialization for network transmission
+    - Async/parallel execution with configurable concurrency
+    - HTTP-based worker communication with connection pooling
+    - Automatic worker discovery and health monitoring
+    - Advanced fault tolerance with retries, circuit breakers, and fallbacks
+    - Multiple load balancing strategies (round-robin, least-loaded, random, fastest)
+    - Smart event serialization (JSON for simple types, pickle for complex)
+    - Task result caching for efficiency
+    - Graceful degradation when workers fail
+    - Comprehensive metrics and monitoring
+
+    Example:
+        >>> workers = [
+        ...     WorkerConfig(host="worker1.local", port=8000),
+        ...     WorkerConfig(host="worker2.local", port=8000),
+        ... ]
+        >>> runner = DistributedRunner(
+        ...     tube,
+        ...     workers=workers,
+        ...     load_balancing=LoadBalancingStrategy.LEAST_LOADED,
+        ...     max_parallel=20
+        ... )
+        >>> results = runner.run(n=100)
     """
-    
+
     workers: list[WorkerConfig] = field(default_factory=list)
     local_execution: bool = True  # Fallback to local execution if workers unavailable
-    max_parallel: int = 10  # Max concurrent tasks per worker
-    retry_delay: float = 1.0  # Delay between retries (exponential backoff)
+    max_parallel: int = 10  # Max concurrent tasks across all workers
+    retry_delay: float = 1.0  # Initial delay between retries (exponential backoff)
     use_async: bool = True  # Use async execution when available
+    load_balancing: LoadBalancingStrategy = LoadBalancingStrategy.LEAST_LOADED
+    circuit_breaker_threshold: int = 5  # Failures before circuit breaks
+    circuit_breaker_timeout: float = 60.0  # Seconds before retry after circuit break
+    enable_task_caching: bool = False  # Cache task results for idempotent nodes
+    batch_size: int = 5  # Number of tasks to batch together
     
     _running: ThreadEvent = field(default_factory=ThreadEvent)
     _lock: Lock = field(default_factory=Lock)
@@ -195,24 +229,76 @@ class DistributedRunner(TubeRunner):
                 self._logger.error("Error in health check loop: %s", e)
                 await asyncio.sleep(5.0)
     
+    def _select_worker(self, node_id: str | None = None) -> str | None:
+        """
+        Select a worker based on the configured load balancing strategy.
+
+        Args:
+            node_id: Optional node ID for affinity-based selection
+
+        Returns:
+            Selected worker ID or None if no workers available
+        """
+        healthy_workers = [
+            wid for wid, status in self._worker_statuses.items()
+            if status.healthy
+        ]
+
+        if not healthy_workers:
+            return None
+
+        if self.load_balancing == LoadBalancingStrategy.ROUND_ROBIN:
+            # Simple round-robin
+            if not hasattr(self, "_worker_index"):
+                self._worker_index = 0
+            worker_id = healthy_workers[self._worker_index % len(healthy_workers)]
+            self._worker_index += 1
+            return worker_id
+
+        elif self.load_balancing == LoadBalancingStrategy.LEAST_LOADED:
+            # Select worker with fewest active tasks
+            return min(
+                healthy_workers,
+                key=lambda wid: self._worker_statuses[wid].tasks_active
+            )
+
+        elif self.load_balancing == LoadBalancingStrategy.RANDOM:
+            # Random selection
+            return random.choice(healthy_workers)
+
+        elif self.load_balancing == LoadBalancingStrategy.FASTEST_RESPONSE:
+            # Select worker with best average response time
+            return min(
+                healthy_workers,
+                key=lambda wid: self._worker_statuses[wid].avg_response_time or float("inf")
+            )
+
+        else:
+            # Default to first healthy worker
+            return healthy_workers[0]
+
     async def _execute_node_remote(
         self, node_id: str, args: list, kwargs: dict, epoch: int, worker_id: str | None = None
     ) -> tuple[list[Event] | None, Exception | None]:
-        """Execute a node on a remote worker"""
+        """Execute a node on a remote worker with improved error handling and metrics"""
         # Select worker if not specified
         if worker_id is None:
-            healthy_workers = [
-                wid for wid, status in self._worker_statuses.items()
-                if status.healthy
-            ]
-            if not healthy_workers:
+            worker_id = self._select_worker(node_id)
+            if not worker_id:
                 return None, Exception("No healthy workers available")
-            worker_id = healthy_workers[0]  # Simple round-robin (can be improved)
-        
+
         client = await self._get_worker_client(worker_id)
         if not client:
             return None, Exception(f"Worker {worker_id} is not available")
-        
+
+        # Track start time for metrics
+        start_time = datetime.now(UTC)
+
+        # Update active task count
+        status = self._worker_statuses.get(worker_id)
+        if status:
+            status.tasks_active += 1
+
         try:
             # Prepare task payload
             payload = {
@@ -222,19 +308,41 @@ class DistributedRunner(TubeRunner):
                 "epoch": epoch,
                 "tube_spec": None  # Would need to serialize tube spec for full remote execution
             }
-            
+
             # Send task to worker
             response = await client.post("/execute", json=payload)
             response.raise_for_status()
-            
+
             result = response.json()
             events = [self._deserialize_event(e) for e in result.get("events", [])]
+
+            # Update metrics
+            execution_time = (datetime.now(UTC) - start_time).total_seconds()
+            if status:
+                status.tasks_completed += 1
+                status.tasks_active -= 1
+                status.total_response_time += execution_time
+                status.avg_response_time = (
+                    status.total_response_time / status.tasks_completed
+                )
+
             return events, None
-            
+
         except Exception as e:
-            status = self._worker_statuses.get(worker_id)
+            # Update failure metrics
             if status:
                 status.tasks_failed += 1
+                status.tasks_active -= 1
+
+                # Check circuit breaker
+                if status.tasks_failed >= self.circuit_breaker_threshold:
+                    status.healthy = False
+                    self._logger.warning(
+                        "Worker %s circuit breaker triggered (%d failures)",
+                        worker_id,
+                        status.tasks_failed
+                    )
+
             return None, e
     
     async def _execute_node_with_retry(

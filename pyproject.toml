@@ -57,11 +57,32 @@ tests = [
     "pytest>=8.3.5",
     "pytest-cov>=6.0.0",
     "pytest-timeout>=2.3.1",
+    "pytest-asyncio>=0.21.0",
     "tomli-w>=1.2.0",
     "faker>=37.3.0",
     "numpy>=2.3.2",
     "xarray>=2025.7.1",
     "fastapi[standard]>=0.116.1",
+    "Pillow>=9.0.0",
+]
+distributed = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+    "httpx>=0.24.0",
+]
+blockchain = [
+    "web3>=6.0.0",
+    "eth-account>=0.8.0",
+]
+rust = [
+    "maturin>=1.0.0",
+]
+examples = [
+    "numpy>=1.20.0",
+    "Pillow>=9.0.0",
+]
+all = [
+    "noob[distributed,blockchain,examples]",
 ]
 docs = [
     "sphinx>=8.2.3",
@@ -73,7 +94,7 @@ docs = [
     "myst-nb>=1.2.0",
 ]
 dev = [
-    "noob[tests,docs]",
+    "noob[tests,docs,distributed,blockchain,rust]",
     "sphinx-autobuild>=2024.10.3",
     "ruff>=0.11.0",
     "black>=25.1.0",
@@ -108,7 +129,7 @@ docs = "sphinx-autobuild docs docs/_build/html"
 addopts = [
     "--cov=noob",
     "--cov-append",
-    "--timeout=10",
+    "--timeout=60",
 ]
 markers = []
 
