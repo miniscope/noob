@@ -1,0 +1,35 @@
+noob_id: testing-complex-parallel
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1.dev5+g4d26757.d20250320
+nodes:
+  source:
+    type: noob.testing.word_source
+  splitter:
+    type: map
+    depends:
+      - source.word
+  processor1:
+    type: noob.testing.exclaim
+    depends:
+      - string: splitter.value
+  processor2:
+    type: noob.testing.exclaim
+    depends:
+      - string: splitter.value
+  processor3:
+    type: noob.testing.exclaim
+    depends:
+      - string: splitter.value
+  gather:
+    type: gather
+    params:
+      n: 3
+    depends:
+      - value: processor1.value
+      - value: processor2.value
+      - value: processor3.value
+  return:
+    type: return
+    depends:
+      - gather.value
+

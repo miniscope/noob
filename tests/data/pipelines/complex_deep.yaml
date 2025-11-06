@@ -1,0 +1,51 @@
+noob_id: testing-complex-deep
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1.dev5+g4d26757.d20250320
+nodes:
+  input_data:
+    type: noob.testing.word_source
+  level1_map:
+    type: map
+    depends:
+      - input_data.word
+  level1_a:
+    type: noob.testing.exclaim
+    depends:
+      - string: level1_map.value
+  level1_b:
+    type: noob.testing.exclaim
+    depends:
+      - string: level1_map.value
+  level2_map:
+    type: map
+    depends:
+      - level1_a.value
+  level2_a:
+    type: noob.testing.exclaim
+    depends:
+      - string: level2_map.value
+  level2_b:
+    type: noob.testing.exclaim
+    depends:
+      - string: level2_map.value
+  level2_c:
+    type: noob.testing.exclaim
+    depends:
+      - string: level1_b.value
+  gather_level2:
+    type: gather
+    params:
+      n: 3
+    depends:
+      - value: level2_a.value
+      - value: level2_b.value
+      - value: level2_c.value
+  final:
+    type: noob.testing.exclaim
+    depends:
+      - string: gather_level2.word
+  return:
+    type: return
+    depends:
+      - final.value
+

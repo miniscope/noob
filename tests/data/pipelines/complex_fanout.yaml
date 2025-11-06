@@ -1,0 +1,58 @@
+noob_id: testing-complex-fanout
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1.dev5+g4d26757.d20250320
+nodes:
+  source1:
+    type: noob.testing.word_source
+  source2:
+    type: noob.testing.word_source
+  mapper1:
+    type: map
+    depends:
+      - source1.word
+  mapper2:
+    type: map
+    depends:
+      - source2.word
+  worker1:
+    type: noob.testing.exclaim
+    depends:
+      - string: mapper1.value
+  worker2:
+    type: noob.testing.exclaim
+    depends:
+      - string: mapper1.value
+  worker3:
+    type: noob.testing.exclaim
+    depends:
+      - string: mapper2.value
+  worker4:
+    type: noob.testing.exclaim
+    depends:
+      - string: mapper2.value
+  merge1:
+    type: gather
+    params:
+      n: 2
+    depends:
+      - value: worker1.value
+      - value: worker2.value
+  merge2:
+    type: gather
+    params:
+      n: 2
+    depends:
+      - value: worker3.value
+      - value: worker4.value
+  final_merge:
+    type: gather
+    params:
+      n: 2
+    depends:
+      - value: merge1.word
+      - value: merge2.word
+  return:
+    type: return
+    depends:
+      - final_merge.word
+

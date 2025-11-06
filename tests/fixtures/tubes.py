@@ -18,8 +18,6 @@ def all_tubes(request: pytest.FixtureRequest) -> str:
     """
     All the test case tubes!
     """
-    if "map" in request.param.name:
-        pytest.xfail("map not implemented")
     return request.param
 
 
@@ -28,6 +26,4 @@ def no_input_tubes(request: pytest.FixtureRequest) -> str:
     """
     Tubes that do not take input
     """
-    if "map" in request.param.name:
-        pytest.xfail("map not implemented")
     return request.param

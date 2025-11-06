@@ -111,10 +111,17 @@ class TubeRunner(ABC):
         args = []
         kwargs = {}
         for k, v in inputs.items():
-            if isinstance(k, int | None):
+            # Handle positional arguments (int keys) and keyword arguments (string keys)
+            # Also handle None keys which indicate scalar positional arguments
+            if isinstance(k, int):
                 args.append((k, v))
+            elif k is None:
+                # None key means scalar positional argument (first position)
+                args.append((0, v))
             else:
                 kwargs[k] = v
+        
+        # Sort args by position index and extract values
         args = [item[1] for item in sorted(args, key=lambda x: x[0])]
 
         return args, kwargs
