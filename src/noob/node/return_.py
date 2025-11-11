@@ -5,6 +5,7 @@ Special Return sink that tube runners use to return values from :meth:`.TubeRunn
 from typing import Any
 
 from noob.node.base import Node, Slot
+from noob.types import NoEvent
 
 
 class Return(Node):
@@ -15,7 +16,7 @@ class Return(Node):
     _args: tuple | None = None
     _kwargs: dict | None = None
 
-    def process(self, *args: Any, **kwargs: Any) -> None:
+    def process(self, *args: Any, **kwargs: Any) -> NoEvent:
         """
         Store the incoming value to retrieve later with :meth:`.get`
         """
@@ -28,6 +29,8 @@ class Return(Node):
             self._kwargs = kwargs
         else:
             self._kwargs.update(kwargs)
+
+        return NoEvent()
 
     def get(self, keep: bool) -> Any | None:
         """

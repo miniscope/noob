@@ -1,5 +1,3 @@
-import pytest
-
 from noob import SynchronousRunner, Tube
 
 
@@ -21,7 +19,7 @@ def test_process_callback() -> None:
     runner.add_callback(_cb)
     runner.process()
 
-    assert len(events) == 2
+    assert len(events) == 4
 
 
 def test_disabled_node() -> None:

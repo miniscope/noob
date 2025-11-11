@@ -5,6 +5,7 @@ from typing import Any, Generic, TypeVar
 from pydantic import PrivateAttr
 
 from noob.node.base import Node
+from noob.types import NoEvent
 
 _TInput = TypeVar("_TInput")
 
@@ -55,7 +56,7 @@ class Gather(Node, Generic[_TInput]):
                 finally:
                     # clear list after returning
                     self._items = []
-            return None
+            return NoEvent()
 
     def _should_return(self, trigger: Any | None) -> bool:
         return (self.n is not None and len(self._items) >= self.n) or (

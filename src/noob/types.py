@@ -121,3 +121,7 @@ AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)
 class RunnerContext(TypedDict):
     runner: TubeRunner
     tube: Tube
+
+
+class NoEvent:
+    pass
