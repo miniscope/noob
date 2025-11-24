@@ -4,8 +4,8 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import PrivateAttr
 
+from noob.event import NoEvent
 from noob.node.base import Node
-from noob.types import NoEvent
 
 _TInput = TypeVar("_TInput")
 

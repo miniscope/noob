@@ -4,8 +4,8 @@ Special Return sink that tube runners use to return values from :meth:`.TubeRunn
 
 from typing import Any
 
+from noob.event import NoEvent
 from noob.node.base import Node, Slot
-from noob.types import NoEvent
 
 
 class Return(Node):

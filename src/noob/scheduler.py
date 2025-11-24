@@ -126,7 +126,7 @@ class Scheduler(BaseModel):
         """
         self[epoch].done(node_id)
         if not self[epoch].is_active():
-            self._end_epoch(epoch)
+            self.end_epoch(epoch)
             return MetaEvent(
                 id=uuid4().int,
                 timestamp=datetime.now(UTC),
@@ -137,8 +137,11 @@ class Scheduler(BaseModel):
             )
         return None
 
-    def _end_epoch(self, epoch: int) -> None:
-        del self._epochs[epoch]
+    def end_epoch(self, epoch: int = None) -> None:
+        if epoch is None:
+            del self._epochs[list(self._epochs)[-1]]
+        else:
+            del self._epochs[epoch]
 
     def enable_node(self, node_id: str) -> None:
         """

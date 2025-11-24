@@ -82,6 +82,7 @@ class SynchronousRunner(TubeRunner):
         while scheduler.is_active():
             ready = scheduler.get_ready()
             if not ready:
+                scheduler.end_epoch()
                 break
             for node_info in ready:
                 node_id, epoch = node_info["value"], node_info["epoch"]

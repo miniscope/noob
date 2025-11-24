@@ -1,4 +1,5 @@
 from noob import SynchronousRunner, Tube
+from noob.node import Return
 
 
 def test_process_callback() -> None:
@@ -10,16 +11,23 @@ def test_process_callback() -> None:
     runner = SynchronousRunner(tube)
 
     runner.init()
-    events = []
+    cb_events = []
 
     def _cb(event) -> None:
-        nonlocal events
-        events.append(event)
+        nonlocal cb_events
+        cb_events.append(event)
 
     runner.add_callback(_cb)
     runner.process()
 
-    assert len(events) == 4
+    # internal events are not caught in callback (or EventStore)
+    # Return node emits NoEvent
+    # NoEvent and MetaEvent are uncaught
+    assert (
+        len(cb_events)
+        == len(runner.store.events)
+        == len([node for node in tube.nodes.values() if not isinstance(node, Return)])
+    )
 
 
 def test_disabled_node() -> None:
@@ -88,3 +96,18 @@ def test_dynamic_disable_return() -> None:
     start = max(first) * 2 + 4
     expected = list(range(start, start + (iters * 2), 2))
     assert result == expected
+
+
+def test_synch_unready_end_epoch():
+    """
+    A SynchronousRunner should end the current epoch and
+    move to the next one (if there is one) if there are no
+    more nodes ready in the current epoch. (Specifically,
+    for cardinality reducing operations like `class: .Gather`.)
+    """
+
+    tube = Tube.from_specification("testing-gather-n")
+    runner = SynchronousRunner(tube)
+
+    for _ in runner.iter(n=25):
+        assert len(runner.tube.scheduler._epochs) == 0

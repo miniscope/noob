@@ -47,3 +47,12 @@ class MetaEvent(Event):
     # mypy doesn't allow narrowing types in typed dicts?
     node_id: Literal["meta"]  # type: ignore
     signal: MetaEventType  # type: ignore
+
+
+class NoEvent:
+    """
+    Signifier for no event emitted
+
+    """
+
+    pass
