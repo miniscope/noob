@@ -270,3 +270,16 @@ class EventStore:
                 continue
             args[edge.target_slot] = evts[-1]["value"]
         return args
+
+    @staticmethod
+    def split_args_kwargs(inputs: dict) -> tuple[list, dict]:
+        # TODO: integrate this with `collect`
+        args = []
+        kwargs = {}
+        for k, v in inputs.items():
+            if isinstance(k, int | None):
+                args.append((k, v))
+            else:
+                kwargs[k] = v
+        args = [item[1] for item in sorted(args, key=lambda x: x[0])]
+        return args, kwargs

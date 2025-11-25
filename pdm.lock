@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs", "tests", "zmq"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:b1a5c1afad9f223c99ec3faf520fb15f54080740a4e591485b9c57e0a5cb089a"
+content_hash = "sha256:5070a48a7bf0b34c1dec2f9f69e78f970a0171f07cbc81a9cabc288ba4bbf5bd"
 
 [[metadata.targets]]
 requires_python = ">=3.11"
@@ -1779,6 +1779,17 @@ dependencies = [
 files = [
     {file = "referencing-0.36.2-py3-none-any.whl", hash = "sha256:e8699adbbf8b5c7de96d8ffa0eb5c158b3beafce084968e2ea8bb08c6794dcd0"},
     {file = "referencing-0.36.2.tar.gz", hash = "sha256:df2e89862cd09deabbdba16944cc3f10feb6b3e6f18e902f7cc25609a34775aa"},
+]
+
+[[package]]
+name = "remote-pdb"
+version = "2.1.0"
+requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
+summary = "Remote vanilla PDB (over TCP sockets) *done right*: no extras, proper handling around connection failures and CI. Based on `pdbx <https://pypi.python.org/pypi/pdbx>`_."
+groups = ["dev"]
+files = [
+    {file = "remote-pdb-2.1.0.tar.gz", hash = "sha256:2d70c6f41e0eabf0165e8f1be58f82aa7a605aaeab8f2aefeb9ce246431091c1"},
+    {file = "remote_pdb-2.1.0-py2.py3-none-any.whl", hash = "sha256:94f73a92ac1248cf16189211011f97096bdada8a7baac8c79372663bbb57b5d0"},
 ]
 
 [[package]]

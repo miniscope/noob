@@ -4,32 +4,18 @@
 - use the `node_id.signal` etc. as basically a feed address
 """
 
-import base64
-import json
 import multiprocessing as mp
-import pickle
+import os
+import signal
 import threading
 from collections import defaultdict
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from enum import StrEnum
 from itertools import count
 from time import time
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
-from typing import Annotated as A
 
 import zmq
-from pydantic import (
-    BaseModel,
-    BeforeValidator,
-    ConfigDict,
-    Discriminator,
-    Field,
-    PlainSerializer,
-    Tag,
-    TypeAdapter,
-)
 from tornado.ioloop import IOLoop
 
 # from zmq.eventloop.ioloop import IOLoop
@@ -39,6 +25,17 @@ from noob.config import config
 from noob.event import Event
 from noob.input import InputCollection
 from noob.logging import init_logger
+from noob.network.message import (
+    AnnounceMsg,
+    AnnounceValue,
+    EventMsg,
+    IdentifyMsg,
+    IdentifyValue,
+    Message,
+    MessageType,
+    ProcessMsg,
+    StopMsg,
+)
 from noob.node import Node, NodeSpecification, Return
 from noob.runner.base import TubeRunner
 from noob.scheduler import Scheduler, SchedulerMode
@@ -52,113 +49,6 @@ if TYPE_CHECKING:
 class Callbacks(TypedDict, total=False):
     on_inbox: Callable[[Event], Any]
     on_command: Callable[[Event], Any]
-
-
-class MessageType(StrEnum):
-    announce = "announce"
-    identify = "identify"
-    start = "start"
-    stop = "stop"
-    event = "event"
-
-
-def _to_json(val: Event) -> str:
-    try:
-        return json.dumps(val)
-    except TypeError:
-        # pickle and b64encode
-        return "pck__" + base64.b64encode(pickle.dumps(val)).decode("utf-8")
-
-
-def _from_json(val: Any) -> Event:
-    if isinstance(val, str):
-        if val.startswith("pck__"):
-            return pickle.loads(base64.b64decode(val[5:]))
-        else:
-            return Event(**json.loads(val))
-    else:
-        return val
-
-
-SerializableEvent = A[
-    Event, PlainSerializer(_to_json, when_used="json"), BeforeValidator(_from_json)
-]
-
-
-class Message(BaseModel):
-    type_: MessageType = Field(..., alias="type")
-    node_id: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    value: dict | str | None = None
-
-    model_config = ConfigDict(use_enum_values=True, validate_by_alias=True, serialize_by_alias=True)
-
-    @classmethod
-    def from_bytes(cls, msg: list[bytes]) -> "Message":
-        return MessageAdapter.validate_json(msg[-1].decode("utf-8"))
-
-    def to_bytes(self) -> bytes:
-        return self.model_dump_json().encode("utf-8")
-
-
-class NodeIdentifyMessage(TypedDict):
-    node_id: str
-    outbox: str
-    signals: list[str] | None
-    slots: list[str] | None
-
-
-class AnnounceMessage(TypedDict):
-    """Command node 'announces' identities of other peers and the events they emit"""
-
-    inbox: str
-    nodes: dict[str, NodeIdentifyMessage]
-
-
-class AnnounceMsg(Message):
-    type_: Literal[MessageType.announce] = Field(MessageType.announce, alias="type")
-    value: AnnounceMessage
-
-
-class IdentifyMsg(Message):
-    type_: Literal[MessageType.identify] = Field(MessageType.identify, alias="type")
-    value: NodeIdentifyMessage
-
-
-class StartMsg(Message):
-    type_: Literal[MessageType.start] = Field(MessageType.start, alias="type")
-    value: None = None
-
-
-class StopMsg(Message):
-    type_: Literal[MessageType.stop] = Field(MessageType.stop, alias="type")
-    value: None = None
-
-
-class EventMsg(Message):
-    type_: Literal[MessageType.event] = Field(MessageType.event, alias="type")
-    value: list[SerializableEvent]
-
-
-def _type_discriminator(v: dict | Message) -> str:
-    typ = v.get("type", "any") if isinstance(v, dict) else v.type_
-
-    if typ in MessageType.__members__:
-        return typ
-    else:
-        return "any"
-
-
-MessageUnion = A[
-    A[AnnounceMessage, Tag("announce")]
-    | A[IdentifyMsg, Tag("identify")]
-    | A[StartMsg, Tag("start")]
-    | A[StopMsg, Tag("stop")]
-    | A[EventMsg, Tag("event")]
-    | A[Message, Tag("any")],
-    Discriminator(_type_discriminator),
-]
-MessageAdapter = TypeAdapter(MessageUnion)
 
 
 class NetworkMixin:
@@ -221,8 +111,6 @@ class NetworkMixin:
             return
         self._quitting.set()
         self.loop.stop()
-        self._thread.join()
-
 
 class CommandNode(NetworkMixin):
     """
@@ -245,7 +133,7 @@ class CommandNode(NetworkMixin):
         self.runner_id = runner_id
         self.port = port
         self.protocol = protocol
-        self.logger = init_logger(f"runner.command.{runner_id}")
+        self.logger = init_logger(f"runner.node.{runner_id}.command")
         self._pub = None
         self._sub = None
         self._router = None
@@ -253,7 +141,7 @@ class CommandNode(NetworkMixin):
         self._loop = None
         self._thread: threading.Thread | None = None
         self._quitting = threading.Event()
-        self._nodes: dict[str, NodeIdentifyMessage] = {}
+        self._nodes: dict[str, IdentifyValue] = {}
         self._ready_condition = threading.Condition()
         self._callbacks: dict[str, list[Callable[[Message], ...]]] = defaultdict(list)
 
@@ -324,9 +212,14 @@ class CommandNode(NetworkMixin):
 
     def announce(self) -> None:
         msg = AnnounceMsg(
-            node_id="command", value=AnnounceMessage(inbox=self.router_address, nodes=self._nodes)
+            node_id="command", value=AnnounceValue(inbox=self.router_address, nodes=self._nodes)
         )
         self._pub.send_multipart([b"announce", msg.to_bytes()])
+
+    def process(self) -> None:
+        """Emit a ProcessMsg to process a single round through the graph"""
+        self._pub.send_multipart([b"process", ProcessMsg(node_id="command").to_bytes()])
+        self.logger.debug("Sent process message")
 
     def add_callback(self, type_: Literal["inbox", "event"], cb: Callable[[Message], Any]) -> None:
         self._callbacks[type_].append(cb)
@@ -338,7 +231,14 @@ class CommandNode(NetworkMixin):
         with self._ready_condition:
             if set(node_ids) == set(self._nodes):
                 return
-            self._ready_condition.wait_for(lambda: set(node_ids) == set(self._nodes))
+
+            def _wait_for():
+                self.logger.debug(
+                    "Checking ready, waiting for: %s, got %s", set(node_ids), set(self._nodes)
+                )
+                return set(node_ids) == set(self._nodes)
+
+            self._ready_condition.wait_for(_wait_for)
 
     def publish_input(self, **kwargs: Any) -> None:
         """
@@ -422,9 +322,12 @@ class NodeRunner(NetworkMixin):
         self._sub = None
         self._node: Node | None = None
         self._depends: tuple[tuple[str, str], ...] | None = None
-        self._nodes: dict[str, NodeIdentifyMessage] = {}
+        self._nodes: dict[str, IdentifyValue] = {}
         self._counter = count()
         self._process_quitting = mp.Event()
+        self._freerun = mp.Event()
+        self._process_one = mp.Event()
+        self._to_process = 0
 
     @property
     def pub_address(self) -> str:
@@ -445,6 +348,7 @@ class NodeRunner(NetworkMixin):
             self._depends = tuple(
                 (edge.source_node, edge.source_signal) for edge in self._node.edges
             )
+            return self._depends
 
     @classmethod
     def run(cls, spec: NodeSpecification, **kwargs: Any) -> None:
@@ -453,21 +357,41 @@ class NodeRunner(NetworkMixin):
         init the class and start it!
         """
         runner = NodeRunner(spec=spec, **kwargs)
-        runner.init()
+        try:
 
-        runner._process_quitting.clear()
-        for args, kwargs, epoch in runner.await_inputs():
-            runner.logger.debug("Running with args: %s, kwargs: %s, epoch: %s", args, kwargs, epoch)
-            value = runner._node.process(*args, **kwargs)
-            events = runner.store.add_value(runner._node.signals, value, runner._node.id, epoch)
-            runner.update_graph(events)
-            runner.publish_events(events)
+            def _handler(sig, frame) -> None:
+                raise KeyboardInterrupt()
 
-        runner.deinit()
+            signal.signal(signal.SIGTERM, _handler)
+            runner.init()
+            runner._process_quitting.clear()
+            runner._freerun.clear()
+            runner._process_one.clear()
+            for args, kwargs, epoch in runner.await_inputs():
+                runner.logger.debug(
+                    "Running with args: %s, kwargs: %s, epoch: %s", args, kwargs, epoch
+                )
+                value = runner._node.process(*args, **kwargs)
+                events = runner.store.add_value(runner._node.signals, value, runner._node.id, epoch)
+                runner.update_graph(events)
+                runner.publish_events(events)
+                runner.scheduler.add_epoch()
+
+        except KeyboardInterrupt:
+            runner.logger.debug("Got keyboard interrupt, quitting")
+        finally:
+            runner.deinit()
 
     def await_inputs(self) -> Generator[tuple[list[Any], dict[Any], int]]:
 
         while not self._process_quitting.is_set():
+            if not self._freerun.is_set():
+                if self._to_process == 0:
+                    self._process_one.wait()
+                self._to_process -= 1
+                if self._to_process == 0:
+                    self._process_one.clear()
+
             ready = self.scheduler.await_node(self.spec.id)
             edges = self._node.edges
             inputs = self.store.collect(edges, ready["epoch"])
@@ -503,8 +427,11 @@ class NodeRunner(NetworkMixin):
     def deinit(self) -> None:
         self.logger.debug("Deinitializing")
         self._node.deinit()
-        self.stop_loop()
+        # TODO: apparently the zmqstreams want to be closed manually,
+        # but this causes deinit to hang. resolve the closing order
+
         self.context.destroy()
+        self.stop_loop()
         self.logger.debug("Deinitialization finished")
 
     def identify(self) -> None:
@@ -513,7 +440,7 @@ class NodeRunner(NetworkMixin):
         """
         ann = IdentifyMsg(
             node_id=self.spec.id,
-            value=NodeIdentifyMessage(
+            value=IdentifyValue(
                 node_id=self.spec.id,
                 outbox=self.pub_address,
                 signals=[s.name for s in self._node.signals] if self._node.signals else None,
@@ -544,7 +471,6 @@ class NodeRunner(NetworkMixin):
         dealer = self.context.socket(zmq.DEALER)
         dealer.setsockopt_string(zmq.IDENTITY, self.spec.id)
         res = dealer.connect(self.command_inbox)
-        self.logger.debug(str(dir(res)))
         dealer = ZMQStream(dealer, self.loop)
         dealer.on_recv(self.on_outbox)
         self.logger.debug("Connected to command node at %s", self.command_inbox)
@@ -560,6 +486,7 @@ class NodeRunner(NetworkMixin):
             # something like:
             # port = pub.bind_to_random_port(self.protocol)
 
+        # FIXME: Why is the pub receiving messages
         pub = ZMQStream(pub, self.loop)
         pub.on_recv(self.on_inbox)
         return pub
@@ -591,14 +518,22 @@ class NodeRunner(NetworkMixin):
             self.logger.exception("Error decoding message %s %s", msg, e)
             raise e
 
+        # FIXME: all this switching sux,
+        # just have a decorator to register a handler for a given message type
         if msg.type_ == MessageType.announce:
             msg = cast(AnnounceMsg, msg)
             self.on_announce(msg)
         elif msg.type_ == MessageType.event:
             msg = cast(EventMsg, msg)
             self.on_event(msg)
+        elif msg.type_ == MessageType.process:
+            msg = cast(ProcessMsg, msg)
+            self.on_process(msg)
+        elif msg.type_ == MessageType.stop:
+            msg = cast(StopMsg, msg)
+            self.on_stop(msg)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(f"{msg.type_} not implemented!")
 
     def on_announce(self, msg: AnnounceMsg) -> None:
         """
@@ -617,10 +552,37 @@ class NodeRunner(NetworkMixin):
 
     def on_event(self, msg: EventMsg) -> None:
         events = msg.value
+        if not self.depends:
+            self.logger.debug("No dependencies, not storing events")
+            return
+
         to_add = [e for e in events if (e["node_id"], e["signal"]) in self.depends]
         for event in to_add:
             self.store.add(event)
-        self.scheduler.update(events)
+        try:
+            self.scheduler.update(events)
+        except Exception:
+            from remote_pdb import set_trace
+
+            set_trace()
+
+    def on_process(self, msg: ProcessMsg) -> None:
+        """
+        Process a single graph iteration
+        Args:
+            msg:
+
+        Returns:
+
+        """
+        # TODO: handle inputs
+        self._to_process += 1
+        self._process_one.set()
+
+    def on_stop(self, msg: StopMsg) -> None:
+        """Stop processing!"""
+        self.logger.debug("Emitting sigterm to self %s", msg)
+        os.kill(mp.current_process().pid, signal.SIGTERM)
 
 
 @dataclass
@@ -636,7 +598,6 @@ class ZMQRunner(TubeRunner):
     store: EventStore = field(default_factory=EventStore)
 
     _running: mp.Event = field(default_factory=mp.Event)
-    _epoch: count = field(default_factory=count)
     _epoch_condition: threading.Condition = field(default_factory=threading.Condition)
     _return_node: Return | None = None
     _init_lock: threading.Lock = field(default_factory=threading.Lock)
@@ -651,7 +612,9 @@ class ZMQRunner(TubeRunner):
             return
         with self._init_lock:
             self._logger.debug("Initializing ZMQ runner")
+            self.tube.scheduler.mode = SchedulerMode.parallel
             self.command = CommandNode(runner_id=self.runner_id)
+            self.command.add_callback("event", self.on_event)
             self.command.start()
             self._logger.debug("Command node initialized")
 
@@ -673,7 +636,10 @@ class ZMQRunner(TubeRunner):
                 )
                 self.node_procs[node_id].start()
             self._logger.debug("Started node processes, awaiting ready")
-            # self.command.await_ready(list(self.tube.nodes.keys()))
+            self.command.await_ready(
+                [k for k, v in self.tube.nodes.items() if not isinstance(v, Return)]
+            )
+            self._logger.debug("Nodes ready")
             self._running.set()
 
     def deinit(self) -> None:
@@ -682,7 +648,8 @@ class ZMQRunner(TubeRunner):
         started_waiting = time()
         waiting_on = set(self.node_procs.values())
         while time() < started_waiting + self.quit_timeout and len(waiting_on) > 0:
-            for proc in waiting_on:
+            _waiting = waiting_on.copy()
+            for proc in _waiting:
                 if not proc.is_alive():
                     waiting_on.remove(proc)
 
@@ -697,7 +664,8 @@ class ZMQRunner(TubeRunner):
             self._logger.info("Runner called process without calling `init`, initializing now.")
             self.init()
 
-        this_epoch = next(self._epoch)
+        this_epoch = self.tube.scheduler.add_epoch()
+        self.command.process()
         self._logger.debug("awaiting epoch %s", this_epoch)
         self.tube.scheduler.await_epoch(this_epoch)
         self._logger.debug("collecting return")
@@ -708,10 +676,23 @@ class ZMQRunner(TubeRunner):
         if msg.type_ != MessageType.event:
             self._logger.debug(f"Ignoring message type {msg.type_}")
 
-        with self._epoch_condition:
-            for event in msg.value:
-                self.store.add(event)
-            self.tube.scheduler.update(msg.value)
+        # with self.tube.scheduler._epoch_condition:
+        self._logger.debug("Updating store and scheduler")
+        for event in msg.value:
+            self.store.add(event)
+        self._logger.debug("Store updated")
+        self.tube.scheduler.update(msg.value)
+        self._logger.debug("Scheduler updated")
+        if self._return_node is not None:
+            epochs = set(e["epoch"] for e in msg.value)
+            for epoch in epochs:
+                if self.tube.scheduler.node_is_ready(self._return_node.id, epoch):
+                    self._logger.debug("Marking return node ready in epoch %s", epoch)
+                    self.tube.scheduler.done(epoch, self._return_node.id)
+                else:
+                    self._logger.debug("Return node not ready in %s", epoch)
+        else:
+            self._logger.debug("no return node")
 
     def collect_return(self, epoch: int | None = None) -> Any:
         if epoch is None:
@@ -719,7 +700,9 @@ class ZMQRunner(TubeRunner):
         if self._return_node is None:
             return None
         else:
-            self._return_node.process(**self.store.collect(self._return_node.edges, epoch))
+            events = self.store.collect(self._return_node.edges, epoch)
+            args, kwargs = self.store.split_args_kwargs(events)
+            self._return_node.process(*args, **kwargs)
             return self._return_node.get(keep=False)
 
     def enable_node(self, node_id: str) -> None:
