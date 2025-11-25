@@ -2,6 +2,24 @@
 - Central command pub/sub
 - each sub-runner has its own set of sockets for publishing and consuming events
 - use the `node_id.signal` etc. as basically a feed address
+
+.. todo::
+
+    Currently only IPC is supported, and thus the zmq runner can't run across machines.
+    Supporting TCP is WIP, it will require some degree of authentication
+    among nodes to prevent arbitrary code execution,
+    since we shouldn't count on users to properly firewall their runners.
+
+
+.. todo::
+
+    The socket spawning and event handling is awfully manual here.
+    Leaving it as is because it's somewhat unlikely we'll need to generalize it,
+    but otherwise it would be great to standardize socket names and have
+    event handler decorators like:
+
+        @on_inbox(MessageType.sometype)
+
 """
 
 import multiprocessing as mp
@@ -13,7 +31,10 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from itertools import count
 from time import time
+from types import FrameType
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
+
+from noob.network.loop import EventloopMixin
 
 try:
     import zmq
@@ -22,7 +43,6 @@ except ImportError as e:
         "Attempted to import zmq runner, but zmq deps are not installed. install with `noob[zmq]`",
     ) from e
 
-from tornado.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 
 from noob.config import config
@@ -49,80 +69,16 @@ from noob.types import NodeID, ReturnNodeType
 if TYPE_CHECKING:
     pass
 
-
-class Callbacks(TypedDict, total=False):
-    on_inbox: Callable[[Event], Any]
-    on_command: Callable[[Event], Any]
-
-
-class NetworkMixin:
-
-    def __init__(self):
-        self._context = None
-        self._loop = None
-        self._quitting = threading.Event()
-        self._thread: threading.Thread | None = None
-
-    @property
-    def context(self) -> zmq.Context:
-        if self._context is None:
-            self._context = zmq.Context.instance()
-        return self._context
-
-    @property
-    def loop(self) -> IOLoop:
-        if self._loop is None:
-            self._loop = IOLoop.current()
-        return self._loop
-
-    def start_loop(self) -> None:
-        if self._thread is not None:
-            raise RuntimeWarning("Command node already started")
-
-        self._quitting.clear()
-
-        _ready = threading.Event()
-
-        def _signal_ready() -> None:
-            _ready.set()
-
-        def _run() -> None:
-            if hasattr(self, "logger"):
-                self.logger.debug("Starting eventloop")
-            while not self._quitting.is_set():
-                try:
-                    self.loop.add_callback(_signal_ready)
-                    self.loop.start()
-
-                except RuntimeError:
-                    # loop already started
-                    if hasattr(self, "logger"):
-                        self.logger.debug("Eventloop already started, quitting")
-                    break
-            if hasattr(self, "logger"):
-                self.logger.debug("Stopping eventloop")
-            self._thread = None
-
-        self._thread = threading.Thread(target=_run)
-        self._thread.start()
-        # wait until the loop has started
-        _ready.wait(5)
-        if hasattr(self, "logger"):
-            self.logger.debug("Event loop started")
-
-    def stop_loop(self) -> None:
-        if self._thread is None:
-            return
-        self._quitting.set()
-        self.loop.stop()
-
-
-class CommandNode(NetworkMixin):
+class CommandNode(EventloopMixin):
     """
     Pub node that controls the state of the other nodes/announces addresses
 
     - one PUB socket to distribute commands
     - one ROUTER socket to receive return messages from runner nodes
+    - one SUB socket to subscribe to all events
+
+    The wrapping runner should register callbacks with `add_callback` to handle incoming messages.
+
     """
 
     def __init__(self, runner_id: str, protocol: str = "ipc", port: int | None = None):
@@ -164,7 +120,6 @@ class CommandNode(NetworkMixin):
     def router_address(self) -> str:
         """Address the return router is bound to"""
         if self.protocol == "ipc":
-            # return "tcp://127.0.0.1:8991"
             path = config.tmp_dir / f"{self.runner_id}/command/inbox"
             path.parent.mkdir(parents=True, exist_ok=True)
             return f"{self.protocol}://{str(path)}"
@@ -237,19 +192,7 @@ class CommandNode(NetworkMixin):
             if set(node_ids) == set(self._nodes):
                 return
 
-            def _wait_for():
-                self.logger.debug(
-                    "Checking ready, waiting for: %s, got %s", set(node_ids), set(self._nodes)
-                )
-                return set(node_ids) == set(self._nodes)
-
-            self._ready_condition.wait_for(_wait_for)
-
-    def publish_input(self, **kwargs: Any) -> None:
-        """
-        Publish process-scoped input to tubes
-        """
-        raise NotImplementedError()
+            self._ready_condition.wait_for(lambda: set(node_ids) == set(self._nodes))
 
     def on_inbox(self, msg: list[bytes]) -> None:
 
@@ -260,14 +203,16 @@ class CommandNode(NetworkMixin):
             self.logger.exception("Exception decoding: %s,  %s", msg, e)
             raise e
 
+        for cb in self._callbacks["inbox"]:
+            cb(msg)
+
         if msg.type_ == MessageType.identify:
             msg = cast(IdentifyMsg, msg)
             self.on_identify(msg)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(f"Message type {msg.type_} is unsupported")
 
-        for cb in self._callbacks["inbox"]:
-            cb(msg)
+
 
     def on_sub(self, msg: list[bytes]) -> None:
         msg = Message.from_bytes(msg)
@@ -288,13 +233,13 @@ class CommandNode(NetworkMixin):
             self.logger.exception("Exception announced: %s", e)
 
 
-class NodeRunner(NetworkMixin):
+class NodeRunner(EventloopMixin):
     """
     Runner for a single node
 
     - DEALER to communicate with command inbox
     - PUB to publish events
-    - SUB to subscribe to events
+    - SUB to subscribe to events from other nodes.
     """
 
     def __init__(
@@ -305,7 +250,6 @@ class NodeRunner(NetworkMixin):
         command_inbox: str,
         input_collection: InputCollection,
         protocol: str = "ipc",
-        callbacks: Callbacks | None = None,
     ):
         super().__init__()
         self.spec = spec
@@ -317,10 +261,6 @@ class NodeRunner(NetworkMixin):
         self.store = EventStore()
         self.scheduler: Scheduler | None = None
         self.logger = init_logger(f"runner.node.{runner_id}.{self.spec.id}")
-        if callbacks is None:
-            self.callbacks = Callbacks()
-        else:
-            self.callbacks = callbacks
 
         self._dealer: zmq.Socket | ZMQStream | None = None
         self._pub: zmq.Socket | None = None
@@ -345,15 +285,13 @@ class NodeRunner(NetworkMixin):
 
     @property
     def depends(self) -> tuple[tuple[str, str], ...] | None:
-        if self._depends is not None:
-            return self._depends
-        elif self._node is None:
+        if self._node is None:
             return None
-        else:
+        elif self._depends is None:
             self._depends = tuple(
                 (edge.source_node, edge.source_signal) for edge in self._node.edges
             )
-            return self._depends
+        return self._depends
 
     @classmethod
     def run(cls, spec: NodeSpecification, **kwargs: Any) -> None:
@@ -364,7 +302,7 @@ class NodeRunner(NetworkMixin):
         runner = NodeRunner(spec=spec, **kwargs)
         try:
 
-            def _handler(sig, frame) -> None:
+            def _handler(sig: int, frame: FrameType | None = None) -> None:
                 raise KeyboardInterrupt()
 
             signal.signal(signal.SIGTERM, _handler)
@@ -390,6 +328,8 @@ class NodeRunner(NetworkMixin):
     def await_inputs(self) -> Generator[tuple[list[Any], dict[Any], int]]:
 
         while not self._process_quitting.is_set():
+            # if we are not freerunning, keep track of how many times we are supposed to run,
+            # and run until we aren't supposed to anymore!
             if not self._freerun.is_set():
                 if self._to_process == 0:
                     self._process_one.wait()
@@ -402,16 +342,7 @@ class NodeRunner(NetworkMixin):
             inputs = self.store.collect(edges, ready["epoch"])
             if inputs is None:
                 inputs = {}
-
-            # TODO: Move this to `EventStore.transform_events`
-            args = []
-            kwargs = {}
-            for k, v in inputs.items():
-                if isinstance(k, int | None):
-                    args.append((k, v))
-                else:
-                    kwargs[k] = v
-            args = [item[1] for item in sorted(args, key=lambda x: x[0])]
+            args, kwargs = self.store.split_args_kwargs(inputs)
             yield args, kwargs, ready["epoch"]
 
     def update_graph(self, events: list[Event]) -> None:
@@ -475,7 +406,7 @@ class NodeRunner(NetworkMixin):
     def init_dealer(self) -> ZMQStream:
         dealer = self.context.socket(zmq.DEALER)
         dealer.setsockopt_string(zmq.IDENTITY, self.spec.id)
-        res = dealer.connect(self.command_inbox)
+        dealer.connect(self.command_inbox)
         dealer = ZMQStream(dealer, self.loop)
         dealer.on_recv(self.on_outbox)
         self.logger.debug("Connected to command node at %s", self.command_inbox)
@@ -491,9 +422,6 @@ class NodeRunner(NetworkMixin):
             # something like:
             # port = pub.bind_to_random_port(self.protocol)
 
-        # FIXME: Why is the pub receiving messages
-        pub = ZMQStream(pub, self.loop)
-        pub.on_recv(self.on_inbox)
         return pub
 
     def init_sub(self) -> ZMQStream:
@@ -514,7 +442,6 @@ class NodeRunner(NetworkMixin):
         self.logger.debug("DEALER received %s", msg)
 
     def on_inbox(self, msg: list[bytes]) -> None:
-
         try:
             msg = Message.from_bytes(msg)
 
@@ -564,21 +491,13 @@ class NodeRunner(NetworkMixin):
         to_add = [e for e in events if (e["node_id"], e["signal"]) in self.depends]
         for event in to_add:
             self.store.add(event)
-        try:
-            self.scheduler.update(events)
-        except Exception:
-            from remote_pdb import set_trace
 
-            set_trace()
+        self.scheduler.update(events)
+
 
     def on_process(self, msg: ProcessMsg) -> None:
         """
         Process a single graph iteration
-        Args:
-            msg:
-
-        Returns:
-
         """
         # TODO: handle inputs
         self._to_process += 1
@@ -603,7 +522,6 @@ class ZMQRunner(TubeRunner):
     store: EventStore = field(default_factory=EventStore)
 
     _running: mp.Event = field(default_factory=mp.Event)
-    _epoch_condition: threading.Condition = field(default_factory=threading.Condition)
     _return_node: Return | None = None
     _init_lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -681,23 +599,15 @@ class ZMQRunner(TubeRunner):
         if msg.type_ != MessageType.event:
             self._logger.debug(f"Ignoring message type {msg.type_}")
 
-        # with self.tube.scheduler._epoch_condition:
-        self._logger.debug("Updating store and scheduler")
         for event in msg.value:
             self.store.add(event)
-        self._logger.debug("Store updated")
         self.tube.scheduler.update(msg.value)
-        self._logger.debug("Scheduler updated")
         if self._return_node is not None:
             epochs = set(e["epoch"] for e in msg.value)
             for epoch in epochs:
                 if self.tube.scheduler.node_is_ready(self._return_node.id, epoch):
                     self._logger.debug("Marking return node ready in epoch %s", epoch)
                     self.tube.scheduler.done(epoch, self._return_node.id)
-                else:
-                    self._logger.debug("Return node not ready in %s", epoch)
-        else:
-            self._logger.debug("no return node")
 
     def collect_return(self, epoch: int | None = None) -> Any:
         if epoch is None:
