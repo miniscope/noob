@@ -17,19 +17,13 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
 try:
     import zmq
-    from tornado.ioloop import IOLoop
-    from zmq.eventloop.zmqstream import ZMQStream
-except ImportError:
-    import warnings
-
-    warnings.warn(
+except ImportError as e:
+    raise ImportError(
         "Attempted to import zmq runner, but zmq deps are not installed. install with `noob[zmq]`",
-        ImportWarning,
-        stacklevel=2,
-    )
-    zmq = None
-    IOLoop = None
-    ZMQStream = None
+    ) from e
+
+from tornado.ioloop import IOLoop
+from zmq.eventloop.zmqstream import ZMQStream
 
 from noob.config import config
 from noob.event import Event
