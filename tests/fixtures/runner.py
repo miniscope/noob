@@ -1,7 +1,8 @@
 import pytest
 
 from noob import Tube
-from noob.runner import SynchronousRunner, TubeRunner, ZMQRunner
+from noob.runner import SynchronousRunner, TubeRunner
+from noob.runner.zmq import ZMQRunner
 
 
 @pytest.fixture(

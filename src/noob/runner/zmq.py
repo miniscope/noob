@@ -15,11 +15,21 @@ from itertools import count
 from time import time
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
-import zmq
-from tornado.ioloop import IOLoop
+try:
+    import zmq
+    from tornado.ioloop import IOLoop
+    from zmq.eventloop.zmqstream import ZMQStream
+except ImportError:
+    import warnings
 
-# from zmq.eventloop.ioloop import IOLoop
-from zmq.eventloop.zmqstream import ZMQStream
+    warnings.warn(
+        "Attempted to import zmq runner, but zmq deps are not installed. install with `noob[zmq]`",
+        ImportWarning,
+        stacklevel=2,
+    )
+    zmq = None
+    IOLoop = None
+    ZMQStream = None
 
 from noob.config import config
 from noob.event import Event
@@ -111,6 +121,7 @@ class NetworkMixin:
             return
         self._quitting.set()
         self.loop.stop()
+
 
 class CommandNode(NetworkMixin):
     """

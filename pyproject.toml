@@ -57,6 +57,7 @@ zmq = [
     "pyzmq>=27.1.0",
 ]
 tests = [
+    "noob[zmq]",
     "pytest>=8.3.5",
     "pytest-cov>=6.0.0",
     "tomli-w>=1.2.0",
