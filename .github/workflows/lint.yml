@@ -35,7 +35,7 @@ jobs:
           python-version: '3.13'
       - name: Install mypy
         run: |
-          pip install '.[mypy]'
+          pip install '.[dev]'
       - name: Mypy type checking
         run: mypy
 
