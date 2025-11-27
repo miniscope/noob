@@ -32,7 +32,7 @@ class SynchronousRunner(TubeRunner):
     def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: ANN001
         self.deinit()
 
-    def init(self) -> Self:
+    def init(self) -> None:
         """
         Start processing data with the tube graph.
         """
@@ -46,8 +46,6 @@ class SynchronousRunner(TubeRunner):
 
         for asset in self.tube.state.assets.values():
             self.inject_context(asset.init)()
-
-        return self
 
     def deinit(self) -> None:
         """Stop all nodes processing"""
@@ -93,18 +91,18 @@ class SynchronousRunner(TubeRunner):
                     scheduler.done(epoch, node_id)
                     continue
                 node = self.tube.nodes[node_id]
-                args, kwargs = self.collect_input(node, epoch, input)
+                maybe_args, maybe_kwargs = self.collect_input(node, epoch, input)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
-                args = [] if args is None else args
-                kwargs = {} if kwargs is None else kwargs
+                args = [] if maybe_args is None else maybe_args
+                kwargs = {} if maybe_kwargs is None else maybe_kwargs
                 value = node.process(*args, **kwargs)
 
                 # take the value from state first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.
                 events = self.store.add(node.signals, value, node_id, epoch)
-                events = scheduler.update(events)
-                self._call_callbacks(events)
+                all_events = scheduler.update(events)
+                self._call_callbacks(all_events)
                 self._logger.debug("Node %s emitted %s in epoch %s", node_id, value, epoch)
 
         return self.collect_return()

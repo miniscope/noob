@@ -50,7 +50,7 @@ class InputCollection(BaseModel):
     INPUT_PATTERN: ClassVar[re.Pattern] = re.compile(r"input\.(?P<key>.*)")
 
     specs: dict[InputScope, dict[PythonIdentifier, InputSpecification]] = Field(
-        default_factory=lambda: defaultdict(dict)
+        default_factory=lambda: defaultdict(dict)  # type: ignore[arg-type]
     )
 
     # store long-lived scope inputs
@@ -96,6 +96,9 @@ class InputCollection(BaseModel):
             if edge.source_node != "input":
                 continue
             try:
+                assert (
+                    edge.source_signal is not None
+                ), "Must specify an input signal (there is no generic 'value' signal for inputs)"
                 args[edge.target_slot] = self.get(edge.source_signal, input)
             except KeyError as e:
                 raise InputMissingError(

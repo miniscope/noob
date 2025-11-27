@@ -88,13 +88,15 @@ class State(BaseModel):
         args = {}
         for edge in edges:
             if edge.source_node == "assets":
+                assert (
+                    edge.source_signal is not None
+                ), ("Must set signal name when depending on an asset "
+                    "(assets have no generic 'value' signal)")
                 asset = self.get(edge.source_signal)
                 obj = None if asset is None else asset.obj
                 args[edge.target_slot] = obj
 
-        args = None if not args or all(val is None for val in args.values()) else args
-
-        return args
+        return None if not args or all(val is None for val in args.values()) else args
 
     def clear(self) -> None:
         """

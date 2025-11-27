@@ -33,7 +33,7 @@ class LogConfig(BaseModel):
     """
     Severity for stream-based logging. If unset, use ``level``
     """
-    dir: Path = _dirs.user_log_dir
+    dir: Path = Path(_dirs.user_log_dir)
     """
     Directory where logs are stored.
     """

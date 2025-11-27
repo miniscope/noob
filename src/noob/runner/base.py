@@ -2,19 +2,17 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass, field
 from functools import partial
 from logging import Logger
-from typing import Any, TypeVar
+from typing import Any
 
 from noob import Tube, init_logger
-from noob.event import Event
+from noob.event import Event, MetaEvent
 from noob.node import Node, Return
 from noob.store import EventStore
 from noob.types import PythonIdentifier, ReturnNodeType, RunnerContext
-
-TInit = TypeVar("TInit", bound=Callable)
 
 
 @dataclass
@@ -31,7 +29,7 @@ class TubeRunner(ABC):
     tube: Tube
     store: EventStore = field(default_factory=EventStore)
 
-    _callbacks: list[Callable[[Event], None]] = field(default_factory=list)
+    _callbacks: list[Callable[[Event | MetaEvent], None]] = field(default_factory=list)
 
     _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
 
@@ -81,7 +79,7 @@ class TubeRunner(ABC):
 
     def collect_input(
         self, node: Node, epoch: int, input: dict | None = None
-    ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None] | None:
+    ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None]:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
 
@@ -90,14 +88,14 @@ class TubeRunner(ABC):
             dict: empty dict if Node is a :class:`.Source`
             None: if no input is available
         """
-        if not node.spec.depends:
+        if not node.spec or not node.spec.depends:
             return None, None
         if input is None:
             input = {}
 
         edges = self.tube.in_edges(node)
 
-        inputs = {}
+        inputs: dict[PythonIdentifier, Any] = {}
 
         state_inputs = self.tube.state.collect(edges)
         inputs |= state_inputs if state_inputs else inputs
@@ -108,7 +106,7 @@ class TubeRunner(ABC):
         input_inputs = self.tube.input_collection.collect(edges, input)
         inputs |= input_inputs if input_inputs else inputs
 
-        args = []
+        args: list[Any] = []
         kwargs = {}
         for k, v in inputs.items():
             if isinstance(k, int | None):
@@ -134,10 +132,10 @@ class TubeRunner(ABC):
         ret_node = ret_nodes[0]
         return ret_node.get(keep=False)
 
-    def add_callback(self, callback: Callable[[Event], None]) -> None:
+    def add_callback(self, callback: Callable[[Event | MetaEvent], None]) -> None:
         self._callbacks.append(callback)
 
-    def _call_callbacks(self, events: list[Event] | None) -> None:
+    def _call_callbacks(self, events: Sequence[Event | MetaEvent] | None) -> None:
         if not events:
             return
         for event in events:
@@ -161,7 +159,7 @@ class TubeRunner(ABC):
     def get_context(self) -> RunnerContext:
         return RunnerContext(runner=self, tube=self.tube)
 
-    def inject_context(self, fn: TInit) -> TInit:
+    def inject_context(self, fn: Callable) -> Callable:
         """Wrap function in a partial with the runner context injected, if requested"""
         sig = inspect.signature(fn)
         ctx_key = [

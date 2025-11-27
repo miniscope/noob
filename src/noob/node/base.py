@@ -1,7 +1,7 @@
 import functools
 import inspect
 from collections.abc import Callable, Generator, Mapping
-from types import GeneratorType, GenericAlias, NoneType, UnionType
+from types import GeneratorType, GenericAlias, UnionType
 from typing import TYPE_CHECKING, Annotated, Any, TypeVar, Union, get_args, get_origin, overload
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -36,7 +36,7 @@ class Slot(BaseModel):
 
 class Signal(BaseModel):
     name: str
-    type_: type | NoneType | UnionType | GenericAlias
+    type_: type | None | UnionType | GenericAlias
 
     # Unable to generate pydantic-core schema for <class 'types.UnionType'>
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -103,7 +103,7 @@ class Edge(BaseModel):
     """
 
     source_node: str
-    source_signal: str | None = None
+    source_signal: str
     target_node: str
     target_slot: str | int | None = None
     """
@@ -142,9 +142,9 @@ class Node(BaseModel):
     When a node is disabled, other nodes that depend on it will not be disabled, 
     but they may never be called since their dependencies will never be satisfied."""
 
-    _signals: list[Signal] = None
-    _slots: dict[str, Slot] = None
-    _gen: GeneratorType | None = None
+    _signals: list[Signal] | None = None
+    _slots: dict[str, Slot] | None = None
+    _gen: Generator | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -159,7 +159,8 @@ class Node(BaseModel):
     @overload
     def init(self, context: RunnerContext) -> None: ...
 
-    def init(self) -> None:
+    # TODO: Support dependency injection in mypy plugin
+    def init(self) -> None:  # type: ignore[misc]
         """
         Start producing, processing, or receiving data.
 
@@ -281,6 +282,7 @@ class Node(BaseModel):
             )
         else:
             # handle arrays of dependencies, positional and kwargs
+            target_slot: int | str
             position_index = 0
             for arrow in self.spec.depends:
                 required = True

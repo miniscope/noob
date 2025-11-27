@@ -90,7 +90,7 @@ class Tube(BaseModel):
 
     state: State = Field(default_factory=State)
 
-    scheduler: Scheduler = None
+    scheduler: Scheduler = None  # type: ignore[assignment]
 
     _enabled_nodes: dict[str, Node] | None = None
 
@@ -196,18 +196,13 @@ class Tube(BaseModel):
         return edges
 
     @classmethod
-    def _init_scheduler(
-        cls, nodes: dict[str, NodeSpecification | Node], edges: list[Edge]
-    ) -> Scheduler:
-        node_specs = {
-            id_: node if isinstance(node, NodeSpecification) else node.spec
-            for id_, node in nodes.items()
-        }
+    def _init_scheduler(cls, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> Scheduler:
+        node_specs = {id_: node for id_, node in nodes.items()}
         return Scheduler.from_specification(node_specs, edges)
 
     @classmethod
     def _init_inputs(cls, spec: TubeSpecification) -> InputCollection:
-        specs = defaultdict(dict)
+        specs: dict[InputScope, dict[PythonIdentifier, InputSpecification]] = defaultdict(dict)
         for input_spec in spec.input.values():
             specs[input_spec.scope][input_spec.id] = input_spec
         return InputCollection(specs=specs)
@@ -256,5 +251,4 @@ class TubeClassicEdition:
 
     def __str__(self) -> str:
         important = resources.files("noob") / "important.txt"
-        important = important.read_text()
-        return important
+        return important.read_text()

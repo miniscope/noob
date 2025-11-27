@@ -1,7 +1,7 @@
 import inspect
 from collections.abc import Callable
 from enum import StrEnum
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, Generic, ParamSpec, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -33,7 +33,7 @@ class Asset(BaseModel):
     scope: AssetScope
     params: dict[str, Any] = Field(default_factory=dict)
 
-    obj: type | None = None
+    obj: Any | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -88,8 +88,8 @@ class Asset(BaseModel):
 T = TypeVar("T")
 
 
-class WrapClassAsset(Asset):
-    cls: type[T]
+class WrapClassAsset(Asset, Generic[T]):
+    cls: type
     obj: T | None = None
 
     def init(self) -> None:
@@ -100,7 +100,7 @@ class WrapClassAsset(Asset):
 
 
 class WrapFuncAsset(Asset):
-    fn: Callable[PWrap, TOutput]
+    fn: Callable
 
     def init(self) -> None:
         self.obj = self.fn(**self.params)

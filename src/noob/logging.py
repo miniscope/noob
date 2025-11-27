@@ -6,7 +6,7 @@ import logging
 import multiprocessing as mp
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from rich.logging import RichHandler
 
@@ -15,7 +15,7 @@ from noob.config import LOG_LEVELS, config
 
 def init_logger(
     name: str,
-    log_dir: Path | None | bool = None,
+    log_dir: Path | None | Literal[False] = None,
     level: LOG_LEVELS | None = None,
     file_level: LOG_LEVELS | None = None,
     log_file_n: int | None = None,
@@ -48,11 +48,11 @@ def init_logger(
     if log_dir is None:
         log_dir = config.logs.dir
     if level is None:
-        level: LOG_LEVELS = (
+        level = (
             config.logs.level_stdout if config.logs.level_stdout is not None else config.logs.level
         )
     if file_level is None:
-        file_level: LOG_LEVELS = (
+        file_level = (
             config.logs.level_file if config.logs.level_file is not None else config.logs.level
         )
     if log_file_n is None:
@@ -81,7 +81,7 @@ def init_logger(
     # if run from a forked process, need to add different handlers to not collide
     if mp.parent_process() is not None:
         handler_name = f"{name}_{mp.current_process().pid}"
-        if not any([h.name == handler_name for h in logger.handlers]):
+        if log_dir is not False and not any([h.name == handler_name for h in logger.handlers]):
             logger.addHandler(
                 _file_handler(
                     name=f"{name}_{mp.current_process().pid}",
@@ -93,7 +93,11 @@ def init_logger(
             )
 
         if not any(
-            [handler_name in h.keywords for h in logger.handlers if isinstance(h, RichHandler)]
+            [
+                handler_name in h.keywords
+                for h in logger.handlers
+                if isinstance(h, RichHandler) and h.keywords is not None
+            ]
         ):
             logger.addHandler(_rich_handler(level, keywords=[handler_name]))
         logger.propagate = False
@@ -104,7 +108,7 @@ def init_logger(
 def _init_root(
     stdout_level: LOG_LEVELS,
     file_level: LOG_LEVELS,
-    log_dir: Path,
+    log_dir: Path | Literal[False],
     log_file_n: int = 5,
     log_file_size: int = 2**22,
 ) -> None:
