@@ -8,7 +8,7 @@ import shutil
 from importlib.metadata import version
 from itertools import chain
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Self, overload
+from typing import Any, ClassVar, Literal, Self, Union, overload
 
 import yaml
 from pydantic import (
@@ -272,7 +272,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         Add before_validator to allow instantiation from id
         """
 
-        def _from_id(value: str | ConfigYAMLMixin) -> ConfigYAMLMixin:
+        def _from_id(value: Union[str, "ConfigYAMLMixin"]) -> "ConfigYAMLMixin":
             if isinstance(value, str):
                 return cls.from_id(value)
             else:
