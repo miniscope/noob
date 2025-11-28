@@ -1,3 +1,0 @@
-logs:
-  level: "DEBUG"
-  dir: tests/__tmp__/log
