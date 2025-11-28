@@ -160,8 +160,6 @@ select = [
     "S608", "S701",
 ]
 ignore = [
-    # needing to annotate `self` is ridiculous
-    "ANN101",
     #"special" methods like `__init__` don't need to be annotated
     "ANN204",
     # any types are semantically valid actually sometimes
