@@ -72,6 +72,7 @@ class Config(BaseSettings):
         nested_model_default_partial_update=True,
         yaml_file="noob_config.yaml",
         pyproject_toml_table_header=("tool", "noob", "config"),
+        validate_default=True,
     )
 
     logs: LogConfig = LogConfig()
