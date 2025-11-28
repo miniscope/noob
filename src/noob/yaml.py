@@ -89,7 +89,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
     model_config = ConfigDict(validate_default=True)
 
     noob_id: ConfigID | None = None
-    noob_model: AbsoluteIdentifier = Field(None, validate_default=True)  # type: ignore
+    noob_model: AbsoluteIdentifier = Field(None, validate_default=True)
     noob_version: str = version("noob")
 
     HEADER_FIELDS: ClassVar[tuple[str, ...]] = ("noob_id", "noob_model", "noob_version")
