@@ -32,6 +32,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Cache deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            .venv
+            __pypackages__
+          key: ${{ hashFiles('pdm.lock', 'pyproject.toml') }}
       - name: Install deps
         run: |
           pip install pdm
