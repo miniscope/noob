@@ -47,7 +47,7 @@ class Gather(Node, Generic[_TInput]):
         """Collect value in a list, emit if `n` is met or `trigger` is present"""
         if trigger is not None and self.n is not None:
             raise ValueError("Cannot use trigger mode while `n` is set")
-        with self._lock:  # type[ignore]
+        with self._lock:
             self._items.append(value)
             if self._should_return(trigger):
                 try:
