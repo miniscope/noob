@@ -101,6 +101,8 @@ class SynchronousRunner(TubeRunner):
                 # take the value from state first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.
                 events = self.store.add(node.signals, value, node_id, epoch)
+                if events is None:
+                    continue
                 all_events = scheduler.update(events)
                 self._call_callbacks(all_events)
                 self._logger.debug("Node %s emitted %s in epoch %s", node_id, value, epoch)
