@@ -44,7 +44,7 @@ class Gather(Node, Generic[_TInput]):
     _items: list[_TInput] = PrivateAttr(default_factory=list)
     _lock: LockType = PrivateAttr(default_factory=Lock)
 
-    def process(self, value: _TInput, trigger: Any | None = None) -> list[_TInput] | None:
+    def process(self, value: _TInput, trigger: Any | None = None) -> list[_TInput] | NoEvent:
         """Collect value in a list, emit if `n` is met or `trigger` is present"""
         if trigger is not None and self.n is not None:
             raise ValueError("Cannot use trigger mode while `n` is set")

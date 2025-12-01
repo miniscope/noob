@@ -137,7 +137,7 @@ class Scheduler(BaseModel):
             )
         return None
 
-    def end_epoch(self, epoch: int = None) -> None:
+    def end_epoch(self, epoch: int | None = None) -> None:
         if epoch is None:
             del self._epochs[list(self._epochs)[-1]]
         else:
