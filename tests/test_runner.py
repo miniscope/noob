@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from noob import SynchronousRunner, Tube
 from noob.node import Return
 
@@ -105,10 +107,15 @@ def test_synch_unready_end_epoch():
     move to the next one (if there is one) if there are no
     more nodes ready in the current epoch. (Specifically,
     for cardinality reducing operations like `class: .Gather`.)
+
     """
 
     tube = Tube.from_specification("testing-gather-n")
     runner = SynchronousRunner(tube)
 
-    for _ in runner.iter(n=25):
-        assert len(runner.tube.scheduler._epochs) == 0
+    n_iters = 5
+    with patch("noob.scheduler.Scheduler.end_epoch") as end_epoch:
+        for _ in runner.iter(n=n_iters):
+            pass
+
+        assert end_epoch.call_count == n_iters * tube.nodes["b"].n
