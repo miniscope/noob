@@ -1,5 +1,6 @@
 from multiprocessing import Lock
-from typing import Any, TypeVar
+from multiprocessing.synchronize import Lock as LockType
+from typing import Any, Generic, TypeVar
 
 from pydantic import PrivateAttr
 
@@ -8,7 +9,7 @@ from noob.node.base import Node
 _TInput = TypeVar("_TInput")
 
 
-class Gather(Node):
+class Gather(Node, Generic[_TInput]):
     """
     Cardinality reduction.
 
@@ -40,7 +41,7 @@ class Gather(Node):
 
     n: int | None = None
     _items: list[_TInput] = PrivateAttr(default_factory=list)
-    _lock: Lock = PrivateAttr(default_factory=Lock)
+    _lock: LockType = PrivateAttr(default_factory=Lock)
 
     def process(self, value: _TInput, trigger: Any | None = None) -> list[_TInput] | None:
         """Collect value in a list, emit if `n` is met or `trigger` is present"""

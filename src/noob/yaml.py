@@ -8,7 +8,7 @@ import shutil
 from importlib.metadata import version
 from itertools import chain
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Self, overload
+from typing import Any, ClassVar, Literal, Self, Union, overload
 
 import yaml
 from pydantic import (
@@ -92,11 +92,12 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
     noob_model: AbsoluteIdentifier = Field(None, validate_default=True)
     noob_version: str = version("noob")
 
-    HEADER_FIELDS: ClassVar[tuple[str]] = ("noob_id", "noob_model", "noob_version")
+    HEADER_FIELDS: ClassVar[tuple[str, ...]] = ("noob_id", "noob_model", "noob_version")
 
     @classmethod
     def from_yaml(cls: type[Self], file_path: str | Path) -> Self:
         """Instantiate this class by passing the contents of a yaml file as kwargs"""
+        file_path = Path(file_path)
         with open(file_path) as file:
             config_data = yaml.safe_load(file)
 
@@ -165,7 +166,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             return source
         elif isinstance(source, str) and valid_config_id(source):
             return cls.from_id(source)
-        else:
+        elif isinstance(source, Path | str):
             from noob.config import config
 
             source = Path(source)
@@ -173,7 +174,10 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
                 if source.exists():
                     # either relative to cwd or absolute
                     return cls.from_yaml(source)
-                elif not source.is_absolute() and (user_source := config / source).exists():
+                elif (
+                    not source.is_absolute()
+                    and (user_source := config.config_dir / source).exists()
+                ):
                     return cls.from_yaml(user_source)
 
         raise ValueError(
@@ -234,7 +238,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
     @classmethod
     def _complete_header(cls: type[Self], data: dict, file_path: str | Path) -> dict:
         """fill in any missing fields in the source file needed for a header"""
-
+        file_path = Path(file_path)
         missing_fields = set(cls.HEADER_FIELDS) - set(data.keys())
         keys = tuple(data.keys())
         out_of_order = len(keys) >= 3 and keys[0:3] != cls.HEADER_FIELDS
@@ -268,7 +272,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         Add before_validator to allow instantiation from id
         """
 
-        def _from_id(value: Any) -> cls:
+        def _from_id(value: Union[str, "ConfigYAMLMixin"]) -> "ConfigYAMLMixin":
             if isinstance(value, str):
                 return cls.from_id(value)
             else:
@@ -332,19 +336,19 @@ def yaml_peek(key: str, path: str | Path, root: bool = True, first: bool = True)
             rf"^\s*(?P<key>{key}):\s*\"*\'*(?P<value>\S.*?)\"*\'*$", flags=re.MULTILINE
         )
 
-    res = None
+    res: re.Match[str] | None = None
     if first:
         with open(path) as yfile:
             for line in yfile:
                 res = pattern.match(line)
                 if res:
                     break
-        if res:
+        if res is not None:
             return res.groupdict()["value"]
     else:
         with open(path) as yfile:
             text = yfile.read()
-        res = [match.groupdict()["value"] for match in pattern.finditer(text)]
-        if res:
-            return res
+        matches = [match.groupdict()["value"] for match in pattern.finditer(text)]
+        if matches:
+            return matches
     raise KeyError(f"Key {key} not found in {path}")

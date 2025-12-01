@@ -1,12 +1,13 @@
+from collections.abc import MutableSequence
 from datetime import UTC, datetime
-from graphlib import _NODE_DONE, TopologicalSorter
+from graphlib import _NODE_DONE, TopologicalSorter  # type: ignore[attr-defined]
 from itertools import count
 from typing import Self
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
-from noob.event import Event, MetaEvent
+from noob.event import Event, MetaEvent, MetaEventType
 from noob.node import Edge, NodeSpecification
 from noob.types import NodeID
 
@@ -38,7 +39,7 @@ class Scheduler(BaseModel):
         if not self.source_nodes:
             graph = self._init_graph(nodes=self.nodes, edges=self.edges)
             self.source_nodes = [
-                id_ for id_, info in graph._node2info.items() if info.npredecessors == 0
+                id_ for id_, info in graph._node2info.items() if info.npredecessors == 0  # type: ignore[attr-defined]
             ]
         return self
 
@@ -78,7 +79,7 @@ class Scheduler(BaseModel):
                 id=uuid4().int,
                 timestamp=datetime.now(),
                 node_id="meta",
-                signal="NodeReady",
+                signal=MetaEventType.NodeReady,
                 epoch=epoch,
                 value=node_id,
             )
@@ -100,9 +101,9 @@ class Scheduler(BaseModel):
 
         """
         graph = self[-1] if epoch is None else self._epochs[epoch]
-        return all(graph._node2info[src].npredecessors == _NODE_DONE for src in self.source_nodes)
+        return all(graph._node2info[src].npredecessors == _NODE_DONE for src in self.source_nodes)  # type: ignore[attr-defined]
 
-    def update(self, events: list[Event]) -> list[Event]:
+    def update(self, events: MutableSequence[Event]) -> MutableSequence[Event]:
         """
         When a set of events are received, update the graphs within the scheduler.
         Currently only has :method:`TopologicalSorter.done` implemented.
@@ -113,7 +114,8 @@ class Scheduler(BaseModel):
 
         epoch_ended = self.done(epoch=events[0]["epoch"], node_id=events[0]["node_id"])
         if epoch_ended:
-            events.append(epoch_ended)
+            # TODO: (mypy) Maybe not use TypedDicts if they can't be covariant
+            events.append(epoch_ended)  # type: ignore
 
         return events
 
@@ -129,7 +131,7 @@ class Scheduler(BaseModel):
                 id=uuid4().int,
                 timestamp=datetime.now(UTC),
                 node_id="meta",
-                signal="EpochEnded",
+                signal=MetaEventType.EpochEnded,
                 epoch=epoch,
                 value=epoch,
             )
@@ -177,7 +179,7 @@ class Scheduler(BaseModel):
             see: https://github.com/miniscope/noob/issues/26,
 
         """
-        sorter = TopologicalSorter()
+        sorter: TopologicalSorter = TopologicalSorter()
         enabled_nodes = [node_id for node_id, node in nodes.items() if node.enabled]
         for node_id in enabled_nodes:
             required_edges = [

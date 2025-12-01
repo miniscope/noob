@@ -35,7 +35,7 @@ class Return(Node):
         """
         try:
             # FIXME: what a nightmare - make all of these derive from the spec
-            if self._args and isinstance(self.spec.depends, str):
+            if self._args and self.spec is not None and isinstance(self.spec.depends, str):
                 return self._args[0]
             elif self._args and self._kwargs:
                 return self._args, self._kwargs
@@ -51,6 +51,8 @@ class Return(Node):
                 self._kwargs = None
 
     def _collect_slots(self) -> dict[str, Slot]:
+        if self.spec is None or not self.spec.depends:
+            raise ValueError("Return nodes must have a specification that defines what they return")
         if isinstance(self.spec.depends, str):
             return {}
         slots = {}

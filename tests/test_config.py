@@ -11,7 +11,7 @@ def test_config(tmp_path):
     """
     Config should be able to make directories and set sensible defaults
     """
-    config = Config(user_dir=tmp_path)
+    config = Config(user_dir=tmp_path, logs={"dir": tmp_path / "log"})
     assert config.user_dir.exists()
     assert config.logs.dir.exists()
 

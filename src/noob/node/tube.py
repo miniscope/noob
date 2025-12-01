@@ -1,5 +1,5 @@
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 
 from noob.exceptions import ExtraInputWarning
 from noob.node.base import Node, Slot
@@ -17,9 +17,9 @@ class TubeNode(Node):
 
     tube: ConfigSource
 
-    _tube: "Tube" = None
-    _tube_spec: "TubeSpecification" = None
-    _runner: "TubeRunner" = None
+    _tube: Union["Tube", None] = None
+    _tube_spec: Union["TubeSpecification", None] = None
+    _runner: Union["TubeRunner", None] = None
 
     @property
     def tube_spec(self) -> "TubeSpecification":
@@ -29,7 +29,8 @@ class TubeNode(Node):
             self._tube_spec = TubeSpecification.from_any(self.tube)
         return self._tube_spec
 
-    def init(self, context: RunnerContext) -> None:
+    # TODO: support dependency injected inits in plugin
+    def init(self, context: RunnerContext) -> None:  # type: ignore[override]
         from noob import SynchronousRunner, Tube
 
         with warnings.catch_warnings(action="ignore", category=ExtraInputWarning):
@@ -40,9 +41,16 @@ class TubeNode(Node):
         self._runner.init()
 
     def deinit(self) -> None:
-        self._runner.deinit()
+        if self._runner is not None:
+            self._runner.deinit()
 
     def process(self, **kwargs: Any) -> Any:
+        if self._runner is None:
+            raise RuntimeError(
+                "TubeNode must be initialized within a Runner "
+                "to receive the outer runner's context. "
+                "It doesn't make sense to run a TubeNode on its own."
+            )
         return self._runner.process(**kwargs)
 
     def _collect_slots(self) -> dict[str, Slot]:

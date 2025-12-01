@@ -42,7 +42,7 @@ class EventStore:
             epoch (int): Epoch count that the signal was emitted in
         """
         if value is None:
-            return
+            return None
         timestamp = datetime.now(UTC)
 
         values = [value] if len(signals) == 1 else value
@@ -103,9 +103,7 @@ class EventStore:
                 value = None if event is None else event["value"]
                 args[edge.target_slot] = value
 
-        args = None if not args or all(val is None for val in args.values()) else args
-
-        return args
+        return None if not args or all(val is None for val in args.values()) else args
 
     def clear(self, epoch: int | None = None) -> None:
         """
