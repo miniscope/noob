@@ -28,6 +28,7 @@ def test_process_callback() -> None:
         == len(runner.store.events)
         == len([node for node in tube.nodes.values() if not isinstance(node, Return)])
     )
+    assert len(cb_events) > 0
 
 
 def test_disabled_node() -> None:
