@@ -1,12 +1,12 @@
 from typing import Annotated, TypeAlias
 
 from annotated_types import Len
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from noob.types import AbsoluteIdentifier, PythonIdentifier
+from noob.types import AbsoluteIdentifier, DependencyIdentifier, PythonIdentifier
 
 _DependsBasic: TypeAlias = Annotated[
-    dict[PythonIdentifier, AbsoluteIdentifier], Len(min_length=1, max_length=1)
+    dict[PythonIdentifier, DependencyIdentifier], Len(min_length=1, max_length=1)
 ]
 """
 Standard dependency declaration, a mapping from a node's `slot` to a `node.signal` pair:
@@ -37,7 +37,7 @@ Examples:
 
 """
 
-DependsType: TypeAlias = list[AbsoluteIdentifier | _DependsBasic] | AbsoluteIdentifier
+DependsType: TypeAlias = list[DependencyIdentifier | _DependsBasic] | DependencyIdentifier
 """
 Either an absolute identifier (which is treated as a positional-only arg)
 or a dict mapping as described in _DependsBasic.
@@ -115,3 +115,21 @@ class NodeSpecification(BaseModel):
     If this flag is False, the node will not be initialized 
     or included in the `:meth:.Tube.graph`.
     """
+
+    @field_validator("depends", mode="after")
+    @classmethod
+    def slots_unique(cls, val: DependsType | None) -> DependsType | None:
+        """
+        Ensure slots are unique in dependency spec: can't map more than one signal to the same slot
+        """
+        if val is None or isinstance(val, str):
+            return val
+        seen = set()
+        for dep in val:
+            if isinstance(dep, str):
+                continue
+            signal = next(iter(dep.keys()))
+            if signal in seen:
+                raise ValueError(f"Duplicate signal in dependencies: {signal}")
+            seen.add(signal)
+        return val
