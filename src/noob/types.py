@@ -58,6 +58,17 @@ def _is_absolute_identifier(val: str) -> str:
     return val
 
 
+def _is_signal_slot(val: str) -> str:
+    """is a {node}.{signal/slot} identifier"""
+    parts = val.split(".")
+    assert len(parts) == 2, "Must be a {node}.{signal} identifier"
+    assert parts[0] != "", "Must specify a node id"
+    assert parts[1] != "", "Must specify a signal"
+    _is_identifier(parts[0])
+    _is_identifier(parts[1])
+    return val
+
+
 def _not_reserved(val: str) -> str:
     assert val not in RESERVED_IDS, f"Cannot used reserved ID {val}"
     return val
@@ -78,6 +89,13 @@ AbsoluteIdentifier: TypeAlias = Annotated[str, AfterValidator(_is_absolute_ident
 OR 
 - a name of a builtin function/type
 """
+DependencyIdentifier: TypeAlias = Annotated[str, AfterValidator(_is_signal_slot)]
+"""
+A {node_id}.{signal} identifier. 
+
+The `node_id` part must be a valid {class}`.PythonIdentifier` .
+"""
+
 
 ConfigID: TypeAlias = Annotated[str, Field(pattern=CONFIG_ID_PATTERN)]
 """

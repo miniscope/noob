@@ -53,9 +53,52 @@ class TubeSpecification(ConfigYAMLMixin):
         """
         assert isinstance(value, dict)
         for id_, node in value.items():
-            if "id" not in node:
-                node["id"] = id_
+            if isinstance(node, dict):
+                if "id" not in node:
+                    node["id"] = id_
+            else:
+                assert isinstance(node, AssetSpecification | InputSpecification | NodeSpecification)
+                assert node.id == id_, (
+                    f"Mismatch between id used as key in node/input/asset dict ({id_}) "
+                    f"and id on already-instantiated object ({node.id})"
+                )
+
         return value
+
+    @model_validator(mode="after")
+    def dependencies_exist(self) -> Self:
+        """
+        Nodes referred to in dependencies should exist, they must be
+        - other nodes in the spec
+        - input (and the input signal must exist)
+        - assets (and the asset must exist)
+
+        Note: we *do not* check the validity of signals here,
+        as that would require us to import/inspect the code object referred to by the node,
+        and we want specifications to be loadable even if the referred code is not
+        present and installed in the environment.
+        """
+        for node_id, node in self.nodes.items():
+            if node.depends is None:
+                continue
+            deps = [node.depends] if isinstance(node.depends, str) else node.depends
+            for dep in deps:
+                dep_str = next(iter(dep.values())) if isinstance(dep, dict) else dep
+                # this is safe, NodeSpec already validates the string is a node_id.signal str
+                dep_node_id, signal = dep_str.split(".")
+                if dep_node_id == "assets":
+                    assert (
+                        signal in self.assets
+                    ), f"Node {node_id} depends on asset {signal}, which does not exist"
+                elif dep_node_id == "input":
+                    assert (
+                        signal in self.input
+                    ), f"Node {node_id} depends on input {signal}, which does not exist"
+                else:
+                    assert (
+                        dep_node_id in self.nodes
+                    ), f"Node {node_id} depends on node {dep_node_id}, which does not exist"
+        return self
 
 
 class Tube(BaseModel):
