@@ -61,6 +61,7 @@ tests = [
     "numpy>=2.3.2",
     "xarray>=2025.7.1",
     "fastapi[standard]>=0.116.1",
+    "pytest-mypy-plugins>=3.2.0",
 ]
 docs = [
     "sphinx>=8.2.3",
@@ -112,6 +113,9 @@ mypy = "mypy"
 addopts = [
     "--cov=noob",
     "--cov-append",
+    "--mypy-same-process",
+    "--mypy-pyproject-toml-file=tests/test_mypy/pyproject.toml"
+
 ]
 markers = []
 
@@ -196,4 +200,4 @@ show_column_numbers = true
 show_error_code_links = true
 pretty = true
 color_output = true
-plugins = ['pydantic.mypy']
+plugins = ['pydantic.mypy', 'noob.typing.mypy']

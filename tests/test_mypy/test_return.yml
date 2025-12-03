@@ -1,0 +1,10 @@
+- case: return_scalar
+  main: |
+    from noob import Tube, SynchronousRunner
+    
+    tube = Tube.from_specification("mypy-return-scalar")
+    runner = SynchronousRunner(tube)
+    
+    reveal_type(runner.process)
+  out: |
+    idk lol

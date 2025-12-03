@@ -1,0 +1,8 @@
+[tool.mypy]
+packages = ["noob", "tests"]
+mypy_path = "$MYPY_CONFIG_FILE_DIR/../"
+warn_redundant_casts = true
+warn_unused_ignores = true
+pretty = true
+show_error_codes = true
+plugins = ['noob.typing.mypy']

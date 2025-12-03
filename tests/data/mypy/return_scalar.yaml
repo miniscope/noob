@@ -1,0 +1,9 @@
+noob_id: mypy-return-scalar
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+nodes:
+  a:
+    type: noob.testing.count_source
+  b:
+    type: return
+    depends: a.index
