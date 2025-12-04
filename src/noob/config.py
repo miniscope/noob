@@ -21,6 +21,8 @@ class LogConfig(BaseModel):
     Configuration for logging
     """
 
+    model_config = SettingsConfigDict(validate_default=True)
+
     level: LOG_LEVELS = "INFO"
     """
     Severity of log messages to process.
