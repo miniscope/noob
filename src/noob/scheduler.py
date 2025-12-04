@@ -65,7 +65,9 @@ class Scheduler(BaseModel):
         if not self.source_nodes:
             graph = self._init_graph(nodes=self.nodes, edges=self.edges)
             self.source_nodes = [
-                id_ for id_, info in graph._node2info.items() if info.npredecessors == 0  # type: ignore[attr-defined]
+                id_
+                for id_, info in graph._node2info.items()  # type: ignore[attr-defined]
+                if info.npredecessors == 0 and id_ not in ("input", "assets")
             ]
         return self
 
@@ -75,7 +77,14 @@ class Scheduler(BaseModel):
 
         """
         with self._ready_condition:
-            this_epoch = next(self._clock) if epoch is None else epoch
+            if epoch:
+
+                this_epoch = epoch
+                # ensure that the next iteration of the clock will return the next number
+                # if we create epochs out of order
+                self._clock = count(max([this_epoch, *self._epochs.keys(), *self._epoch_log]) + 1)
+            else:
+                this_epoch = next(self._clock)
             if this_epoch in self._epochs:
                 raise ValueError(f"Epoch {this_epoch} is already scheduled")
             graph = self._init_graph(nodes=self.nodes, edges=self.edges)
@@ -166,7 +175,7 @@ class Scheduler(BaseModel):
 
         graph = self[-1] if epoch is None else self._epochs[epoch]
         return all(
-            graph._node2info[src].npredecessors == _NODE_DONE or src in graph._ready_nodes  # type: ignore[attr-defined]
+            graph._node2info[src].npredecessors == _NODE_DONE  # type: ignore[attr-defined]
             for src in self.source_nodes
         )
 
@@ -380,9 +389,7 @@ class Scheduler(BaseModel):
             required_edges = [
                 e.source_node
                 for e in edges
-                if e.target_node == node_id
-                # and e.source_node in enabled_nodes
-                and e.target_node in enabled_nodes
+                if e.target_node == node_id and e.target_node in enabled_nodes
             ]
             sorter.add(node_id, *required_edges)
         return sorter

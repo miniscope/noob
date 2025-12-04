@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from threading import Event as ThreadEvent
 from typing import Any
 
-from noob.exceptions import AlreadyRunningError
 from noob.input import InputScope
 from noob.node import Return
 from noob.runner.base import TubeRunner
@@ -28,7 +27,8 @@ class SynchronousRunner(TubeRunner):
         """
         # TODO: lock for re-entry
         if self._running.is_set():
-            raise AlreadyRunningError("Tube is already running!")
+            # fine!
+            return
 
         self._running.set()
         for node in self.tube.enabled_nodes.values():
@@ -77,11 +77,15 @@ class SynchronousRunner(TubeRunner):
             for node_info in ready:
                 node_id, epoch = node_info["value"], node_info["epoch"]
 
-                if node_id == "assets":
+                if node_id in ("assets", "input"):
                     # graph autogenerates "assets" node if something depends on it
                     scheduler.done(epoch, node_id)
                     continue
                 node = self.tube.nodes[node_id]
+                if not node.enabled:
+                    # nodes can be in the graph while disabled if something else depends on them
+                    # FIXME when we stop using the builtin graphlib
+                    continue
                 maybe_args, maybe_kwargs = self.collect_input(node, epoch, input)
 
                 # need to eventually distinguish "still waiting" vs "there is none"

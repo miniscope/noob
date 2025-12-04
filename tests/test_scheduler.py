@@ -13,17 +13,20 @@ def test_epoch_increment():
     """
     Must be able to increment epoch on a Scheduler, which generates a graph
     each time.
-
     """
     tube = Tube.from_specification("testing-basic")
     scheduler = tube.scheduler
 
-    with pytest.raises(KeyError):
-        assert scheduler[0]
+    # accessing makes the epoch
+    assert isinstance(scheduler[0], TopologicalSorter)
 
     for i in range(5):
-        scheduler.add_epoch()
+        assert scheduler.add_epoch() == i + 1
         assert isinstance(scheduler[i], TopologicalSorter)
+
+    # if we create an epoch out of order, the next call without epoch specified increments
+    assert scheduler.add_epoch(10) == 10
+    assert scheduler.add_epoch() == 11
 
 
 def test_tube_increments_epoch(no_input_tubes):

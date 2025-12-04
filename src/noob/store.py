@@ -41,6 +41,16 @@ class EventStore:
 
     _event_condition: Condition = field(default_factory=Condition)
 
+    @property
+    def flat_events(self) -> list[Event]:
+        """Flattened list of events in the store"""
+        events = []
+        for epoch_evts in self.events.values():
+            for node_evts in epoch_evts.values():
+                for signal_evts in node_evts.values():
+                    events.extend(signal_evts)
+        return events
+
     def add(self, event: Event) -> Event:
         """
         Add an existing event to the store, returning it.
