@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from itertools import count
 from time import time
 from types import FrameType
-from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from noob.network.loop import EventloopMixin
 
@@ -68,6 +68,7 @@ from noob.types import NodeID, ReturnNodeType
 
 if TYPE_CHECKING:
     pass
+
 
 class CommandNode(EventloopMixin):
     """
@@ -211,8 +212,6 @@ class CommandNode(EventloopMixin):
             self.on_identify(msg)
         else:
             raise NotImplementedError(f"Message type {msg.type_} is unsupported")
-
-
 
     def on_sub(self, msg: list[bytes]) -> None:
         msg = Message.from_bytes(msg)
@@ -493,7 +492,6 @@ class NodeRunner(EventloopMixin):
             self.store.add(event)
 
         self.scheduler.update(events)
-
 
     def on_process(self, msg: ProcessMsg) -> None:
         """

@@ -8,11 +8,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from logging import Logger
-from typing import Any, Self, TypeVar
+from typing import Any, Self
 
 from noob import Tube, init_logger
 from noob.event import Event, MetaEvent
-from noob.node import Node, Return
+from noob.node import Node
 from noob.store import EventStore
 from noob.types import PythonIdentifier, ReturnNodeType, RunnerContext
 

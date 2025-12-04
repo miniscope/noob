@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Event as ThreadEvent
-from typing import Any, Self
+from typing import Any
 
 from noob.exceptions import AlreadyRunningError
 from noob.input import InputScope

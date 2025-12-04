@@ -9,7 +9,6 @@ from itertools import count
 from threading import Condition
 from typing import Any, TypeAlias
 
-from noob.const import RESERVED_IDS
 from noob.event import Event, NoEvent
 from noob.node import Edge
 from noob.node.base import Signal
@@ -187,7 +186,6 @@ class EventStore:
                     continue
 
             return events if events else None
-
 
     def await_events(self, edges: list[Edge], epoch: int) -> list[Event]:
         """
