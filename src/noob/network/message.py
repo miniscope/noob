@@ -1,10 +1,11 @@
 import base64
 import json
 import pickle
+import sys
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated as A
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -18,6 +19,11 @@ from pydantic import (
 )
 
 from noob.event import Event
+
+if sys.version_info < (3, 12):
+    from typing_extensions import TypedDict
+else:
+    from typing import TypedDict
 
 
 class MessageType(StrEnum):
