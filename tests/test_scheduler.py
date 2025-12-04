@@ -205,4 +205,10 @@ def test_metaevents():
     event = queue.get_nowait()
     assert event["node_id"] == "meta"
     assert len(runner.store.events) > 0
-    assert all(event["node_id"] != "meta" for event in runner.store.events)
+    assert all(event["node_id"] != "meta" for event in runner.store.flat_events)
+
+
+@pytest.mark.xfail(raises=NotImplementedError)
+def test_noevent_ends_epoch():
+    """If a node in the middle of a tube emits a noevent, the epoch should no longer be active"""
+    raise NotImplementedError("Write this test!")

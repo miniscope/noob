@@ -315,9 +315,11 @@ class NodeRunner(EventloopMixin):
                 )
                 value = runner._node.process(*args, **kwargs)
                 events = runner.store.add_value(runner._node.signals, value, runner._node.id, epoch)
+
+                runner.scheduler.add_epoch()
+
                 runner.update_graph(events)
                 runner.publish_events(events)
-                runner.scheduler.add_epoch()
 
         except KeyboardInterrupt:
             runner.logger.debug("Got keyboard interrupt, quitting")
@@ -362,10 +364,6 @@ class NodeRunner(EventloopMixin):
     def deinit(self) -> None:
         self.logger.debug("Deinitializing")
         self._node.deinit()
-        # TODO: apparently the zmqstreams want to be closed manually,
-        # but this causes deinit to hang. resolve the closing order
-
-        self.context.destroy()
         self.stop_loop()
         self.logger.debug("Deinitialization finished")
 
@@ -515,7 +513,7 @@ class ZMQRunner(TubeRunner):
 
     node_procs: dict[NodeID, mp.Process] = field(default_factory=dict)
     command: CommandNode | None = None
-    quit_timeout: float = 5
+    quit_timeout: float = 10
     """time in seconds to wait after calling deinit to wait before killing runner processes"""
     store: EventStore = field(default_factory=EventStore)
 
@@ -579,6 +577,7 @@ class ZMQRunner(TubeRunner):
                 f"NodeRunner {proc.name} was still alive after timeout expired, killing it"
             )
             proc.kill()
+            proc.close()
 
     def process(self, **kwargs: Any) -> ReturnNodeType:
         if not self.running:
@@ -614,6 +613,8 @@ class ZMQRunner(TubeRunner):
             return None
         else:
             events = self.store.collect(self._return_node.edges, epoch)
+            if events is None:
+                return None
             args, kwargs = self.store.split_args_kwargs(events)
             self._return_node.process(*args, **kwargs)
             return self._return_node.get(keep=False)

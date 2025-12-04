@@ -9,6 +9,7 @@ from itertools import count
 from threading import Condition
 from typing import Any, TypeAlias
 
+from noob.const import META_SIGNAL
 from noob.event import Event, NoEvent
 from noob.node import Edge
 from noob.node.base import Signal
@@ -81,12 +82,12 @@ class EventStore:
             node_id (str): ID of the node that emitted the events
             epoch (int): Epoch count that the signal was emitted in
         """
+
+        timestamp = datetime.now(UTC)
         if isinstance(value, NoEvent):
-            return None
+            signals = [Signal(name=META_SIGNAL, type_=NoEvent)]
 
         with self._event_condition:
-            timestamp = datetime.now(UTC)
-
             values = [value] if len(signals) == 1 else value
 
             new_events = []

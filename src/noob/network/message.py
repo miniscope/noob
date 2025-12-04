@@ -18,7 +18,8 @@ from pydantic import (
     TypeAdapter,
 )
 
-from noob.event import Event
+from noob.const import META_SIGNAL
+from noob.event import Event, NoEvent
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
@@ -93,6 +94,9 @@ class StopMsg(Message):
 
 
 def _to_json(val: Event) -> str:
+    if val["signal"] == META_SIGNAL and isinstance(val["value"], NoEvent):
+        val["value"] = "NOEVENT"
+
     try:
         return json.dumps(val)
     except TypeError:
@@ -103,9 +107,12 @@ def _to_json(val: Event) -> str:
 def _from_json(val: Any) -> Event:
     if isinstance(val, str):
         if val.startswith("pck__"):
-            return pickle.loads(base64.b64decode(val[5:]))
+            evt = pickle.loads(base64.b64decode(val[5:]))
         else:
-            return Event(**json.loads(val))
+            evt = Event(**json.loads(val))
+        if evt["signal"] == META_SIGNAL and evt["value"] == "NOEVENT":
+            evt["value"] = NoEvent()
+        return evt
     else:
         return val
 

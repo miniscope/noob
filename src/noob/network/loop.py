@@ -49,7 +49,7 @@ class EventloopMixin:
                         self.logger.debug("Eventloop already started, quitting")
                     break
             if hasattr(self, "logger"):
-                self.logger.debug("Stopping eventloop")
+                self.logger.debug("Eventloop stopped")
             self._thread = None
 
         self._thread = threading.Thread(target=_run)
@@ -63,4 +63,4 @@ class EventloopMixin:
         if self._thread is None:
             return
         self._quitting.set()
-        self.loop.stop()
+        self.loop.add_callback(self.loop.stop)

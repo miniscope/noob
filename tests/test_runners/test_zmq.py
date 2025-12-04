@@ -37,5 +37,5 @@ def test_message_roundtrip():
         ),
     )
     as_bytes = msg.to_bytes()
-    recreated = IdentifyMsg.from_bytes(as_bytes)
+    recreated = IdentifyMsg.from_bytes([as_bytes])
     assert msg == recreated
