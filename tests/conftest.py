@@ -1,4 +1,5 @@
 import argparse
+import platform
 from pathlib import Path
 
 import pytest
@@ -19,3 +20,12 @@ def patch_config_source(monkeypatch_session: MonkeyPatch) -> None:
         return [CONFIG_DIR, PIPELINE_DIR, *current_sources]
 
     monkeypatch_session.setattr(ConfigYAMLMixin, "config_sources", classmethod(_config_sources))
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    # While zmq runner uses IPC, can't run on windows
+    if platform.system() == "Windows":
+        skip_zmq = pytest.mark.skip(reason="IPC not supported on windows")
+        for item in items:
+            if item.get_closest_marker("zmq_runner"):
+                item.add_marker(skip_zmq)
