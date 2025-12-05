@@ -67,30 +67,35 @@ class AnnounceValue(TypedDict):
 
 class AnnounceMsg(Message):
     """Command node 'announces' identities of other peers and the events they emit"""
+
     type_: Literal[MessageType.announce] = Field(MessageType.announce, alias="type")
     value: AnnounceValue
 
 
 class IdentifyMsg(Message):
     """A node sends its configuration to the command node on initialization"""
+
     type_: Literal[MessageType.identify] = Field(MessageType.identify, alias="type")
     value: IdentifyValue
 
 
 class ProcessMsg(Message):
     """Process a single iteration of the graph"""
+
     type_: Literal[MessageType.process] = Field(MessageType.process, alias="type")
     value: None = None
 
 
 class StartMsg(Message):
     """Start free running nodes"""
+
     type_: Literal[MessageType.start] = Field(MessageType.start, alias="type")
     value: None = None
 
 
 class StopMsg(Message):
     """Stop processing"""
+
     type_: Literal[MessageType.stop] = Field(MessageType.stop, alias="type")
     value: None = None
 

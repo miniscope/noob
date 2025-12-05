@@ -2,7 +2,6 @@ import logging
 from collections import deque
 from collections.abc import MutableSequence
 from datetime import UTC, datetime
-from enum import StrEnum
 from graphlib import _NODE_DONE, _NODE_OUT, TopologicalSorter  # type: ignore[attr-defined]
 from itertools import count
 from threading import Condition
@@ -17,25 +16,10 @@ from noob.node import Edge, NodeSpecification
 from noob.types import NodeID
 
 
-class SchedulerMode(StrEnum):
-    sync = "sync"
-    """
-    All nodes from a single epoch are run before yielding nodes from a new epoch.
-    The calling runner is expected to advance the epoch with add_epoch
-    """
-    parallel = "parallel"
-    """
-    Nodes are yielded as soon as they can be from multiple epochs
-    Epoch is advanced by "source" nodes (without any dependencies)
-    or by calling `process` when there is tube-scoped input. 
-    """
-
-
 class Scheduler(BaseModel):
     nodes: dict[str, NodeSpecification]
     edges: list[Edge]
     source_nodes: list[NodeID] = Field(default_factory=list)
-    mode: SchedulerMode = SchedulerMode.sync
     logger: logging.Logger = Field(default_factory=lambda: init_logger("noob.scheduler"))
 
     _clock: count = PrivateAttr(default_factory=count)
@@ -75,23 +59,21 @@ class Scheduler(BaseModel):
     def add_epoch(self, epoch: int | None = None) -> int:
         """
         Add another epoch with a prepared graph to the scheduler.
-
         """
-        # if mp.parent_process() is None:
-        #     breakpoint()
         with self._ready_condition:
             if epoch:
-
                 this_epoch = epoch
                 # ensure that the next iteration of the clock will return the next number
                 # if we create epochs out of order
                 self._clock = count(max([this_epoch, *self._epochs.keys(), *self._epoch_log]) + 1)
             else:
                 this_epoch = next(self._clock)
+
             if this_epoch in self._epochs:
                 raise ValueError(f"Epoch {this_epoch} is already scheduled")
             elif this_epoch in self._epoch_log:
                 raise ValueError(f"Epoch {this_epoch} has already been completed!")
+
             graph = self._init_graph(nodes=self.nodes, edges=self.edges)
             graph.prepare()
             self._epochs[this_epoch] = graph
@@ -124,8 +106,6 @@ class Scheduler(BaseModel):
         graphs = self._epochs.items() if epoch is None else [(epoch, self._epochs[epoch])]
 
         with self._ready_condition:
-            # if epoch is None and self.mode == SchedulerMode.parallel and self.sources_finished():
-            #     self.add_epoch()
             ready_nodes = [
                 MetaEvent(
                     id=uuid4().int,
@@ -138,8 +118,6 @@ class Scheduler(BaseModel):
                 for epoch, graph in graphs
                 for node_id in graph.get_ready()
             ]
-            if epoch is None and self.mode == SchedulerMode.parallel:
-                ready_nodes += self._get_ready_sources()
 
         return ready_nodes
 
@@ -157,12 +135,9 @@ class Scheduler(BaseModel):
         # if we've already run this, the node is ready - don't create another epoch
         if epoch in self._epoch_log:
             return True
+
         graphs = self._epochs.items() if epoch is None else [(epoch, self[epoch])]
-        self.logger.debug(
-            f"node {node} epoch ready nodes {[(e, graph._ready_nodes) for e, graph in graphs]}"
-        )
         is_ready = any(node_id == node for epoch, graph in graphs for node_id in graph._ready_nodes)
-        self.logger.debug(f"node {node} is ready {is_ready}")
         return is_ready
 
     def __getitem__(self, epoch: int) -> TopologicalSorter:
@@ -184,7 +159,7 @@ class Scheduler(BaseModel):
 
         graph = self[-1] if epoch is None else self._epochs[epoch]
         return all(
-            graph._node2info[src].npredecessors != _NODE_OUT
+            graph._node2info[src].npredecessors != _NODE_OUT  # type: ignore[attr-defined]
             and src not in graph._ready_nodes  # type: ignore[attr-defined]
             for src in self.source_nodes
         )
@@ -199,22 +174,17 @@ class Scheduler(BaseModel):
             return events
         end_events = []
         with self._ready_condition, self._epoch_condition:
-            is_done = set(
-                (e["epoch"], e["node_id"]) for e in events if not isinstance(e["value"], NoEvent)
-            )
-            self.logger.debug("is done %s", is_done)
-            for epoch, node_id in is_done:
-                epoch_ended = self.done(epoch=epoch, node_id=node_id)
-                self.logger.debug("marked %s done", node_id)
-                if epoch_ended:
-                    end_events.append(epoch_ended)
+            marked_done = set()
+            for e in events:
+                if (done_marker := (e["epoch"], e["node_id"])) in marked_done:
+                    continue
+                else:
+                    marked_done.add(done_marker)
+                if isinstance(e["value"], NoEvent):
+                    epoch_ended = self.cancel(epoch=e["epoch"], node_id=e["node_id"])
+                else:
+                    epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"])
 
-            # increment the _nfinished count if we got noevents
-            noevented = set(
-                (e["epoch"], e["node_id"]) for e in events if isinstance(e["value"], NoEvent)
-            )
-            for epoch, node_id in noevented:
-                epoch_ended = self.cancel(epoch=epoch, node_id=node_id)
                 if epoch_ended:
                     end_events.append(epoch_ended)
 
@@ -233,43 +203,31 @@ class Scheduler(BaseModel):
         with self._ready_condition, self._epoch_condition:
             if epoch in self._epoch_log:
                 self.logger.debug(
-                    f"Marking node {node_id} as done in epoch {epoch}, "
-                    f"but epoch was already completed. ignoring"
+                    "Marking node %s as done in epoch %s, "
+                    "but epoch was already completed. ignoring",
+                    node_id,
+                    epoch,
                 )
                 return
 
             try:
-                self.logger.debug("marking done")
                 self[epoch].done(node_id)
-                self.logger.debug("marked done")
             except ValueError as e:
                 self.logger.debug("error marking done %s", e)
-                # in parallel mode, we don't "get" the preceding ready nodes
+                # in parallel mode, we don't `get_ready` the preceding ready nodes
                 # so we have to manually mark them as "out"
-                if self.mode != SchedulerMode.parallel:
+                # FIXME: so ugly - need to make our own topo sorter
+                if node_id not in self[epoch]._node2info:  # type: ignore[attr-defined]
                     raise e
-                if node_id not in self[epoch]._node2info:
-                    raise e
-                self[epoch]._node2info[node_id].npredecessors = _NODE_OUT
-                self[epoch]._nfinished += 1
-                if node_id in self[epoch]._ready_nodes:
-                    self[epoch]._ready_nodes.remove(node_id)
+                self[epoch]._node2info[node_id].npredecessors = _NODE_OUT  # type: ignore[attr-defined]
+                self[epoch]._nfinished += 1  # type: ignore[attr-defined]
+                if node_id in self[epoch]._ready_nodes:  # type: ignore[attr-defined]
+                    self[epoch]._ready_nodes.remove(node_id)  # type: ignore[attr-defined]
                 self[epoch].done(node_id)
-            self.logger.debug("notifying")
+
             self._ready_condition.notify_all()
-            self.logger.debug("notified")
             if not self[epoch].is_active():
-                self.logger.debug("ending epoch %s", epoch)
-                self.end_epoch(epoch)
-                if self.mode == SchedulerMode.sync:
-                    return MetaEvent(
-                        id=uuid4().int,
-                        timestamp=datetime.now(UTC),
-                        node_id="meta",
-                        signal=MetaEventType.EpochEnded,
-                        epoch=epoch,
-                        value=epoch,
-                    )
+                return self.end_epoch(epoch)
         return None
 
     def cancel(self, epoch: int, node_id: str) -> MetaEvent | None:
@@ -277,23 +235,13 @@ class Scheduler(BaseModel):
         Mark a node as completed without making its dependent nodes ready
         """
         with self._ready_condition, self._epoch_condition:
-            self[epoch]._node2info[node_id].npredecessors = _NODE_DONE
-            self[epoch]._nfinished += 1
-            if node_id in self[epoch]._ready_nodes:
-                self[epoch]._ready_nodes.remove(node_id)
+            self[epoch]._node2info[node_id].npredecessors = _NODE_DONE  # type: ignore[attr-defined]
+            self[epoch]._nfinished += 1  # type: ignore[attr-defined]
+            if node_id in self[epoch]._ready_nodes:  # type: ignore[attr-defined]
+                self[epoch]._ready_nodes.remove(node_id)  # type: ignore[attr-defined]
             self._ready_condition.notify_all()
             if not self[epoch].is_active():
-                self.logger.debug("ending epoch %s", epoch)
-                self.end_epoch(epoch)
-                if self.mode == SchedulerMode.sync:
-                    return MetaEvent(
-                        id=uuid4().int,
-                        timestamp=datetime.now(UTC),
-                        node_id="meta",
-                        signal=MetaEventType.EpochEnded,
-                        epoch=epoch,
-                        value=epoch,
-                    )
+                return self.end_epoch(epoch)
 
     def await_node(self, node_id: NodeID, epoch: int | None = None) -> MetaEvent:
         """
@@ -311,23 +259,16 @@ class Scheduler(BaseModel):
             if not self.node_is_ready(node_id, epoch):
                 self._ready_condition.wait_for(lambda: self.node_is_ready(node_id, epoch))
 
-            # # FIXME: instead of modifying the scheduler with a mode,
-            # # let's move this into the node runner
-            # if node_id in self.source_nodes and self.mode == SchedulerMode.parallel:
-            #     self.add_epoch()
-
             # be FIFO-like and get the earliest epoch the node is ready in
-            self.logger.debug(f"n epochs {len(self._epochs)}")
             if epoch is None:
                 for ep in self._epochs:
                     if self.node_is_ready(node_id, ep):
-                        self.logger.debug(f"NODE IS READY IN EPOCH {ep}")
                         epoch = ep
 
             # do a little graphlib surgery to mark just one event as done.
             # threadsafe because we are holding the lock that protects graph mutation
-            self._epochs[epoch]._node2info[node_id].npredecessors = _NODE_OUT
-            self._epochs[epoch]._ready_nodes.remove(node_id)
+            self._epochs[epoch]._node2info[node_id].npredecessors = _NODE_OUT  # type: ignore[attr-defined]
+            self._epochs[epoch]._ready_nodes.remove(node_id)  # type: ignore[attr-defined]
 
         return MetaEvent(
             id=uuid4().int,
@@ -366,20 +307,13 @@ class Scheduler(BaseModel):
         Check if the epoch has been completed.
         """
         with self._epoch_condition:
-            self.logger.debug("epoch %s in epochs %s", epoch, epoch in self._epochs)
-            if epoch in self._epochs:
-                self.logger.debug(
-                    "epoch %s present and is active %s", epoch, self._epochs[epoch].is_active()
-                )
             previously_completed = (
                 len(self._epoch_log) > 0 and epoch not in self._epochs and epoch in self._epoch_log
             )
-            self.logger.debug("epoch %s previously completed %s", epoch, previously_completed)
             active_completed = epoch in self._epochs and not self._epochs[epoch].is_active()
-            self.logger.debug("epoch %s active completed %s", epoch, active_completed)
             return previously_completed or active_completed
 
-    def end_epoch(self, epoch: int | None = None) -> None:
+    def end_epoch(self, epoch: int | None = None) -> MetaEvent | None:
         if epoch is None:
             if len(self._epochs) == 0:
                 return
@@ -389,6 +323,15 @@ class Scheduler(BaseModel):
             self._epoch_condition.notify_all()
             self._epoch_log.append(epoch)
             del self._epochs[epoch]
+
+        return MetaEvent(
+            id=uuid4().int,
+            timestamp=datetime.now(UTC),
+            node_id="meta",
+            signal=MetaEventType.EpochEnded,
+            epoch=epoch,
+            value=epoch,
+        )
 
     def enable_node(self, node_id: str) -> None:
         """

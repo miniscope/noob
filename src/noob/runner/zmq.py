@@ -62,7 +62,7 @@ from noob.network.message import (
 )
 from noob.node import Node, NodeSpecification, Return
 from noob.runner.base import TubeRunner
-from noob.scheduler import Scheduler, SchedulerMode
+from noob.scheduler import Scheduler
 from noob.store import EventStore
 from noob.types import NodeID, ReturnNodeType
 
@@ -394,9 +394,7 @@ class NodeRunner(EventloopMixin):
     def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
         self._node.init()
-        self.scheduler = Scheduler(
-            nodes={self.spec.id: self.spec}, edges=self._node.edges, mode=SchedulerMode.parallel
-        )
+        self.scheduler = Scheduler(nodes={self.spec.id: self.spec}, edges=self._node.edges)
         self.scheduler.add_epoch()
 
     def _init_sockets(self) -> None:
@@ -537,7 +535,6 @@ class ZMQRunner(TubeRunner):
             return
         with self._init_lock:
             self._logger.debug("Initializing ZMQ runner")
-            self.tube.scheduler.mode = SchedulerMode.parallel
             self.command = CommandNode(runner_id=self.runner_id)
             self.command.add_callback("inbox", self.on_event)
             self.command.start()
