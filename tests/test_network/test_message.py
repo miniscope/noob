@@ -1,6 +1,8 @@
 import json
 from datetime import UTC, datetime
 
+import pytest
+
 from noob.event import Event
 from noob.network.message import EventMsg
 
@@ -65,3 +67,9 @@ def test_pickleable_event():
     z = EventMsg.model_validate_json(dumped)
     assert msg == z
     assert isinstance(z.value[0]["value"], PickleClass)
+
+
+@pytest.mark.xfail(raises=NotImplementedError)
+def test_roundtrip_noevent():
+    """NoEvents should roundtrip to and from a string"""
+    raise NotImplementedError("Implement this test!")

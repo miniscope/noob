@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
+from noob.const import META_SIGNAL
 from noob.event import Event, MetaEvent, MetaEventType, NoEvent
 from noob.logging import init_logger
 from noob.node import Edge, NodeSpecification
@@ -176,11 +177,16 @@ class Scheduler(BaseModel):
         with self._ready_condition, self._epoch_condition:
             marked_done = set()
             for e in events:
-                if (done_marker := (e["epoch"], e["node_id"])) in marked_done:
+                if (done_marker := (e["epoch"], e["node_id"])) in marked_done or e[
+                    "node_id"
+                ] == "meta":
                     continue
                 else:
                     marked_done.add(done_marker)
-                if isinstance(e["value"], NoEvent):
+
+                if isinstance(e["value"], NoEvent) or (
+                    e["signal"] == META_SIGNAL and e["value"] == "NOEVENT"
+                ):
                     epoch_ended = self.cancel(epoch=e["epoch"], node_id=e["node_id"])
                 else:
                     epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"])
@@ -213,7 +219,6 @@ class Scheduler(BaseModel):
             try:
                 self[epoch].done(node_id)
             except ValueError as e:
-                self.logger.debug("error marking done %s", e)
                 # in parallel mode, we don't `get_ready` the preceding ready nodes
                 # so we have to manually mark them as "out"
                 # FIXME: so ugly - need to make our own topo sorter

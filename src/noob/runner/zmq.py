@@ -322,8 +322,11 @@ class NodeRunner(EventloopMixin):
                 events = runner.store.add_value(runner._node.signals, value, runner._node.id, epoch)
                 runner.scheduler.add_epoch()
 
-                runner.update_graph(events)
-                runner.publish_events(events)
+                # node runners should not report epoch endings
+                events = [e for e in events if e["node_id"] != "meta"]
+                if events:
+                    runner.update_graph(events)
+                    runner.publish_events(events)
 
         except KeyboardInterrupt:
             runner.logger.debug("Got keyboard interrupt, quitting")
