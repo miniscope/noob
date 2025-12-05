@@ -13,10 +13,11 @@ from pydantic import (
     ConfigDict,
     Discriminator,
     Field,
-    PlainSerializer,
     Tag,
     TypeAdapter,
+    WrapSerializer,
 )
+from pydantic_core.core_schema import SerializerFunctionWrapHandler
 
 from noob.const import META_SIGNAL
 from noob.event import Event, NoEvent
@@ -40,7 +41,7 @@ class Message(BaseModel):
     type_: MessageType = Field(..., alias="type")
     node_id: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    value: dict | str | None = None
+    value: Any = None
 
     model_config = ConfigDict(use_enum_values=True, validate_by_alias=True, serialize_by_alias=True)
 
@@ -93,12 +94,12 @@ class StopMsg(Message):
     value: None = None
 
 
-def _to_json(val: Event) -> str:
+def _to_json(val: Event, handler: SerializerFunctionWrapHandler) -> Any:
     if val["signal"] == META_SIGNAL and isinstance(val["value"], NoEvent):
         val["value"] = "NOEVENT"
 
     try:
-        return json.dumps(val)
+        return handler(val)
     except TypeError:
         # pickle and b64encode
         return "pck__" + base64.b64encode(pickle.dumps(val)).decode("utf-8")
@@ -109,7 +110,7 @@ def _from_json(val: Any) -> Event:
         if val.startswith("pck__"):
             evt = pickle.loads(base64.b64decode(val[5:]))
         else:
-            evt = Event(**json.loads(val))
+            evt = Event(**json.loads(val))  # type: ignore[typeddict-item]
         if evt["signal"] == META_SIGNAL and evt["value"] == "NOEVENT":
             evt["value"] = NoEvent()
         return evt
@@ -118,7 +119,7 @@ def _from_json(val: Any) -> Event:
 
 
 SerializableEvent = A[
-    Event, PlainSerializer(_to_json, when_used="json"), BeforeValidator(_from_json)
+    Event, WrapSerializer(_to_json, when_used="json"), BeforeValidator(_from_json)
 ]
 
 
@@ -146,4 +147,4 @@ MessageUnion = A[
     | A[Message, Tag("any")],
     Discriminator(_type_discriminator),
 ]
-MessageAdapter = TypeAdapter(MessageUnion)
+MessageAdapter = TypeAdapter[MessageUnion](MessageUnion)

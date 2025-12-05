@@ -1,15 +1,27 @@
 from __future__ import annotations
 
+import base64
 import builtins
+import pickle
 import re
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, TypedDict, TypeVar
 
 from annotated_types import Ge
-from pydantic import AfterValidator, Field, TypeAdapter
+from pydantic import (
+    AfterValidator,
+    BeforeValidator,
+    Field,
+    PlainSerializer,
+    TypeAdapter,
+    WrapSerializer,
+)
+from pydantic_core import PydanticSerializationError
+from pydantic_core.core_schema import SerializerFunctionWrapHandler
 
 from noob.const import RESERVED_IDS
 
@@ -75,6 +87,29 @@ def _not_reserved(val: str) -> str:
     return val
 
 
+def _from_isoformat(val: str | datetime) -> datetime:
+    if isinstance(val, str):
+        val = datetime.fromisoformat(val)
+    return val
+
+
+def _to_isoformat(val: datetime) -> str:
+    return val.isoformat()
+
+
+def _to_jsonable_pickle(val: Any, handler: SerializerFunctionWrapHandler) -> Any:
+    try:
+        return handler(val)
+    except (TypeError, PydanticSerializationError):
+        return "pck__" + base64.b64encode(pickle.dumps(val)).decode("utf-8")
+
+
+def _from_jsonable_pickle(val: Any) -> Any:
+    if isinstance(val, str) and val.startswith("pck__"):
+        return pickle.loads(base64.b64decode(val[5:]))
+    return val
+
+
 Range: TypeAlias = tuple[int, int] | tuple[float, float]
 PythonIdentifier: TypeAlias = Annotated[
     str, AfterValidator(_is_identifier), AfterValidator(_not_reserved)
@@ -106,6 +141,16 @@ ConfigSource: TypeAlias = Path | PathLike[str] | ConfigID
 """
 Union of all types of config sources
 """
+
+SerializableDatetime = Annotated[
+    datetime, BeforeValidator(_from_isoformat), PlainSerializer(_to_isoformat, when_used="json")
+]
+TPickle = TypeVar("TPickle")
+Picklable = Annotated[
+    TPickle,
+    BeforeValidator(_from_jsonable_pickle),
+    WrapSerializer(_to_jsonable_pickle, when_used="json"),
+]
 
 # type aliases, mostly for documentation's sake
 NodeID: TypeAlias = Annotated[str, AfterValidator(_is_identifier), AfterValidator(_not_reserved)]
