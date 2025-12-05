@@ -67,6 +67,7 @@ tests = [
     "numpy>=2.3.2",
     "xarray>=2025.7.1",
     "fastapi[standard]>=0.116.1",
+    "pytest-timeout>=2.4.0",
 ]
 docs = [
     "sphinx>=8.2.3",
@@ -120,6 +121,7 @@ mypy = "mypy"
 addopts = [
     "--cov=noob",
     "--cov-append",
+    "--timeout=15"
 ]
 markers = [
     "sync_runner: uses the sync runner",
