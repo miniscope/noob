@@ -18,7 +18,7 @@
     but otherwise it would be great to standardize socket names and have
     event handler decorators like:
 
-        @on_inbox(MessageType.sometype)
+        @on_router(MessageType.sometype)
 
 """
 
@@ -96,8 +96,8 @@ class CommandNode(EventloopMixin):
         self.port = port
         self.protocol = protocol
         self.logger = init_logger(f"runner.node.{runner_id}.command")
-        self._pub = None
-        self._sub = None
+        self._outbox = None
+        self._inbox = None
         self._router = None
         self._context = None
         self._loop = None
@@ -129,60 +129,65 @@ class CommandNode(EventloopMixin):
 
     def start(self) -> None:
         self.logger.debug("Starting command runner")
-        self.init_sockets()
+        self._init_sockets()
         self.start_loop()
         self.logger.debug("Command runner started")
 
     def stop(self) -> None:
         self.logger.debug("Stopping command runner")
         msg = StopMsg(node_id="command")
-        self._pub.send_multipart([b"stop", msg.to_bytes()])
+        self._outbox.send_multipart([b"stop", msg.to_bytes()])
         self.stop_loop()
         self.logger.debug("Command runner stopped")
 
-    def init_sockets(self) -> None:
-        self._pub = self.init_pub()
-        self._router = self.init_router()
-        self._sub = self.init_subscriber()
+    def _init_sockets(self) -> None:
+        self._outbox = self._init_outbox()
+        self._router = self._init_router()
+        self._inbox = self._init_inbox()
 
-    def init_pub(self) -> zmq.Socket:
+    def _init_outbox(self) -> zmq.Socket:
         """Create the main control publisher"""
         pub = self.context.socket(zmq.PUB)
         pub.bind(self.pub_address)
         pub.setsockopt_string(zmq.IDENTITY, "command.outbox")
         return pub
 
-    def init_router(self) -> ZMQStream:
+    def _init_router(self) -> ZMQStream:
         """Create the inbox router"""
         router = self.context.socket(zmq.ROUTER)
         router.bind(self.router_address)
-        router.setsockopt_string(zmq.IDENTITY, "command.inbox")
+        router.setsockopt_string(zmq.IDENTITY, "command.router")
         router = ZMQStream(router, self.loop)
-        router.on_recv(self.on_inbox)
+        router.on_recv(self.on_router)
         self.logger.debug("Inbox bound to %s", self.router_address)
         return router
 
-    def init_subscriber(self) -> ZMQStream:
+    def _init_inbox(self) -> ZMQStream:
         """Subscriber that receives all events from running nodes"""
         sub = self.context.socket(zmq.SUB)
-        sub.setsockopt_string(zmq.IDENTITY, "command.subscriber")
+        sub.setsockopt_string(zmq.IDENTITY, "command.inbox")
         sub.setsockopt_string(zmq.SUBSCRIBE, "")
         sub = ZMQStream(sub, self.loop)
-        sub.on_recv(self.on_sub)
+        sub.on_recv(self.on_inbox)
         return sub
 
     def announce(self) -> None:
         msg = AnnounceMsg(
             node_id="command", value=AnnounceValue(inbox=self.router_address, nodes=self._nodes)
         )
-        self._pub.send_multipart([b"announce", msg.to_bytes()])
+        self._outbox.send_multipart([b"announce", msg.to_bytes()])
 
     def process(self) -> None:
         """Emit a ProcessMsg to process a single round through the graph"""
-        self._pub.send_multipart([b"process", ProcessMsg(node_id="command").to_bytes()])
+        self._outbox.send_multipart([b"process", ProcessMsg(node_id="command").to_bytes()])
         self.logger.debug("Sent process message")
 
-    def add_callback(self, type_: Literal["inbox", "event"], cb: Callable[[Message], Any]) -> None:
+    def add_callback(self, type_: Literal["inbox", "router"], cb: Callable[[Message], Any]) -> None:
+        """
+        Add a callback called for message received
+        - by the inbox: the subscriber that receives all events from node runners
+        - by the router: direct messages sent by node runners to the command node
+        """
         self._callbacks[type_].append(cb)
 
     def await_ready(self, node_ids: list[NodeID]) -> None:
@@ -195,16 +200,15 @@ class CommandNode(EventloopMixin):
 
             self._ready_condition.wait_for(lambda: set(node_ids) == set(self._nodes))
 
-    def on_inbox(self, msg: list[bytes]) -> None:
-
+    def on_router(self, msg: list[bytes]) -> None:
         try:
             msg = Message.from_bytes(msg)
-            self.logger.debug("Received INBOX message %s", msg)
+            self.logger.debug("Received ROUTER message %s", msg)
         except Exception as e:
             self.logger.exception("Exception decoding: %s,  %s", msg, e)
             raise e
 
-        for cb in self._callbacks["inbox"]:
+        for cb in self._callbacks["router"]:
             cb(msg)
 
         if msg.type_ == MessageType.identify:
@@ -213,16 +217,16 @@ class CommandNode(EventloopMixin):
         else:
             raise NotImplementedError(f"Message type {msg.type_} is unsupported")
 
-    def on_sub(self, msg: list[bytes]) -> None:
+    def on_inbox(self, msg: list[bytes]) -> None:
         msg = Message.from_bytes(msg)
-        self.logger.debug("Received SUBSCRIBER message: %s", msg)
-        for cb in self._callbacks["event"]:
+        self.logger.debug("Received INBOX message: %s", msg)
+        for cb in self._callbacks["inbox"]:
             cb(msg)
 
     def on_identify(self, msg: IdentifyMsg) -> None:
         with self._ready_condition:
             self._nodes[msg.node_id] = msg.value
-            self._sub.connect(msg.value["outbox"])
+            self._inbox.connect(msg.value["outbox"])
             self._ready_condition.notify_all()
 
         try:
@@ -237,8 +241,8 @@ class NodeRunner(EventloopMixin):
     Runner for a single node
 
     - DEALER to communicate with command inbox
-    - PUB to publish events
-    - SUB to subscribe to events from other nodes.
+    - PUB (outbox) to publish events
+    - SUB (inbox) to subscribe to events from other nodes.
     """
 
     def __init__(
@@ -246,7 +250,7 @@ class NodeRunner(EventloopMixin):
         spec: NodeSpecification,
         runner_id: str,
         command_outbox: str,
-        command_inbox: str,
+        command_router: str,
         input_collection: InputCollection,
         protocol: str = "ipc",
     ):
@@ -255,15 +259,15 @@ class NodeRunner(EventloopMixin):
         self.runner_id = runner_id
         self.input_collection = input_collection
         self.command_outbox = command_outbox
-        self.command_inbox = command_inbox
+        self.command_router = command_router
         self.protocol = protocol
         self.store = EventStore()
         self.scheduler: Scheduler | None = None
         self.logger = init_logger(f"runner.node.{runner_id}.{self.spec.id}")
 
         self._dealer: zmq.Socket | ZMQStream | None = None
-        self._pub: zmq.Socket | None = None
-        self._sub = None
+        self._outbox: zmq.Socket | None = None
+        self._inbox = None
         self._node: Node | None = None
         self._depends: tuple[tuple[str, str], ...] | None = None
         self._nodes: dict[str, IdentifyValue] = {}
@@ -274,7 +278,7 @@ class NodeRunner(EventloopMixin):
         self._to_process = 0
 
     @property
-    def pub_address(self) -> str:
+    def outbox_address(self) -> str:
         if self.protocol == "ipc":
             path = config.tmp_dir / f"{self.runner_id}/nodes/{self.spec.id}/outbox"
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -284,6 +288,7 @@ class NodeRunner(EventloopMixin):
 
     @property
     def depends(self) -> tuple[tuple[str, str], ...] | None:
+        """(node, signal) tuples of the wrapped node's dependencies"""
         if self._node is None:
             return None
         elif self._depends is None:
@@ -315,7 +320,6 @@ class NodeRunner(EventloopMixin):
                 )
                 value = runner._node.process(*args, **kwargs)
                 events = runner.store.add_value(runner._node.signals, value, runner._node.id, epoch)
-
                 runner.scheduler.add_epoch()
 
                 runner.update_graph(events)
@@ -351,7 +355,7 @@ class NodeRunner(EventloopMixin):
 
     def publish_events(self, events: list[Event]) -> None:
         msg = EventMsg(node_id=self.spec.id, value=events)
-        self._pub.send_multipart([b"event", msg.to_bytes()])
+        self._outbox.send_multipart([b"event", msg.to_bytes()])
 
     def init(self) -> None:
         self.logger.debug("Initializing")
@@ -375,7 +379,7 @@ class NodeRunner(EventloopMixin):
             node_id=self.spec.id,
             value=IdentifyValue(
                 node_id=self.spec.id,
-                outbox=self.pub_address,
+                outbox=self.outbox_address,
                 signals=[s.name for s in self._node.signals] if self._node.signals else None,
                 slots=[slot_name for slot_name in self._node.slots] if self._node.slots else None,
             ),
@@ -384,7 +388,7 @@ class NodeRunner(EventloopMixin):
         self.logger.debug("Sent identification message: %s", ann.to_bytes())
 
     def start_sockets(self) -> None:
-        self.init_sockets()
+        self._init_sockets()
         self.start_loop()
 
     def init_node(self) -> None:
@@ -395,25 +399,25 @@ class NodeRunner(EventloopMixin):
         )
         self.scheduler.add_epoch()
 
-    def init_sockets(self) -> None:
-        self._dealer = self.init_dealer()
-        self._pub = self.init_pub()
-        self._sub = self.init_sub()
+    def _init_sockets(self) -> None:
+        self._dealer = self._init_dealer()
+        self._outbox = self._init_outbox()
+        self._inbox = self._init_inbox()
 
-    def init_dealer(self) -> ZMQStream:
+    def _init_dealer(self) -> ZMQStream:
         dealer = self.context.socket(zmq.DEALER)
         dealer.setsockopt_string(zmq.IDENTITY, self.spec.id)
-        dealer.connect(self.command_inbox)
+        dealer.connect(self.command_router)
         dealer = ZMQStream(dealer, self.loop)
-        dealer.on_recv(self.on_outbox)
-        self.logger.debug("Connected to command node at %s", self.command_inbox)
+        dealer.on_recv(self.on_dealer)
+        self.logger.debug("Connected to command node at %s", self.command_router)
         return dealer
 
-    def init_pub(self) -> ZMQStream:
+    def _init_outbox(self) -> ZMQStream:
         pub = self.context.socket(zmq.PUB)
         pub.setsockopt_string(zmq.IDENTITY, self.spec.id)
         if self.protocol == "ipc":
-            pub.bind(self.pub_address)
+            pub.bind(self.outbox_address)
         else:
             raise NotImplementedError()
             # something like:
@@ -421,7 +425,7 @@ class NodeRunner(EventloopMixin):
 
         return pub
 
-    def init_sub(self) -> ZMQStream:
+    def _init_inbox(self) -> ZMQStream:
         """
         Init the subscriber, but don't attempt to subscribe to anything but the command yet!
         we do that when we get node Announces
@@ -435,7 +439,7 @@ class NodeRunner(EventloopMixin):
         self.logger.debug("Subscribed to command outbox %s", self.command_outbox)
         return sub
 
-    def on_outbox(self, msg: list[bytes]) -> None:
+    def on_dealer(self, msg: list[bytes]) -> None:
         self.logger.debug("DEALER received %s", msg)
 
     def on_inbox(self, msg: list[bytes]) -> None:
@@ -445,7 +449,7 @@ class NodeRunner(EventloopMixin):
             self.logger.debug("INBOX received %s", msg)
         except Exception as e:
             self.logger.exception("Error decoding message %s %s", msg, e)
-            raise e
+            return
 
         # FIXME: all this switching sux,
         # just have a decorator to register a handler for a given message type
@@ -462,7 +466,9 @@ class NodeRunner(EventloopMixin):
             msg = cast(StopMsg, msg)
             self.on_stop(msg)
         else:
-            raise NotImplementedError(f"{msg.type_} not implemented!")
+            # log but don't throw - other nodes shouldn't be able to crash us
+            self.logger.error(f"{msg.type_} not implemented!")
+            self.logger.debug("%s", msg)
 
     def on_announce(self, msg: AnnounceMsg) -> None:
         """
@@ -475,7 +481,7 @@ class NodeRunner(EventloopMixin):
             ):
                 # TODO: a way to check if we're already connected, without storing it locally?
                 outbox = msg.value["nodes"][node_id]["outbox"]
-                self._sub.connect(outbox)
+                self._inbox.connect(outbox)
                 self.logger.debug("Subscribed to %s at %s", node_id, outbox)
         self._nodes = msg.value["nodes"]
 
@@ -533,7 +539,7 @@ class ZMQRunner(TubeRunner):
             self._logger.debug("Initializing ZMQ runner")
             self.tube.scheduler.mode = SchedulerMode.parallel
             self.command = CommandNode(runner_id=self.runner_id)
-            self.command.add_callback("event", self.on_event)
+            self.command.add_callback("inbox", self.on_event)
             self.command.start()
             self._logger.debug("Command node initialized")
 
@@ -547,7 +553,7 @@ class ZMQRunner(TubeRunner):
                     kwargs={
                         "runner_id": self.runner_id,
                         "command_outbox": self.command.pub_address,
-                        "command_inbox": self.command.router_address,
+                        "command_router": self.command.router_address,
                         "input_collection": self.tube.input_collection,
                     },
                     name=".".join([self.runner_id, node_id]),
@@ -591,15 +597,20 @@ class ZMQRunner(TubeRunner):
         self._logger.debug("collecting return")
         return self.collect_return(this_epoch)
 
-    def on_event(self, msg: EventMsg) -> None:
+    def on_event(self, msg: Message) -> None:
         self._logger.debug("EVENT received: %s", msg)
         if msg.type_ != MessageType.event:
             self._logger.debug(f"Ignoring message type {msg.type_}")
+            return
 
+        msg = cast(EventMsg, msg)
         for event in msg.value:
             self.store.add(event)
         self.tube.scheduler.update(msg.value)
         if self._return_node is not None:
+            # mark the return node done if we've received the expected events for an epoch
+            # do it here since we don't really run the return node like a real node
+            # to avoid an unnecessary pickling/unpickling across the network
             epochs = set(e["epoch"] for e in msg.value)
             for epoch in epochs:
                 if self.tube.scheduler.node_is_ready(self._return_node.id, epoch):

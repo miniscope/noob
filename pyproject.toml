@@ -203,6 +203,7 @@ mypy_path = "$MYPY_CONFIG_FILE_DIR/src"
 packages = ["noob"]
 warn_redundant_casts = true
 warn_unused_ignores = true
+check_untyped_defs = true
 show_error_context = true
 show_column_numbers = true
 show_error_code_links = true

@@ -2,7 +2,17 @@ import functools
 import inspect
 from collections.abc import Callable, Generator, Mapping
 from types import GeneratorType, GenericAlias, UnionType
-from typing import TYPE_CHECKING, Annotated, Any, TypeVar, Union, get_args, get_origin, overload
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    TypeVar,
+    Union,
+    cast,
+    get_args,
+    get_origin,
+    overload,
+)
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -330,6 +340,7 @@ class Node(BaseModel):
         self._gen = proc()
 
         def _process():  # noqa: ANN202
+            self._gen = cast(Generator, self._gen)
             return next(self._gen)
 
         signature = inspect.signature(self.process)

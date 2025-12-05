@@ -1,7 +1,12 @@
 import threading
 
-import zmq
-from tornado.ioloop import IOLoop
+try:
+    import zmq
+    from tornado.ioloop import IOLoop
+except ImportError as e:
+    raise ImportError(        
+        "Attempted to import zmq runner, but zmq deps are not installed. install with `noob[zmq]`",
+    ) from e
 
 
 class EventloopMixin:

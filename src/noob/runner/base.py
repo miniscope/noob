@@ -30,7 +30,7 @@ class TubeRunner(ABC):
 
     tube: Tube
     store: EventStore = field(default_factory=EventStore)
-    MAX_ITER_LOOPS: int = 100
+    max_iter_loops: int = 100
     """The max number of times that `iter` will call `process` to try and get a result"""
 
     _callbacks: list[Callable[[Event | MetaEvent], None]] = field(default_factory=list)
@@ -93,7 +93,7 @@ class TubeRunner(ABC):
                 while ret is None:
                     ret = self.process()
                     loop += 1
-                    if loop > self.MAX_ITER_LOOPS:
+                    if loop > self.max_iter_loops:
                         raise RuntimeError("Reached maximum process calls per iteration")
 
                 yield ret
