@@ -139,3 +139,14 @@ AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)
 class RunnerContext(TypedDict):
     runner: TubeRunner
     tube: Tube
+
+
+class Singleton(type):
+    _instances: dict = {}
+
+    def __call__(cls, *args: Any, **kwargs: Any):
+        if cls not in cls._instances:
+            cls._instances[cls] = super().__call__(*args, **kwargs)
+        else:
+            cls._instances[cls].__init__(*args, **kwargs)
+        return cls._instances[cls]
