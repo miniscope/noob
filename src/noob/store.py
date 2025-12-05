@@ -170,72 +170,20 @@ class EventStore:
         If some of the requested events but others are present,
         return an incomplete list.
 
-        If epoch is -1, get the latest complete set of events,
-        returning None if no complete sets are present.
-
         Args:
             edges (list[Edge]): List of edges from which to collect events
             epoch (int): Epoch to select from, if -1, get the latest complete set of events.
         """
+        events = []
+        for edge in edges:
+            try:
+                event = self.get(edge.source_node, edge.source_signal, epoch)
+                events.append(event)
+            except KeyError:
+                # no matching event
+                continue
 
-        if epoch == -1:
-            for ep in reversed(self.events.keys()):
-                events = self.collect_events(edges, ep)
-                if self.dependencies_satisfied(edges, events):
-                    return events
-
-            return None
-
-        else:
-            events = []
-            for edge in edges:
-                try:
-                    event = self.get(edge.source_node, edge.source_signal, epoch)
-                    events.append(event)
-                except KeyError:
-                    # no matching event
-                    continue
-
-            return events if events else None
-
-    def await_events(self, edges: list[Edge], epoch: int) -> list[Event]:
-        """
-        Block until a set of events implied by `edges` are all present, returning the events.
-
-        Args:
-            edges (list[:class:`.Edge`]): dependencies to wait for
-            epoch (int | None): If an int, wait for this specific epoch to be ready,
-              if `None` await *any* epoch to be ready.
-        """
-        with self._event_condition:
-            # if we already have dependencies ready, just return them
-            events = self.collect_events(edges, epoch)
-            if events is not None and self.dependencies_satisfied(edges, events):
-                return events
-
-            # otherwise, wait until they are available
-            self._event_condition.wait_for(lambda: self.dependencies_ready(edges, epoch))
-            return self.collect_events(edges, epoch)
-
-    def await_dependencies(self, edges: list[Edge], epoch: int | None = None) -> dict:
-        """
-        like :meth:`.await_events`, except transforming the events into node kwargs before returning
-        """
-        return self.transform_events(edges, self.await_events(edges, epoch))
-
-    def dependencies_ready(self, edges: list[Edge], epoch: int | None = None) -> bool:
-        """
-        Check if dependencies are ready for a given dependency set and epoch
-        Args:
-            edges (list[:class:`.Edge`]): dependencies to check
-            epoch (int | None): If an int, check this specific epoch, otherwise check any epoch.
-
-        Returns:
-            bool
-        """
-        epoch = -1 if epoch is None else epoch
-        events = self.collect_events(edges, epoch=epoch)
-        return events is not None and self.dependencies_satisfied(edges, events)
+        return events if events else None
 
     def clear(self, epoch: int | None = None) -> None:
         """
@@ -248,16 +196,6 @@ class EventStore:
             self.events = _make_event_dict()
         else:
             del self.events[epoch]
-
-    @staticmethod
-    def dependencies_satisfied(edges: list[Edge], events: list[Event]) -> bool:
-        """
-        For a given set of edges and events, check if the events satisfy the edge's dependencies
-        (i.e. that there is at least one event for each specified source node/signal pair)
-        """
-        edge_set = set((edge.source_node, edge.source_signal) for edge in edges)
-        event_set = set((event["node_id"], event["signal"]) for event in events)
-        return edge_set == event_set
 
     @staticmethod
     def transform_events(edges: list[Edge], events: list[Event]) -> dict:
