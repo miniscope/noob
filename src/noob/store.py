@@ -9,7 +9,7 @@ from itertools import count
 from typing import Any
 
 from noob.const import RESERVED_IDS
-from noob.event import Event, NoEvent
+from noob.event import Event, MetaSignal
 from noob.node import Edge
 from noob.node.base import Signal
 
@@ -41,7 +41,7 @@ class EventStore:
             node_id (str): ID of the node that emitted the events
             epoch (int): Epoch count that the signal was emitted in
         """
-        if isinstance(value, NoEvent):
+        if value is MetaSignal.NoEvent:
             return None
         timestamp = datetime.now(UTC)
 

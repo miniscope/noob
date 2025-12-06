@@ -8,8 +8,6 @@ if sys.version_info < (3, 12):
 else:
     from typing import TypedDict
 
-from noob.types import Singleton
-
 
 class Event(TypedDict):
     """
@@ -51,10 +49,5 @@ class MetaEvent(Event):
     signal: MetaEventType  # type: ignore
 
 
-class NoEvent(metaclass=Singleton):
-    """
-    Signifier for no event emitted
-
-    """
-
-    pass
+class MetaSignal(StrEnum):
+    NoEvent = "NoEvent"
