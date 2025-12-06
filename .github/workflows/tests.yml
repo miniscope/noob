@@ -30,6 +30,7 @@ jobs:
 
       - name: Run Tests
         run: pytest
+        timeout-minutes: 5
 
       - name: Coveralls Parallel
         uses: coverallsapp/github-action@v2
