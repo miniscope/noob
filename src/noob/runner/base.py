@@ -35,7 +35,7 @@ class TubeRunner(ABC):
 
     _callbacks: list[Callable[[Event | MetaEvent], None]] = field(default_factory=list)
 
-    _logger: Logger | None = None
+    _logger: Logger = None  # type: ignore[assignment]
     _runner_id: str | None = None
 
     def __post_init__(self):

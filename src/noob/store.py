@@ -64,9 +64,7 @@ class EventStore:
             self._event_condition.notify_all()
         return event
 
-    def add_value(
-        self, signals: list[Signal], value: Any, node_id: str, epoch: int
-    ) -> list[Event] | None:
+    def add_value(self, signals: list[Signal], value: Any, node_id: str, epoch: int) -> list[Event]:
         """
         Add the result of a :meth:`.Node.process` call to the event store.
 
@@ -224,8 +222,10 @@ class EventStore:
         args = []
         kwargs = {}
         for k, v in inputs.items():
-            if isinstance(k, int | None):
+            if isinstance(k, int):
                 args.append((k, v))
+            elif k is None:
+                args.append((0, v))
             else:
                 kwargs[k] = v
         args = [item[1] for item in sorted(args, key=lambda x: x[0])]

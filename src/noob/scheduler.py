@@ -138,7 +138,7 @@ class Scheduler(BaseModel):
             return True
 
         graphs = self._epochs.items() if epoch is None else [(epoch, self[epoch])]
-        is_ready = any(node_id == node for epoch, graph in graphs for node_id in graph._ready_nodes)
+        is_ready = any(node_id == node for epoch, graph in graphs for node_id in graph._ready_nodes)  # type: ignore[attr-defined]
         return is_ready
 
     def __getitem__(self, epoch: int) -> TopologicalSorter:
@@ -165,7 +165,9 @@ class Scheduler(BaseModel):
             for src in self.source_nodes
         )
 
-    def update(self, events: MutableSequence[Event]) -> MutableSequence[Event]:
+    def update(
+        self, events: MutableSequence[Event | MetaEvent] | MutableSequence[Event]
+    ) -> MutableSequence[Event] | MutableSequence[Event | MetaEvent]:
         """
         When a set of events are received, update the graphs within the scheduler.
         Currently only has :method:`TopologicalSorter.done` implemented.
@@ -173,7 +175,7 @@ class Scheduler(BaseModel):
         """
         if not events:
             return events
-        end_events = []
+        end_events: MutableSequence[MetaEvent] = []
         with self._ready_condition, self._epoch_condition:
             marked_done = set()
             for e in events:
@@ -197,9 +199,10 @@ class Scheduler(BaseModel):
             # condition uses an RLock, so waiters only run here,
             # even though `done` also notifies.
             self._ready_condition.notify_all()
-        events.extend(end_events)
 
-        return events
+        ret_events = [*events, *end_events]
+
+        return ret_events
 
     def done(self, epoch: int, node_id: str) -> MetaEvent | None:
         """
@@ -214,7 +217,7 @@ class Scheduler(BaseModel):
                     node_id,
                     epoch,
                 )
-                return
+                return None
 
             try:
                 self[epoch].done(node_id)
@@ -248,6 +251,8 @@ class Scheduler(BaseModel):
             if not self[epoch].is_active():
                 return self.end_epoch(epoch)
 
+        return None
+
     def await_node(self, node_id: NodeID, epoch: int | None = None) -> MetaEvent:
         """
         Block until a node is ready
@@ -270,6 +275,13 @@ class Scheduler(BaseModel):
                     if self.node_is_ready(node_id, ep):
                         epoch = ep
 
+            if epoch is None:
+                raise RuntimeError(
+                    "Could not find ready epoch even though node ready condition passed, "
+                    "something is wrong with the way node status checking is "
+                    "locked between threads."
+                )
+
             # do a little graphlib surgery to mark just one event as done.
             # threadsafe because we are holding the lock that protects graph mutation
             self._epochs[epoch]._node2info[node_id].npredecessors = _NODE_OUT  # type: ignore[attr-defined]
@@ -279,7 +291,7 @@ class Scheduler(BaseModel):
             id=uuid4().int,
             timestamp=datetime.now(),
             node_id="meta",
-            signal="NodeReady",
+            signal=MetaEventType.NodeReady,
             epoch=epoch,
             value=node_id,
         )
@@ -321,7 +333,7 @@ class Scheduler(BaseModel):
     def end_epoch(self, epoch: int | None = None) -> MetaEvent | None:
         if epoch is None:
             if len(self._epochs) == 0:
-                return
+                return None
             epoch = list(self._epochs)[-1]
 
         with self._epoch_condition:
