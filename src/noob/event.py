@@ -1,7 +1,8 @@
 import sys
-from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
+
+from noob.types import Picklable, SerializableDatetime
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
@@ -16,7 +17,7 @@ class Event(TypedDict):
 
     id: int
     """Unique ID for each event"""
-    timestamp: datetime
+    timestamp: SerializableDatetime
     """Timestamp of when the event was received by the :class:`.TubeRunner`"""
     node_id: str
     """ID of node that emitted the event"""
@@ -24,7 +25,7 @@ class Event(TypedDict):
     """name of the signal that emitted the event"""
     epoch: int
     """Epoch number the event was emitted in"""
-    value: Any
+    value: Picklable[Any]
     """Value emitted by the processing node"""
 
 

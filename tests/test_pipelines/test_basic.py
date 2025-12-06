@@ -2,65 +2,65 @@ import numpy as np
 import pytest
 
 from noob import SynchronousRunner, Tube
+from noob.runner import TubeRunner
 
 
-def test_basic():
+@pytest.mark.parametrize("loaded_tube", ["testing-basic"], indirect=True)
+def test_basic_process(loaded_tube: Tube, runner: TubeRunner):
     """The most basic tube! We can process a fixed number of events"""
-    tube = Tube.from_specification("testing-basic")
-    runner = SynchronousRunner(tube)
+    outputs = []
+    for _ in range(5):
+        outputs.append(runner.process())
+    assert len(outputs) == 5
+    assert outputs == [0, 2, 4, 6, 8]
 
+
+@pytest.mark.parametrize("loaded_tube", ["testing-basic"], indirect=True)
+def test_basic(loaded_tube: Tube, runner: TubeRunner):
+    """The most basic tube! We can process a fixed number of events"""
     outputs = runner.run(n=5)
     assert len(outputs) == 5
     assert outputs == [0, 2, 4, 6, 8]
 
 
-def test_basic_iter():
+@pytest.mark.parametrize("loaded_tube", ["testing-basic"], indirect=True)
+def test_basic_iter(loaded_tube: Tube, runner: TubeRunner):
     """We should also be able to iterate over values"""
-    tube = Tube.from_specification("testing-basic")
-    runner = SynchronousRunner(tube)
-
     expected = [0, 2, 4, 6, 8]
     for e, value in zip(expected, runner.iter(n=5)):
         assert value == e
 
 
-def test_branch():
+@pytest.mark.parametrize("loaded_tube", ["testing-branch"], indirect=True)
+def test_branch(loaded_tube: Tube, runner: TubeRunner):
     """A nodes output can be branched and received by multiple nodes!"""
-    tube = Tube.from_specification("testing-branch")
-    runner = SynchronousRunner(tube)
     expected = [{"multiply": i * 2, "divide": i / 5} for i in range(5)]
 
     for e, value in zip(expected, runner.iter(n=5)):
         assert value == e
 
 
-def test_merge():
+@pytest.mark.parametrize("loaded_tube", ["testing-merge"], indirect=True)
+def test_merge(loaded_tube: Tube, runner: TubeRunner):
     """Multiple node outputs can be merged into one node!"""
-    tube = Tube.from_specification("testing-merge")
-    runner = SynchronousRunner(tube)
-
     expected = [(i * 2) / j for i, j in zip(range(5), range(5, 10))]
 
     for e, value in zip(expected, runner.iter(n=5)):
         assert value == e
 
 
-def test_gather_n():
+@pytest.mark.parametrize("loaded_tube", ["testing-gather-n"], indirect=True)
+def test_gather_n(loaded_tube: Tube, runner: TubeRunner):
     """A node can gather n inputs into one call"""
-    tube = Tube.from_specification("testing-gather-n")
-    runner = SynchronousRunner(tube)
-
     expected = ["abcde", "fghij", "klmno", "pqrst", "uvwxy"]
 
     for e, value in zip(expected, runner.iter(n=5)):
         assert value == {"word": e}
 
 
-def test_gather_dependent():
+@pytest.mark.parametrize("loaded_tube", ["testing-gather-dependent"], indirect=True)
+def test_gather_dependent(loaded_tube: Tube, runner: TubeRunner):
     """A node can gather inputs from one slot when another slot receives an event"""
-    tube = Tube.from_specification("testing-gather-dependent")
-    runner = SynchronousRunner(tube)
-
     expected = [
         [0, 1, 2],
         [3, 4, 5],
@@ -95,12 +95,13 @@ def test_map():
         assert value[1] == "!"
 
 
-def test_multi_signal():
+@pytest.mark.parametrize("loaded_tube", ["testing-multi-signal"], indirect=True)
+def test_multi_signal(loaded_tube: Tube, runner_cls: type[TubeRunner]):
     """
     Nodes that emit multiple signals can have each used independently
     """
     tube = Tube.from_specification("testing-multi-signal")
-    runner = SynchronousRunner(tube)
+    runner = runner_cls(tube)
 
     for value in runner.iter(n=5):
         assert isinstance(value, dict)

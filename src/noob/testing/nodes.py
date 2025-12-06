@@ -82,6 +82,10 @@ def dictify(key: str, items: list[Any]) -> dict[str, Any]:
     return {key: items}
 
 
+def error(value: Any) -> None:
+    raise ValueError("This node just emits errors")
+
+
 class CountSource(Node):
     limit: int = 1000
     start: int = 0

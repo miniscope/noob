@@ -8,6 +8,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Literal
 
+from rich import get_console
 from rich.logging import RichHandler
 
 from noob.config import LOG_LEVELS, config
@@ -20,6 +21,7 @@ def init_logger(
     file_level: LOG_LEVELS | None = None,
     log_file_n: int | None = None,
     log_file_size: int | None = None,
+    width: int | None = None,
 ) -> logging.Logger:
     """
     Make a logger.
@@ -41,6 +43,8 @@ def init_logger(
             If ``None`` , get from :class:`.Config`
         log_file_size (int): Maximum size of logfiles before rotation.
             If ``None`` , get from :class:`.Config`
+        width (int, None): Explicitly set width of rich stdout console.
+            If ``None`` , get from :class:`.Config`
 
     Returns:
         :class:`logging.Logger`
@@ -59,6 +63,8 @@ def init_logger(
         log_file_n = config.logs.file_n
     if log_file_size is None:
         log_file_size = config.logs.file_size
+    if width is None:
+        width = config.logs.width
 
     # set our logger to the minimum of the levels so that it always handles at least that severity
     # even if one or the other handlers might not.
@@ -73,6 +79,7 @@ def init_logger(
         log_dir=log_dir,
         log_file_n=log_file_n,
         log_file_size=log_file_size,
+        width=width,
     )
 
     logger = logging.getLogger(name)
@@ -99,7 +106,7 @@ def init_logger(
                 if isinstance(h, RichHandler) and h.keywords is not None
             ]
         ):
-            logger.addHandler(_rich_handler(level, keywords=[handler_name]))
+            logger.addHandler(_rich_handler(level, keywords=[handler_name], width=width))
         logger.propagate = False
 
     return logger
@@ -111,6 +118,7 @@ def _init_root(
     log_dir: Path | Literal[False],
     log_file_n: int = 5,
     log_file_size: int = 2**22,
+    width: int | None = None,
 ) -> None:
     root_logger = logging.getLogger("noob")
     file_handlers = [
@@ -135,7 +143,7 @@ def _init_root(
             file_handler.setLevel(file_level)
 
     if not stream_handlers:
-        root_logger.addHandler(_rich_handler(stdout_level))
+        root_logger.addHandler(_rich_handler(stdout_level, width=width))
     else:
         for stream_handler in stream_handlers:
             stream_handler.setLevel(stdout_level)
@@ -163,7 +171,11 @@ def _file_handler(
     return file_handler
 
 
-def _rich_handler(level: LOG_LEVELS, **kwargs: Any) -> RichHandler:
+def _rich_handler(level: LOG_LEVELS, width: int | None = None, **kwargs: Any) -> RichHandler:
+    console = get_console()
+    if width:
+        console.width = width
+
     rich_handler = RichHandler(rich_tracebacks=True, markup=True, **kwargs)
     rich_formatter = logging.Formatter(
         r"[bold green]\[%(name)s][/bold green] %(message)s",
