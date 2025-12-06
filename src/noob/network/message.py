@@ -21,6 +21,7 @@ from pydantic_core.core_schema import SerializerFunctionWrapHandler
 
 from noob.const import META_SIGNAL
 from noob.event import Event, NoEvent
+from noob.types import Picklable
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
@@ -35,6 +36,7 @@ class MessageType(StrEnum):
     start = "start"
     stop = "stop"
     event = "event"
+    error = "error"
 
 
 class Message(BaseModel):
@@ -100,6 +102,15 @@ class StopMsg(Message):
     value: None = None
 
 
+class ErrorMsg(Message):
+    """An error occurred in one of the processing nodes"""
+
+    type_: Literal[MessageType.error] = Field(MessageType.error, alias="type")
+    value: Picklable[Exception]
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
 def _to_json(val: Event, handler: SerializerFunctionWrapHandler) -> Any:
     if val["signal"] == META_SIGNAL and isinstance(val["value"], NoEvent):
         val["value"] = "NOEVENT"
@@ -150,6 +161,7 @@ MessageUnion = A[
     | A[StartMsg, Tag("start")]
     | A[StopMsg, Tag("stop")]
     | A[EventMsg, Tag("event")]
+    | A[ErrorMsg, Tag("error")]
     | A[Message, Tag("any")],
     Discriminator(_type_discriminator),
 ]

@@ -2,6 +2,7 @@ import pytest
 
 from noob import Tube
 from noob.network.message import IdentifyMsg, IdentifyValue
+from noob.runner.zmq import ZMQRunner
 
 pytestmark = pytest.mark.zmq_runner
 
@@ -39,3 +40,11 @@ def test_message_roundtrip():
     as_bytes = msg.to_bytes()
     recreated = IdentifyMsg.from_bytes([as_bytes])
     assert msg == recreated
+
+
+def test_error_reporting():
+    """When a zmq runner node has an error, it sends it back to the command node"""
+    tube = Tube.from_specification("testing-error")
+    runner = ZMQRunner(tube)
+    with pytest.raises(ValueError, match="This node just emits errors"):
+        runner.process()

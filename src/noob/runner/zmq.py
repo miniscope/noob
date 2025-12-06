@@ -22,6 +22,7 @@
 
 """
 
+import logging
 import multiprocessing as mp
 import os
 import signal
@@ -52,6 +53,7 @@ from noob.logging import init_logger
 from noob.network.message import (
     AnnounceMsg,
     AnnounceValue,
+    ErrorMsg,
     EventMsg,
     IdentifyMsg,
     IdentifyValue,
@@ -214,8 +216,6 @@ class CommandNode(EventloopMixin):
         if msg.type_ == MessageType.identify:
             msg = cast(IdentifyMsg, msg)
             self.on_identify(msg)
-        else:
-            raise NotImplementedError(f"Message type {msg.type_} is unsupported")
 
     def on_inbox(self, msg: list[bytes]) -> None:
         msg = Message.from_bytes(msg)
@@ -330,6 +330,8 @@ class NodeRunner(EventloopMixin):
 
         except KeyboardInterrupt:
             runner.logger.debug("Got keyboard interrupt, quitting")
+        except Exception as e:
+            runner.error(e)
         finally:
             runner.deinit()
 
@@ -511,6 +513,11 @@ class NodeRunner(EventloopMixin):
         self.logger.debug("Emitting sigterm to self %s", msg)
         os.kill(mp.current_process().pid, signal.SIGTERM)
 
+    def error(self, err: Exception) -> None:
+        self.logger.debug("Throwing error in main runner: %s", err)
+        msg = ErrorMsg(node_id=self.spec.id, value=err)
+        self._dealer.send_multipart([msg.to_bytes()])
+
 
 @dataclass
 class ZMQRunner(TubeRunner):
@@ -527,6 +534,11 @@ class ZMQRunner(TubeRunner):
     _running: mp.Event = field(default_factory=mp.Event)
     _return_node: Return | None = None
     _init_lock: threading.Lock = field(default_factory=threading.Lock)
+    _logger: logging.Logger | None = None
+    _to_throw: Exception | None = None
+
+    def __post_init__(self):
+        self._logger = init_logger(f"noob.runner.{self.runner_id}")
 
     @property
     def running(self) -> bool:
@@ -540,6 +552,7 @@ class ZMQRunner(TubeRunner):
             self._logger.debug("Initializing ZMQ runner")
             self.command = CommandNode(runner_id=self.runner_id)
             self.command.add_callback("inbox", self.on_event)
+            self.command.add_callback("router", self.on_router)
             self.command.start()
             self._logger.debug("Command node initialized")
 
@@ -568,34 +581,38 @@ class ZMQRunner(TubeRunner):
             self._running.set()
 
     def deinit(self) -> None:
-        self.command.stop()
-        # wait for nodes to finish, if they don't finish in the timeout, kill them
-        started_waiting = time()
-        waiting_on = set(self.node_procs.values())
-        while time() < started_waiting + self.quit_timeout and len(waiting_on) > 0:
-            _waiting = waiting_on.copy()
-            for proc in _waiting:
-                if not proc.is_alive():
-                    waiting_on.remove(proc)
+        with self._init_lock:
+            self.command.stop()
+            # wait for nodes to finish, if they don't finish in the timeout, kill them
+            started_waiting = time()
+            waiting_on = set(self.node_procs.values())
+            while time() < started_waiting + self.quit_timeout and len(waiting_on) > 0:
+                _waiting = waiting_on.copy()
+                for proc in _waiting:
+                    if not proc.is_alive():
+                        waiting_on.remove(proc)
 
-        for proc in waiting_on:
-            self._logger.info(
-                f"NodeRunner {proc.name} was still alive after timeout expired, killing it"
-            )
-            proc.kill()
-            proc.close()
+            for proc in waiting_on:
+                self._logger.info(
+                    f"NodeRunner {proc.name} was still alive after timeout expired, killing it"
+                )
+                proc.kill()
+                proc.close()
+            self._running.clear()
 
     def process(self, **kwargs: Any) -> ReturnNodeType:
         if not self.running:
             self._logger.info("Runner called process without calling `init`, initializing now.")
             self.init()
 
-        this_epoch = self.tube.scheduler.add_epoch()
+        self._current_epoch = self.tube.scheduler.add_epoch()
         self.command.process()
-        self._logger.debug("awaiting epoch %s", this_epoch)
-        self.tube.scheduler.await_epoch(this_epoch)
+        self._logger.debug("awaiting epoch %s", self._current_epoch)
+        self.tube.scheduler.await_epoch(self._current_epoch)
+        if self._to_throw:
+            self._throw_error()
         self._logger.debug("collecting return")
-        return self.collect_return(this_epoch)
+        return self.collect_return(self._current_epoch)
 
     def on_event(self, msg: Message) -> None:
         self._logger.debug("EVENT received: %s", msg)
@@ -617,6 +634,10 @@ class ZMQRunner(TubeRunner):
                     self._logger.debug("Marking return node ready in epoch %s", epoch)
                     self.tube.scheduler.done(epoch, self._return_node.id)
 
+    def on_router(self, msg: Message) -> None:
+        if isinstance(msg, ErrorMsg):
+            self._handle_error(msg)
+
     def collect_return(self, epoch: int | None = None) -> Any:
         if epoch is None:
             raise ValueError("Must specify epoch in concurrent runners")
@@ -629,6 +650,21 @@ class ZMQRunner(TubeRunner):
             args, kwargs = self.store.split_args_kwargs(events)
             self._return_node.process(*args, **kwargs)
             return self._return_node.get(keep=False)
+
+    def _handle_error(self, msg: ErrorMsg) -> None:
+        """Cancel current epoch, stash error for process method to throw"""
+        self._logger.error("Received error from node: %s", msg)
+        self._to_throw = msg.value
+        self.tube.scheduler.end_epoch(self._current_epoch)
+
+    def _throw_error(self) -> None:
+        err = self._to_throw
+        self._to_throw = None
+        self._logger.debug(
+            "Deinitializing before throwing error",
+        )
+        self.deinit()
+        raise err
 
     def enable_node(self, node_id: str) -> None:
         raise NotImplementedError()
