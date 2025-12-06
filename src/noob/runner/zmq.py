@@ -630,7 +630,7 @@ class ZMQRunner(TubeRunner):
             return
 
         with self._init_lock:
-            self.command = cast(CommandNode, None)
+            self.command = cast(CommandNode, self.command)
             self.command.stop()
             # wait for nodes to finish, if they don't finish in the timeout, kill them
             started_waiting = time()
