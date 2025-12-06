@@ -1,7 +1,7 @@
 import pytest
 
 from noob import Tube
-from noob.network.message import IdentifyMsg, IdentifyValue
+from noob.network.message import IdentifyMsg, IdentifyValue, NodeStatus
 from noob.runner.zmq import ZMQRunner
 
 pytestmark = pytest.mark.zmq_runner
@@ -32,6 +32,7 @@ def test_message_roundtrip():
         node_id=node.spec.id,
         value=IdentifyValue(
             node_id=node.spec.id,
+            status=NodeStatus.ready,
             outbox="ipc:///abc/123",
             signals=[s.name for s in node.signals],
             slots=[s for s in node.slots],
