@@ -22,7 +22,6 @@
 
 """
 
-import logging
 import multiprocessing as mp
 import os
 import signal
@@ -59,7 +58,9 @@ from noob.network.message import (
     IdentifyValue,
     Message,
     MessageType,
+    NodeStatus,
     ProcessMsg,
+    StatusMsg,
     StopMsg,
 )
 from noob.node import Node, NodeSpecification, Return
@@ -200,7 +201,12 @@ class CommandNode(EventloopMixin):
             if set(node_ids) == set(self._nodes):
                 return
 
-            self._ready_condition.wait_for(lambda: set(node_ids) == set(self._nodes))
+            def _is_ready() -> bool:
+                return set(node_ids) == {
+                    node_id for node_id, state in self._nodes.items() if state["status"] == "ready"
+                }
+
+            self._ready_condition.wait_for(_is_ready)
 
     def on_router(self, msg: list[bytes]) -> None:
         try:
@@ -216,6 +222,9 @@ class CommandNode(EventloopMixin):
         if msg.type_ == MessageType.identify:
             msg = cast(IdentifyMsg, msg)
             self.on_identify(msg)
+        elif msg.type_ == MessageType.status:
+            msg = cast(StatusMsg, msg)
+            self.on_status(msg)
 
     def on_inbox(self, msg: list[bytes]) -> None:
         msg = Message.from_bytes(msg)
@@ -234,6 +243,11 @@ class CommandNode(EventloopMixin):
             self.logger.debug("Announced")
         except Exception as e:
             self.logger.exception("Exception announced: %s", e)
+
+    def on_status(self, msg: StatusMsg) -> None:
+        with self._ready_condition:
+            self._nodes[msg.node_id]["status"] = msg.value
+            self._ready_condition.notify_all()
 
 
 class NodeRunner(EventloopMixin):
@@ -275,6 +289,8 @@ class NodeRunner(EventloopMixin):
         self._process_quitting = mp.Event()
         self._freerun = mp.Event()
         self._process_one = mp.Event()
+        self._status: NodeStatus = NodeStatus.stopped
+        self._status_lock = mp.RLock()
         self._to_process = 0
 
     @property
@@ -296,6 +312,16 @@ class NodeRunner(EventloopMixin):
                 (edge.source_node, edge.source_signal) for edge in self._node.edges
             )
         return self._depends
+
+    @property
+    def status(self) -> NodeStatus:
+        with self._status_lock:
+            return self._status
+
+    @status.setter
+    def status(self, status: NodeStatus) -> None:
+        with self._status_lock:
+            self._status = status
 
     @classmethod
     def run(cls, spec: NodeSpecification, **kwargs: Any) -> None:
@@ -367,6 +393,7 @@ class NodeRunner(EventloopMixin):
 
         self.init_node()
         self.start_sockets()
+        self.status = NodeStatus.waiting if self.depends else NodeStatus.ready
         self.identify()
         self.logger.debug("Initialization finished")
 
@@ -374,6 +401,7 @@ class NodeRunner(EventloopMixin):
         self.logger.debug("Deinitializing")
         if self._node is not None:
             self._node.deinit()
+        self.update_status(NodeStatus.closed)
         self.stop_loop()
         self.logger.debug("Deinitialization finished")
 
@@ -381,17 +409,28 @@ class NodeRunner(EventloopMixin):
         """
         Send the command node an announce to say we're alive
         """
-        ann = IdentifyMsg(
-            node_id=self.spec.id,
-            value=IdentifyValue(
+        with self._status_lock:
+            ann = IdentifyMsg(
                 node_id=self.spec.id,
-                outbox=self.outbox_address,
-                signals=[s.name for s in self._node.signals] if self._node.signals else None,
-                slots=[slot_name for slot_name in self._node.slots] if self._node.slots else None,
-            ),
-        )
-        self._dealer.send_multipart([ann.to_bytes()])
-        self.logger.debug("Sent identification message: %s", ann.to_bytes())
+                value=IdentifyValue(
+                    node_id=self.spec.id,
+                    status=self.status,
+                    outbox=self.outbox_address,
+                    signals=[s.name for s in self._node.signals] if self._node.signals else None,
+                    slots=(
+                        [slot_name for slot_name in self._node.slots] if self._node.slots else None
+                    ),
+                ),
+            )
+            self._dealer.send_multipart([ann.to_bytes()])
+        self.logger.debug("Sent identification message: %s", ann)
+
+    def update_status(self, status: NodeStatus) -> None:
+        """Update our internal status and announce it to the command node"""
+        with self._status_lock:
+            self.status = status
+            msg = StatusMsg(node_id=self.spec.id, value=status)
+            self._dealer.send_multipart([msg.to_bytes()])
 
     def start_sockets(self) -> None:
         self._init_sockets()
@@ -478,16 +517,17 @@ class NodeRunner(EventloopMixin):
         """
         Store map, connect to the nodes we depend on
         """
-        for node_id in msg.value["nodes"]:
-            if (
-                node_id in {edge.source_node for edge in self._node.edges}
-                and node_id not in self._nodes
-            ):
-                # TODO: a way to check if we're already connected, without storing it locally?
-                outbox = msg.value["nodes"][node_id]["outbox"]
-                self._inbox.connect(outbox)
-                self.logger.debug("Subscribed to %s at %s", node_id, outbox)
-        self._nodes = msg.value["nodes"]
+        with self._status_lock:
+            depended_nodes = {edge.source_node for edge in self._node.edges}
+            for node_id in msg.value["nodes"]:
+                if node_id in depended_nodes and node_id not in self._nodes:
+                    # TODO: a way to check if we're already connected, without storing it locally?
+                    outbox = msg.value["nodes"][node_id]["outbox"]
+                    self._inbox.connect(outbox)
+                    self.logger.debug("Subscribed to %s at %s", node_id, outbox)
+            self._nodes = msg.value["nodes"]
+            if set(self._nodes) >= depended_nodes and self.status == NodeStatus.waiting:
+                self.update_status(NodeStatus.ready)
 
     def on_event(self, msg: EventMsg) -> None:
         events = msg.value

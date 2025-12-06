@@ -34,9 +34,27 @@ class MessageType(StrEnum):
     identify = "identify"
     process = "process"
     start = "start"
+    status = "status"
     stop = "stop"
     event = "event"
     error = "error"
+
+
+class NodeStatus(StrEnum):
+    stopped = "stopped"
+    """Node is deinitialized - does not have an instantiated node, etc., but is responsive."""
+    waiting = "waiting"
+    """Node is waiting for its dependency nodes to be ready"""
+    ready = "ready"
+    """Node is ready to process events"""
+    running = "running"
+    """
+    Node is running in free-run mode.
+    Note that we do not update status for every process call at the moment,
+    as that level of granularity is not relevant to the command node when sending commands 
+    """
+    closed = "closed"
+    """Node is permanently gone, should not be expected to respond to further messages."""
 
 
 class Message(BaseModel):
@@ -58,6 +76,7 @@ class Message(BaseModel):
 class IdentifyValue(TypedDict):
     node_id: str
     outbox: str
+    status: NodeStatus
     signals: list[str] | None
     slots: list[str] | None
 
@@ -93,6 +112,13 @@ class StartMsg(Message):
 
     type_: Literal[MessageType.start] = Field(MessageType.start, alias="type")
     value: None = None
+
+
+class StatusMsg(Message):
+    """Node updating its current status"""
+
+    type_: Literal[MessageType.status] = Field(MessageType.status, alias="type")
+    value: NodeStatus
 
 
 class StopMsg(Message):
@@ -159,6 +185,7 @@ MessageUnion = A[
     | A[IdentifyMsg, Tag("identify")]
     | A[ProcessMsg, Tag("process")]
     | A[StartMsg, Tag("start")]
+    | A[StatusMsg, Tag("status")]
     | A[StopMsg, Tag("stop")]
     | A[EventMsg, Tag("event")]
     | A[ErrorMsg, Tag("error")]
