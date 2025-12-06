@@ -535,11 +535,7 @@ class ZMQRunner(TubeRunner):
     _running: mp.Event = field(default_factory=mp.Event)
     _return_node: Return | None = None
     _init_lock: threading.Lock = field(default_factory=threading.Lock)
-    _logger: logging.Logger | None = None
     _to_throw: Exception | None = None
-
-    def __post_init__(self):
-        self._logger = init_logger(f"noob.runner.{self.runner_id}")
 
     @property
     def running(self) -> bool:

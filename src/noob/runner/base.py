@@ -35,8 +35,11 @@ class TubeRunner(ABC):
 
     _callbacks: list[Callable[[Event | MetaEvent], None]] = field(default_factory=list)
 
-    _logger: Logger = field(default_factory=lambda: init_logger("tube.runner"))
+    _logger: Logger | None = None
     _runner_id: str | None = None
+
+    def __post_init__(self):
+        self._logger = init_logger(f"noob.runner.{self.runner_id}")
 
     @property
     def runner_id(self) -> str:

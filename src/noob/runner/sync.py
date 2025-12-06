@@ -19,6 +19,7 @@ class SynchronousRunner(TubeRunner):
     """
 
     def __post_init__(self):
+        super().__post_init__()
         self._running = ThreadEvent()
 
     def init(self) -> None:
