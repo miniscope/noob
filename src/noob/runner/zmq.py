@@ -526,7 +526,7 @@ class ZMQRunner(TubeRunner):
     A concurrent runner that uses zmq to broker events between nodes running in separate processes
     """
 
-    node_procs: dict[NodeID, mp.Process] = field(default_factory=dict)
+    node_procs: dict[NodeID, mp.context.ForkProcess] = field(default_factory=dict)
     command: CommandNode | None = None
     quit_timeout: float = 10
     """time in seconds to wait after calling deinit to wait before killing runner processes"""
@@ -537,10 +537,18 @@ class ZMQRunner(TubeRunner):
     _init_lock: threading.Lock = field(default_factory=threading.Lock)
     _to_throw: Exception | None = None
 
+    _context: mp.context.ForkContext | None = None
+
     @property
     def running(self) -> bool:
         with self._init_lock:
             return self._running.is_set()
+
+    @property
+    def context(self) -> mp.context.ForkContext:
+        if self._context is None:
+            self._context = mp.get_context('fork')
+        return self._context
 
     def init(self) -> None:
         if self.running:
@@ -557,7 +565,7 @@ class ZMQRunner(TubeRunner):
                 if isinstance(node, Return):
                     self._return_node = node
                     continue
-                self.node_procs[node_id] = mp.Process(
+                self.node_procs[node_id] = self.context.Process(
                     target=NodeRunner.run,
                     args=(node.spec,),
                     kwargs={
