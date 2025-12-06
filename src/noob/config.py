@@ -47,6 +47,10 @@ class LogConfig(BaseModel):
     """
     Maximum size of log files (bytes)
     """
+    width: int | None = None
+    """
+    Explicitly set width of rich stdout logs, leave as None for auto detection.
+    """
 
     @field_validator("level", "level_file", "level_stdout", mode="before")
     @classmethod

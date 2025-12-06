@@ -1,3 +1,4 @@
+import asyncio
 import threading
 
 try:
@@ -14,7 +15,7 @@ class EventloopMixin:
     def __init__(self):
         self._context = None
         self._loop = None
-        self._quitting = threading.Event()
+        self._quitting = asyncio.Event()
         self._thread: threading.Thread | None = None
 
     @property
@@ -25,6 +26,14 @@ class EventloopMixin:
 
     @property
     def loop(self) -> IOLoop:
+        # tornado requires an eventloop to be created manually now
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # Create a new asyncio event loop for this thread.
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
         if self._loop is None:
             self._loop = IOLoop.current()
         return self._loop

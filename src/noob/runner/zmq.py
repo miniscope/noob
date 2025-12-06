@@ -372,7 +372,8 @@ class NodeRunner(EventloopMixin):
 
     def deinit(self) -> None:
         self.logger.debug("Deinitializing")
-        self._node.deinit()
+        if self._node is not None:
+            self._node.deinit()
         self.stop_loop()
         self.logger.debug("Deinitialization finished")
 
