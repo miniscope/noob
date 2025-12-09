@@ -10,7 +10,7 @@ from threading import Condition
 from typing import Any, TypeAlias
 
 from noob.const import META_SIGNAL
-from noob.event import Event, NoEvent
+from noob.event import Event, MetaSignal
 from noob.node import Edge
 from noob.node.base import Signal
 from noob.types import Epoch, NodeID, SignalName
@@ -80,10 +80,9 @@ class EventStore:
             node_id (str): ID of the node that emitted the events
             epoch (int): Epoch count that the signal was emitted in
         """
-
         timestamp = datetime.now(UTC)
-        if isinstance(value, NoEvent):
-            signals = [Signal(name=META_SIGNAL, type_=NoEvent)]
+        if value is MetaSignal.NoEvent:
+            signals = [Signal(name=META_SIGNAL, type_=MetaSignal)]
 
         with self._event_condition:
             values = [value] if len(signals) == 1 else value
