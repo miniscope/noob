@@ -49,10 +49,5 @@ class MetaEvent(Event):
     signal: MetaEventType  # type: ignore
 
 
-class NoEvent:
-    """
-    Signifier for no event emitted
-
-    """
-
-    pass
+class MetaSignal(StrEnum):
+    NoEvent = "NoEvent"
