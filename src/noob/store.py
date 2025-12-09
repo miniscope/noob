@@ -145,7 +145,7 @@ class EventStore:
 
         If `epoch` is -1,
         get the the events from the most recent epoch where all events are present,
-        and if no epochs are present with a full set of events,
+        and if no epochs are present with a full set of events, return None
 
         .. todo::
 
