@@ -1,4 +1,4 @@
-name: docs
+name: Docs Preview
 on:
   pull_request_target:
     types:
