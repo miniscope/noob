@@ -20,7 +20,7 @@ from pydantic import (
 from pydantic_core.core_schema import SerializerFunctionWrapHandler
 
 from noob.const import META_SIGNAL
-from noob.event import Event, NoEvent
+from noob.event import Event, MetaSignal
 from noob.types import Picklable
 
 if sys.version_info < (3, 12):
@@ -138,8 +138,8 @@ class ErrorMsg(Message):
 
 
 def _to_json(val: Event, handler: SerializerFunctionWrapHandler) -> Any:
-    if val["signal"] == META_SIGNAL and isinstance(val["value"], NoEvent):
-        val["value"] = "NOEVENT"
+    if val["signal"] == META_SIGNAL and val["value"] is MetaSignal.NoEvent:
+        val["value"] = MetaSignal.NoEvent.value
 
     try:
         return handler(val)
@@ -154,8 +154,8 @@ def _from_json(val: Any) -> Event:
             evt = pickle.loads(base64.b64decode(val[5:]))
         else:
             evt = Event(**json.loads(val))  # type: ignore[typeddict-item]
-        if evt["signal"] == META_SIGNAL and evt["value"] == "NOEVENT":
-            evt["value"] = NoEvent()
+        if evt["signal"] == META_SIGNAL and evt["value"] == MetaSignal.NoEvent.value:
+            evt["value"] = MetaSignal.NoEvent
         return evt
     else:
         return val

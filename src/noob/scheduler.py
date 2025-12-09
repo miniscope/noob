@@ -11,7 +11,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from noob.const import META_SIGNAL
-from noob.event import Event, MetaEvent, MetaEventType, NoEvent
+from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
 from noob.logging import init_logger
 from noob.node import Edge, NodeSpecification
 from noob.types import NodeID
@@ -186,9 +186,7 @@ class Scheduler(BaseModel):
                 else:
                     marked_done.add(done_marker)
 
-                if isinstance(e["value"], NoEvent) or (
-                    e["signal"] == META_SIGNAL and e["value"] == "NOEVENT"
-                ):
+                if e["signal"] == META_SIGNAL and e["value"] == MetaSignal.NoEvent:
                     epoch_ended = self.cancel(epoch=e["epoch"], node_id=e["node_id"])
                 else:
                     epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"])

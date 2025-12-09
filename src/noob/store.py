@@ -81,7 +81,7 @@ class EventStore:
             epoch (int): Epoch count that the signal was emitted in
         """
         timestamp = datetime.now(UTC)
-        if value is MetaSignal.NoEvent:
+        if value is MetaSignal.NoEvent or (isinstance(value, str) and value == MetaSignal.NoEvent):
             signals = [Signal(name=META_SIGNAL, type_=MetaSignal)]
 
         with self._event_condition:
