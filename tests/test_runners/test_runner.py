@@ -22,14 +22,10 @@ def test_process_callback() -> None:
     runner.add_callback(_cb)
     runner.process()
 
-    # internal events are not caught in callback (or EventStore)
-    # Return node emits NoEvent
-    # NoEvent and MetaEvent are uncaught
-    assert (
-        len(cb_events)
-        == len(runner.store.events)
-        == len([node for node in tube.nodes.values() if not isinstance(node, Return)])
-    )
+    # Callback will get MetaEvents like epoch end,
+    # but event store won't have them,
+    # so the callback should have received one more event than the others
+    assert len(cb_events) - 1 == len(runner.store.flat_events) == len(tube.nodes)
     assert len(cb_events) > 0
 
 
@@ -46,7 +42,7 @@ def test_disabled_node() -> None:
         all_events.append(event)
 
     runner.add_callback(_cb)
-    runner.run()
+    runner.process()
     assert "b" not in {e["node_id"] for e in all_events}
 
 

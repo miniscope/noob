@@ -13,17 +13,20 @@ def test_epoch_increment():
     """
     Must be able to increment epoch on a Scheduler, which generates a graph
     each time.
-
     """
     tube = Tube.from_specification("testing-basic")
     scheduler = tube.scheduler
 
-    with pytest.raises(KeyError):
-        assert scheduler[0]
+    # accessing makes the epoch
+    assert isinstance(scheduler[0], TopologicalSorter)
 
     for i in range(5):
-        scheduler.add_epoch()
+        assert scheduler.add_epoch() == i + 1
         assert isinstance(scheduler[i], TopologicalSorter)
+
+    # if we create an epoch out of order, the next call without epoch specified increments
+    assert scheduler.add_epoch(10) == 10
+    assert scheduler.add_epoch() == 11
 
 
 def test_tube_increments_epoch(no_input_tubes):
@@ -37,8 +40,8 @@ def test_tube_increments_epoch(no_input_tubes):
         _ = runner.process()
         events = runner.store.events
         # we haven't cleared events
-        assert len(events) > 0
-        assert all(e["epoch"] == i for e in events)
+        assert len(events) == 1
+        assert list(events.keys())[0] == i
 
 
 def test_event_store_filter():
@@ -202,4 +205,10 @@ def test_metaevents():
     event = queue.get_nowait()
     assert event["node_id"] == "meta"
     assert len(runner.store.events) > 0
-    assert all(event["node_id"] != "meta" for event in runner.store.events)
+    assert all(event["node_id"] != "meta" for event in runner.store.flat_events)
+
+
+@pytest.mark.xfail(raises=NotImplementedError)
+def test_noevent_ends_epoch():
+    """If a node in the middle of a tube emits a noevent, the epoch should no longer be active"""
+    raise NotImplementedError("Write this test!")

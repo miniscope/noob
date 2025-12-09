@@ -30,22 +30,23 @@ jobs:
 
       - name: Run Tests
         run: pytest
+        timeout-minutes: 5
+        env:
+          NOOB_LOGS__WIDTH: 140
 
-# re-enable when repository public
-#      - name: Coveralls Parallel
-#        uses: coverallsapp/github-action@v2.3.6
-#        if: runner.os != 'macOS'
-#        with:
-#          flag-name: run-${{ join(matrix.*, '-') }}
-#          parallel: true
-#          debug: true
-#
-#  finish-coverage:
-#    needs: test
-#    if: ${{ always() }}
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Coveralls Finished
-#        uses: coverallsapp/github-action@v2.3.6
-#        with:
-#          parallel-finished: true
+      - name: Coveralls Parallel
+        uses: coverallsapp/github-action@v2
+        with:
+          flag-name: run-${{ join(matrix.*, '-') }}
+          parallel: true
+          debug: true
+
+  finish-coverage:
+    needs: test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Coveralls Finished
+        uses: coverallsapp/github-action@v2.3.6
+        with:
+          parallel-finished: true

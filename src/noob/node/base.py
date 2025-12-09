@@ -2,7 +2,17 @@ import functools
 import inspect
 from collections.abc import Callable, Generator, Mapping
 from types import GeneratorType, GenericAlias, UnionType
-from typing import TYPE_CHECKING, Annotated, Any, TypeVar, Union, get_args, get_origin, overload
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    TypeVar,
+    Union,
+    cast,
+    get_args,
+    get_origin,
+    overload,
+)
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -145,6 +155,7 @@ class Node(BaseModel):
     _signals: list[Signal] | None = None
     _slots: dict[str, Slot] | None = None
     _gen: Generator | None = None
+    _edges: list[Edge] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -267,6 +278,9 @@ class Node(BaseModel):
         if not self.spec.depends:
             return []
 
+        if self._edges is not None:
+            return self._edges
+
         edges = []
         if isinstance(self.spec.depends, str):
             # handle scalar dependency like
@@ -312,7 +326,8 @@ class Node(BaseModel):
                     )
                 )
 
-        return edges
+        self._edges = edges
+        return self._edges
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)
@@ -325,6 +340,7 @@ class Node(BaseModel):
         self._gen = proc()
 
         def _process():  # noqa: ANN202
+            self._gen = cast(Generator, self._gen)
             return next(self._gen)
 
         signature = inspect.signature(self.process)
