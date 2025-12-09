@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from noob.const import META_SIGNAL
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
+from noob.exceptions import EpochCompletedError, EpochExistsError
 from noob.logging import init_logger
 from noob.node import Edge, NodeSpecification
 from noob.types import NodeID
@@ -71,9 +72,9 @@ class Scheduler(BaseModel):
                 this_epoch = next(self._clock)
 
             if this_epoch in self._epochs:
-                raise ValueError(f"Epoch {this_epoch} is already scheduled")
+                raise EpochExistsError(f"Epoch {this_epoch} is already scheduled")
             elif this_epoch in self._epoch_log:
-                raise ValueError(f"Epoch {this_epoch} has already been completed!")
+                raise EpochCompletedError(f"Epoch {this_epoch} has already been completed!")
 
             graph = self._init_graph(nodes=self.nodes, edges=self.edges)
             graph.prepare()
