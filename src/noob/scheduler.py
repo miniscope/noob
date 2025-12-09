@@ -272,6 +272,7 @@ class Scheduler(BaseModel):
                 for ep in self._epochs:
                     if self.node_is_ready(node_id, ep):
                         epoch = ep
+                        break
 
             if epoch is None:
                 raise RuntimeError(
