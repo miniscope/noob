@@ -1,5 +1,7 @@
 # noob
 
+![PyPI - Version](https://img.shields.io/pypi/v/noob)
+
 (beginning active development March 2025, public release soon <3)
 
 ---
