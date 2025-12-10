@@ -25,6 +25,7 @@ usage/index
 examples/index
 api/index
 related_projects
+changelog
 ```
 
 
