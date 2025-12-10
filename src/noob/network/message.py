@@ -4,7 +4,6 @@ import pickle
 import sys
 from datetime import UTC, datetime
 from enum import StrEnum
-from traceback import TracebackException
 from typing import Annotated as A
 from typing import Any, Literal
 
@@ -90,7 +89,7 @@ class AnnounceValue(TypedDict):
 class ErrorValue(TypedDict):
     err_type: type[Exception]
     err_args: tuple
-    traceback: TracebackException
+    traceback: str
 
 
 class AnnounceMsg(Message):

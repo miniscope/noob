@@ -569,7 +569,7 @@ class NodeRunner(EventloopMixin):
         Capture the error and traceback context from an exception using
         :class:`traceback.TracebackException` and send to command node to re-raise
         """
-        tbexception = traceback.TracebackException.from_exception(err)
+        tbexception = "\n".join(traceback.format_tb(err.__traceback__))
         self.logger.debug("Throwing error in main runner: %s", tbexception)
         msg = ErrorMsg(
             node_id=self.spec.id,
@@ -738,7 +738,7 @@ class ZMQRunner(TubeRunner):
         tb_message = "\nError re-raised from node runner process\n\n"
         tb_message += "Original traceback:\n"
         tb_message += "-" * 20 + "\n"
-        tb_message += "".join(line for line in errval["traceback"].format(chain=True))
+        tb_message += errval["traceback"]
         err.add_note(tb_message)
 
         raise err
