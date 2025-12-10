@@ -733,7 +733,6 @@ class ZMQRunner(TubeRunner):
 
         # add the traceback as a note,
         # sort of the best we can do without using tblib
-        errval = cast(ErrorValue, errval)
         err = errval["err"]
         tb_message = "\nError re-raised from node runner process\n\n"
         tb_message += "Original traceback:\n"
