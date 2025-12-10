@@ -47,5 +47,15 @@ def test_error_reporting():
     """When a zmq runner node has an error, it sends it back to the command node"""
     tube = Tube.from_specification("testing-error")
     runner = ZMQRunner(tube)
-    with pytest.raises(ValueError, match="This node just emits errors"):
+    with pytest.raises(ValueError) as exc_info:
         runner.process()
+
+    assert exc_info.type is ValueError
+    # original error message
+    assert str(exc_info.value) == "This node just emits errors"
+    # additional information in the notes
+    note = exc_info.value.__notes__[0]
+    # notice that this error was raised in another process
+    assert "Error re-raised from node runner process" in note
+    # the location of the original exception
+    assert "testing/nodes.py" in note

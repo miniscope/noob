@@ -26,6 +26,7 @@ import multiprocessing as mp
 import os
 import signal
 import threading
+import traceback
 from collections import defaultdict
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
@@ -54,6 +55,7 @@ from noob.network.message import (
     AnnounceMsg,
     AnnounceValue,
     ErrorMsg,
+    ErrorValue,
     EventMsg,
     IdentifyMsg,
     IdentifyValue,
@@ -563,8 +565,19 @@ class NodeRunner(EventloopMixin):
         os.kill(pid, signal.SIGTERM)
 
     def error(self, err: Exception) -> None:
-        self.logger.debug("Throwing error in main runner: %s", err)
-        msg = ErrorMsg(node_id=self.spec.id, value=err)
+        """
+        Capture the error and traceback context from an exception using
+        :class:`traceback.TracebackException` and send to command node to re-raise
+        """
+        tbexception = traceback.TracebackException.from_exception(err)
+        self.logger.debug("Throwing error in main runner: %s", tbexception)
+        msg = ErrorMsg(
+            node_id=self.spec.id,
+            value=ErrorValue(
+                err=err,
+                traceback=tbexception,
+            ),
+        )
         self._dealer.send_multipart([msg.to_bytes()])
 
 
@@ -583,7 +596,7 @@ class ZMQRunner(TubeRunner):
     _running: EventType = field(default_factory=mp.Event)
     _return_node: Return | None = None
     _init_lock: threading.Lock = field(default_factory=threading.Lock)
-    _to_throw: Exception | None = None
+    _to_throw: ErrorValue | None = None
 
     @property
     def running(self) -> bool:
@@ -708,14 +721,26 @@ class ZMQRunner(TubeRunner):
         self.tube.scheduler.end_epoch(self._current_epoch)
 
     def _throw_error(self) -> None:
-        err = self._to_throw
-        if err is None:
+        errval = self._to_throw
+        if errval is None:
             return
+        # clear instance object and store locally, we aren't locked here.
         self._to_throw = None
         self._logger.debug(
             "Deinitializing before throwing error",
         )
         self.deinit()
+
+        # add the traceback as a note,
+        # sort of the best we can do without using tblib
+        errval = cast(ErrorValue, errval)
+        err = errval["err"]
+        tb_message = "\nError re-raised from node runner process\n\n"
+        tb_message += "Original traceback:\n"
+        tb_message += "-" * 20 + "\n"
+        tb_message += "".join(line for line in errval["traceback"].format(chain=True))
+        err.add_note(tb_message)
+
         raise err
 
     def enable_node(self, node_id: str) -> None:

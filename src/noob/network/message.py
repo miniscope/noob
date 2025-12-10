@@ -4,6 +4,7 @@ import pickle
 import sys
 from datetime import UTC, datetime
 from enum import StrEnum
+from traceback import TracebackException
 from typing import Annotated as A
 from typing import Any, Literal
 
@@ -86,6 +87,11 @@ class AnnounceValue(TypedDict):
     nodes: dict[str, IdentifyValue]
 
 
+class ErrorValue(TypedDict):
+    err: Exception
+    traceback: TracebackException
+
+
 class AnnounceMsg(Message):
     """Command node 'announces' identities of other peers and the events they emit"""
 
@@ -132,7 +138,7 @@ class ErrorMsg(Message):
     """An error occurred in one of the processing nodes"""
 
     type_: Literal[MessageType.error] = Field(MessageType.error, alias="type")
-    value: Picklable[Exception]
+    value: Picklable[ErrorValue]
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
