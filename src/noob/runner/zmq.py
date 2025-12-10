@@ -574,7 +574,8 @@ class NodeRunner(EventloopMixin):
         msg = ErrorMsg(
             node_id=self.spec.id,
             value=ErrorValue(
-                err=err,
+                err_type=type(err),
+                err_args=err.args,
                 traceback=tbexception,
             ),
         )
@@ -733,7 +734,7 @@ class ZMQRunner(TubeRunner):
 
         # add the traceback as a note,
         # sort of the best we can do without using tblib
-        err = errval["err"]
+        err = errval["err_type"](*errval["err_args"])
         tb_message = "\nError re-raised from node runner process\n\n"
         tb_message += "Original traceback:\n"
         tb_message += "-" * 20 + "\n"

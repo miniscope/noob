@@ -88,7 +88,8 @@ class AnnounceValue(TypedDict):
 
 
 class ErrorValue(TypedDict):
-    err: Exception
+    err_type: type[Exception]
+    err_args: tuple
     traceback: TracebackException
 
 
