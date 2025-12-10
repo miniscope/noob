@@ -86,6 +86,12 @@ class AnnounceValue(TypedDict):
     nodes: dict[str, IdentifyValue]
 
 
+class ErrorValue(TypedDict):
+    err_type: type[Exception]
+    err_args: tuple
+    traceback: str
+
+
 class AnnounceMsg(Message):
     """Command node 'announces' identities of other peers and the events they emit"""
 
@@ -132,7 +138,7 @@ class ErrorMsg(Message):
     """An error occurred in one of the processing nodes"""
 
     type_: Literal[MessageType.error] = Field(MessageType.error, alias="type")
-    value: Picklable[Exception]
+    value: Picklable[ErrorValue]
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
