@@ -96,6 +96,7 @@ build-backend = "pdm.backend"
 
 [tool.pdm]
 distribution = true
+lock.format = "pylock"
 
 [tool.pdm.version]
 # versions from tags like "v0.1.2"
