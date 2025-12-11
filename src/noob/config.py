@@ -1,3 +1,5 @@
+import warnings
+from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Literal
 
@@ -11,9 +13,15 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
+from noob.exceptions import EntrypointImportWarning
+
 _default_userdir = Path().home() / ".config" / "noob"
 _dirs = PlatformDirs("noob", "noob")
 LOG_LEVELS = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
+_extra_sources = []
+"""Extra sources for tube configs added by `add_sources`"""
+_entrypoint_sources: list[Path] | None = None
+"""Sources added by entrypoint functions. Initially `None`, populated on first load of a config"""
 
 
 class LogConfig(BaseModel):
@@ -124,6 +132,56 @@ class Config(BaseSettings):
             YamlConfigSettingsSource(settings_cls),
             PyprojectTomlConfigSettingsSource(settings_cls),
         )
+
+
+def add_config_source(path: Path) -> None:
+    """
+    Add a directory as a source of tube configs when searching by tube id
+    """
+    global _extra_sources
+    path = Path(path)
+    _extra_sources.append(path)
+
+
+def get_entrypoint_sources() -> list[Path]:
+    """
+    Get additional config sources added by entrypoint functions.
+
+    Packages that ship noob tubes can make those tubes available by adding an
+    entrypoint function with a signature ``() -> list[Path]`` to their pyproject.toml
+    like:
+
+        [project.entry-points."noob.add_sources"]
+        tubes = "my_package.something:add_sources"
+
+    References:
+        https://setuptools.pypa.io/en/latest/userguide/entry_point.html
+    """
+    global _entrypoint_sources
+    if _entrypoint_sources is None:
+        _entrypoint_sources = []
+        for ext in entry_points(group="noob.add_sources"):
+            try:
+                add_sources_fn = ext.load()
+            except (ImportError, AttributeError):
+                warnings.warn(
+                    f"Config source entrypoint {ext.name}, {ext.value} "
+                    f"could not be imported, or the function could not be found. Ignoring",
+                    EntrypointImportWarning,
+                    stacklevel=1,
+                )
+                continue
+            try:
+                _entrypoint_sources.extend([Path(p) for p in add_sources_fn()])
+            except Exception as e:
+                # bare exception is fine here - we're calling external code and can't know.
+                warnings.warn(
+                    f"Config source entrypoint {ext.name}, {ext.value} "
+                    f"threw an error, or returned an invalid list of paths, ignoring.\n{str(e)}",
+                    EntrypointImportWarning,
+                    stacklevel=1,
+                )
+    return _entrypoint_sources
 
 
 config = Config()

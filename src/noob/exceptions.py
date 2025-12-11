@@ -16,6 +16,10 @@ class ConfigError(NoobError):
     """Base config error type"""
 
 
+class ConfigWarning(NoobWarning):
+    """Base config warning type"""
+
+
 class SchedulerError(NoobError):
     """Base error in the scheduler"""
 
@@ -49,6 +53,10 @@ class ConfigMismatchError(ConfigError, ValueError):
     """
     Mismatch between the fields in some config model and the fields in the model it is configuring
     """
+
+
+class EntrypointImportWarning(ConfigWarning, ImportWarning):
+    """Some problem with a configuration entypoint, usually when importing"""
 
 
 class AlreadyRunningError(RunnerError, RuntimeError):
