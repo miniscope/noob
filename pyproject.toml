@@ -78,7 +78,7 @@ docs = [
     "sphinxcontrib-mermaid>=1.0.0",
     "myst-nb>=1.2.0",
     "numpy>=2.3.2",
-    "xarray>=2025.7.1",\
+    "xarray>=2025.7.1",
     "faker>=37.3.0",
 ]
 mypy = [
