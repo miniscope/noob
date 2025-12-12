@@ -8,6 +8,7 @@
 
 import importlib.metadata as metadata
 import logging
+import os
 
 project = "noob"
 copyright = "2025, raymond, jonny"
@@ -113,6 +114,11 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
         if hasattr(record, "location") and record.location is not None:
             if "typing.Annotated" in record.location or "typing.Union" in record.location:
                 return False
+
+        # not worth installing graphviz for one diagram in gh actions testing
+        if "GITHUB_ACTION" in os.environ and "dot command" in record.message:
+            return False
+
         return True
 
 
