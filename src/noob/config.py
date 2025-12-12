@@ -106,6 +106,7 @@ class Config(BaseSettings):
         """
         Read config settings from, in order of priority from high to low, where
         high priorities override lower priorities:
+
         * in the arguments passed to the class constructor (not user configurable)
         * in environment variables like ``export NOOB_LOGS__DIR=~/``
         * in a ``.env`` file in the working directory
@@ -113,6 +114,7 @@ class Config(BaseSettings):
         * in the ``tool.noob.config`` table in a ``pyproject.toml`` file
           in the working directory
         * the default values in the :class:`.Config` model
+
         """
 
         return (

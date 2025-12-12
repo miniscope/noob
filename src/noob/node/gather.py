@@ -20,24 +20,24 @@ class Gather(Node, Generic[_TInput]):
 
     - gather a fixed number of events
 
-    ```yaml
-    nodename:
-      type: gather
-      params:
-        n: 5
-      depends:
-        - value: othernode.signal
-    ```
+    .. code-block:: yaml
+
+        nodename:
+          type: gather
+          params:
+            n: 5
+          depends:
+            - value: othernode.signal
 
     - gather events until a trigger is received
 
-    ```yaml
-    nodename:
-      type: gather
-      depends:
-        - value: othernode.signal_1
-        - trigger: thirdnode.signal_2
-    ```
+    .. code-block:: yaml
+
+        nodename:
+          type: gather
+          depends:
+            - value: othernode.signal_1
+            - trigger: thirdnode.signal_2
     """
 
     n: int | None = None

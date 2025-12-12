@@ -171,7 +171,7 @@ class Scheduler(BaseModel):
     ) -> MutableSequence[Event] | MutableSequence[Event | MetaEvent]:
         """
         When a set of events are received, update the graphs within the scheduler.
-        Currently only has :method:`TopologicalSorter.done` implemented.
+        Currently only has :meth:`TopologicalSorter.done` implemented.
 
         """
         if not events:

@@ -1,7 +1,7 @@
-# `runner`
+# `nodes`
 
 ```{eval-rst}
-.. automodule:: noob.runner
+.. automodule:: noob.testing.nodes
     :members:
     :undoc-members:
 ```

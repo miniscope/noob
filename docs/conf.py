@@ -8,6 +8,7 @@
 
 import importlib.metadata as metadata
 import logging
+import os
 
 project = "noob"
 copyright = "2025, raymond, jonny"
@@ -21,6 +22,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.autodoc",
     "sphinxcontrib.autodoc_pydantic",
+    "sphinx.ext.inheritance_diagram",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
     "sphinx.ext.doctest",
@@ -57,7 +59,8 @@ html_css_files = [
 # --------------------------------------------------
 
 # Autodoc
-autoclass_content = "both"
+autoclass_content = "class"
+autodoc_inherit_docstrings = False
 autodoc_member_order = "bysource"
 add_module_names = False
 
@@ -89,6 +92,14 @@ todo_link_only = True
 nb_render_markdown_format = "myst"
 nb_execution_show_tb = True
 
+# inheritance-diagram
+inheritance_graph_attrs = {"rankdir": "LR", "splines": "ortho"}
+
+inheritance_edge_attrs = {
+    "color": "blue",
+    "style": "bold",
+}
+
 
 class FuckTheSphinxFiltersFilter(logging.Filter):
     """
@@ -100,8 +111,18 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord):
         # filter warnings that are NOT OUR FAULT
-        if hasattr(record, "location") and "typing.Annotated" in record.location:
+        if hasattr(record, "location") and record.location is not None:
+            if "typing.Annotated" in record.location or "typing.Union" in record.location:
+                return False
+
+        # not worth installing graphviz for one diagram in gh actions testing
+        if (
+            "GITHUB_ACTION" in os.environ
+            and hasattr(record, "getMessage")
+            and "dot command" in record.getMessage()
+        ):
             return False
+
         return True
 
 
