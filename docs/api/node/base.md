@@ -3,5 +3,5 @@
 ```{eval-rst}
 .. automodule:: noob.node.base
     :members:
-    :undoc-members:
+    :undoc-memberzs:
 ```

@@ -116,7 +116,11 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
                 return False
 
         # not worth installing graphviz for one diagram in gh actions testing
-        if "GITHUB_ACTION" in os.environ and "dot command" in record.message:
+        if (
+            "GITHUB_ACTION" in os.environ
+            and hasattr(record, "getMessage")
+            and "dot command" in record.getMessage()
+        ):
             return False
 
         return True
