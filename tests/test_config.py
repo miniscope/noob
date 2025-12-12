@@ -1,8 +1,5 @@
-import os
 import random
 from pathlib import Path
-
-import yaml
 
 from noob.config import Config
 

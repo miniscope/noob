@@ -6,11 +6,11 @@ Should be split off into another package :)
 import re
 import shutil
 from importlib.metadata import version
+from io import StringIO
 from itertools import chain
 from pathlib import Path
 from typing import Any, ClassVar, Literal, Self, Union, overload
 
-import yaml
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -20,19 +20,23 @@ from pydantic import (
     field_validator,
 )
 from pydantic_core import core_schema
+from ruamel.yaml import YAML, RoundTripRepresenter, ScalarNode
 
 from noob.types import AbsoluteIdentifier, ConfigID, ConfigSource, valid_config_id
 
+yaml = YAML()
 
-class YamlDumper(yaml.SafeDumper):
+
+class YamlRepresenter(RoundTripRepresenter):
     """Dumper that can represent extra types like Paths"""
 
-    def represent_path(self, data: Path) -> yaml.ScalarNode:
+    def represent_path(self, data: Path) -> ScalarNode:
         """Represent a path as a string"""
         return self.represent_scalar("tag:yaml.org,2002:str", str(data))
 
 
-YamlDumper.add_representer(type(Path()), YamlDumper.represent_path)
+YamlRepresenter.add_representer(type(Path()), YamlRepresenter.represent_path)
+yaml.Representer = YamlRepresenter
 
 
 class YAMLMixin:
@@ -45,7 +49,7 @@ class YAMLMixin:
     def from_yaml(cls: type[Self], file_path: str | Path) -> Self:
         """Instantiate this class by passing the contents of a yaml file as kwargs"""
         with open(file_path) as file:
-            config_data = yaml.safe_load(file)
+            config_data = yaml.load(file)
         return cls(**config_data)
 
     def to_yaml(self, path: Path | None = None, **kwargs: Any) -> str:
@@ -68,7 +72,11 @@ class YAMLMixin:
             **kwargs: passed to :meth:`.BaseModel.model_dump`
         """
         data = self._dump_data(**kwargs)
-        return yaml.dump(data, Dumper=YamlDumper, sort_keys=False)
+        string_stream = StringIO()
+        yaml.dump(data, string_stream)
+        output_str = string_stream.getvalue()
+        string_stream.close()
+        return output_str
 
     def _dump_data(self, **kwargs: Any) -> dict:
         data = self.model_dump(**kwargs) if isinstance(self, BaseModel) else self.__dict__
@@ -99,7 +107,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         """Instantiate this class by passing the contents of a yaml file as kwargs"""
         file_path = Path(file_path)
         with open(file_path) as file:
-            config_data = yaml.safe_load(file)
+            config_data = yaml.load(file)
 
         # fill in any missing fields in the source file needed for a header
         config_data = cls._complete_header(config_data, file_path)
@@ -260,7 +268,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             data = {**header, **data}
             shutil.copy(file_path, file_path.with_suffix(".yaml.bak"))
             with open(file_path, "w") as yfile:
-                yaml.dump(data, yfile, Dumper=YamlDumper, sort_keys=False)
+                yaml.dump(data, yfile)
 
         return data
 

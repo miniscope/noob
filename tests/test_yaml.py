@@ -1,11 +1,11 @@
+from collections import OrderedDict
 from importlib.metadata import version
 from pathlib import Path
 
 import pytest
-import yaml
 from pydantic import BaseModel, ConfigDict
 
-from noob.yaml import ConfigYAMLMixin, YAMLMixin, yaml_peek
+from noob.yaml import ConfigYAMLMixin, YAMLMixin, yaml, yaml_peek
 
 
 class NestedModel(BaseModel):
@@ -43,7 +43,7 @@ def test_yaml_mixin(tmp_path):
 
     yaml_file = tmp_path / "temp.yaml"
     with open(yaml_file, "w") as yfile:
-        yaml.safe_dump(data, yfile)
+        yaml.dump(data, yfile)
 
     instance = MyModel.from_yaml(yaml_file)
     assert instance.model_dump() == data
@@ -69,6 +69,17 @@ def test_config_from_id(yaml_config, id, path, valid):
     else:
         with pytest.raises(KeyError):
             MyModel.from_id(id)
+
+
+def test_roundtrip_dump_load_yaml(tmp_config_source):
+    """yaml dump and load preserve key order"""
+    yaml_file = tmp_config_source / "test_config.yaml"
+
+    instance = MyModel()
+    instance.to_yaml(yaml_file)
+    expected = instance._dump_data()
+    result = yaml.load(yaml_file)
+    assert OrderedDict(expected) == OrderedDict(result)
 
 
 def test_roundtrip_to_from_yaml(tmp_config_source):
@@ -125,7 +136,7 @@ def test_complete_header(tmp_config_source, src: str):
     _ = MyModel.from_yaml(yaml_file)
 
     with open(yaml_file) as yfile:
-        loaded = yaml.safe_load(yfile)
+        loaded = yaml.load(yfile)
 
     loaded_str = yaml_file.read_text()
 
