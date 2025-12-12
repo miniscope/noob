@@ -6,6 +6,7 @@ Should be split off into another package :)
 import re
 import shutil
 from importlib.metadata import version
+from io import StringIO
 from itertools import chain
 from pathlib import Path
 from typing import Any, ClassVar, Literal, Self, Union, overload
@@ -71,7 +72,11 @@ class YAMLMixin:
             **kwargs: passed to :meth:`.BaseModel.model_dump`
         """
         data = self._dump_data(**kwargs)
-        return yaml.dump(data)
+        string_stream = StringIO()
+        yaml.dump(data, string_stream)
+        output_str = string_stream.getvalue()
+        string_stream.close()
+        return output_str
 
     def _dump_data(self, **kwargs: Any) -> dict:
         data = self.model_dump(**kwargs) if isinstance(self, BaseModel) else self.__dict__
