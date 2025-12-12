@@ -2,10 +2,12 @@ from importlib.metadata import version
 from pathlib import Path
 
 import pytest
-import yaml
 from pydantic import BaseModel, ConfigDict
+from ruamel.yaml import YAML
 
 from noob.yaml import ConfigYAMLMixin, YAMLMixin, yaml_peek
+
+yaml = YAML()
 
 
 class NestedModel(BaseModel):
@@ -43,7 +45,7 @@ def test_yaml_mixin(tmp_path):
 
     yaml_file = tmp_path / "temp.yaml"
     with open(yaml_file, "w") as yfile:
-        yaml.safe_dump(data, yfile)
+        yaml.dump(data, yfile)
 
     instance = MyModel.from_yaml(yaml_file)
     assert instance.model_dump() == data
@@ -125,7 +127,7 @@ def test_complete_header(tmp_config_source, src: str):
     _ = MyModel.from_yaml(yaml_file)
 
     with open(yaml_file) as yfile:
-        loaded = yaml.safe_load(yfile)
+        loaded = yaml.load(yfile)
 
     loaded_str = yaml_file.read_text()
 
