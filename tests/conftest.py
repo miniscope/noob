@@ -11,13 +11,19 @@ from .fixtures.paths import CONFIG_DIR, PIPELINE_DIR, SPECIAL_DIR
 
 @pytest.fixture(scope="session", autouse=True)
 def patch_config_source(monkeypatch_session: MonkeyPatch) -> None:
+    """Patch config sources so we don't accidentally use any user pipelines during testing."""
+    from noob.config import add_config_source
     from noob.yaml import ConfigYAMLMixin
 
     current_sources = ConfigYAMLMixin.config_sources()
+    original_method = ConfigYAMLMixin.config_sources
+
+    for pth in (CONFIG_DIR, SPECIAL_DIR, PIPELINE_DIR):
+        add_config_source(pth)
 
     def _config_sources(cls: type[ConfigYAMLMixin]) -> list[Path]:
-        nonlocal current_sources
-        return [CONFIG_DIR, PIPELINE_DIR, SPECIAL_DIR, *current_sources]
+        nonlocal current_sources, original_method
+        return [p for p in original_method() if p not in current_sources]
 
     monkeypatch_session.setattr(ConfigYAMLMixin, "config_sources", classmethod(_config_sources))
 

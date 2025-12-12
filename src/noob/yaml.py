@@ -199,9 +199,9 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         Directories to search for config files, in order of priority
         such that earlier sources are preferred over later sources.
         """
-        from noob.config import Config, _extra_sources, get_entrypoint_sources
+        from noob.config import Config, get_entrypoint_sources, get_extra_sources
 
-        return [Config().config_dir, *_extra_sources, *get_entrypoint_sources()]
+        return [Config().config_dir, *get_extra_sources(), *get_entrypoint_sources()]
 
     def _dump_data(self, **kwargs: Any) -> dict:
         """Ensure that header is prepended to model data"""

@@ -143,6 +143,17 @@ def add_config_source(path: Path) -> None:
     _extra_sources.append(path)
 
 
+def get_extra_sources() -> list[Path]:
+    """
+    Get the extra sources added by :func:`.add_config_source`
+
+    (avoid importing the private module-level collection anywhere else,
+    as it makes mutation weird and unpredictable)
+    """
+    global _extra_sources
+    return _extra_sources
+
+
 def get_entrypoint_sources() -> list[Path]:
     """
     Get additional config sources added by entrypoint functions.

@@ -1,10 +1,10 @@
-import os
 import random
+from importlib import metadata
 from pathlib import Path
 
-import yaml
-
-from noob.config import Config
+from noob.config import Config, add_config_source
+from noob.testing.entrypoint import ENTRYPOINT_PATH
+from noob.yaml import ConfigYAMLMixin
 
 
 def test_config(tmp_path):
@@ -68,3 +68,36 @@ def test_config_sources_overrides(set_env, set_dotenv, set_pyproject, set_local_
     set_env({"logs": {"file_n": 5}})
     assert Config().logs.file_n == 5
     assert Config(**{"logs": {"file_n": 6}}).logs.file_n == 6
+
+
+def test_add_config_source(tmp_path):
+    """
+    Adding config source via the function hook adds it to the `config_sources`
+    """
+    assert tmp_path not in ConfigYAMLMixin.config_sources()
+    add_config_source(tmp_path)
+    assert tmp_path in ConfigYAMLMixin.config_sources()
+
+
+def test_entrypoint_config_source(tmp_path, monkeypatch):
+    """
+    Packages that specify an entrypoint function to add config sources are added to `config_sources`
+
+    References:
+        https://stackoverflow.com/a/79386262/13113166
+    """
+    from noob import config
+
+    config._entrypoint_sources = None
+    ep = metadata.EntryPoint(
+        name="test", group="noob.add_sources", value="noob.testing.entrypoint:some_entrypoint_fn"
+    )
+
+    def _entry_points(**params: dict) -> metadata.EntryPoints:
+        if not params.get("group", False) == "noob.add_sources":
+            raise ValueError("We should be trying to get the noob.add_sources group!")
+        return metadata.EntryPoints([ep])
+
+    monkeypatch.setattr(config, "entry_points", _entry_points)
+
+    assert ENTRYPOINT_PATH in ConfigYAMLMixin.config_sources()
