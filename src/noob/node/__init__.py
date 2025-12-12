@@ -6,6 +6,9 @@ from noob.node.map import Map
 from noob.node.tube import TubeNode
 
 SPECIAL_NODES = {"gather": Gather, "map": Map, "return": Return, "tube": TubeNode}
+"""
+Map from short names used in node ``type`` values to special node classes 
+"""
 
 
 __all__ = [
