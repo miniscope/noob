@@ -110,12 +110,9 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord):
         # filter warnings that are NOT OUR FAULT
-        if (
-            hasattr(record, "location")
-            and record.location is not None
-            and "typing.Annotated" in record.location
-        ):
-            return False
+        if hasattr(record, "location") and record.location is not None:
+            if "typing.Annotated" in record.location or "typing.Union" in record.location:
+                return False
         return True
 
 

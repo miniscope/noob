@@ -11,7 +11,7 @@ def resolve_python_identifier(ref: AbsoluteIdentifier) -> Any:
     Given some fully-qualified package.subpackage.Class identifier,
     return the referenced object, importing if needed.
 
-    Returns a node from :ref:`noob.node.SPECIAL_NODES` if match found
+    Returns a node from :data:`noob.node.SPECIAL_NODES` if match found
     """
     from noob.node import SPECIAL_NODES
 
