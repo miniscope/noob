@@ -1,11 +1,9 @@
 import pytest
-from ruamel.yaml import YAML
 
 from noob.tube import Tube
+from noob.yaml import yaml
 
 from .paths import PIPELINE_DIR
-
-yaml = YAML()
 
 # all tubes except special cases
 _special_case_names = ("disable_node",)

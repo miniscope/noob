@@ -3,11 +3,8 @@ from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, ConfigDict
-from ruamel.yaml import YAML
 
-from noob.yaml import ConfigYAMLMixin, YAMLMixin, yaml_peek
-
-yaml = YAML()
+from noob.yaml import ConfigYAMLMixin, YAMLMixin, yaml, yaml_peek
 
 
 class NestedModel(BaseModel):
