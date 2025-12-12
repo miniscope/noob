@@ -1,9 +1,10 @@
 import pytest
-import yaml
+from ruamel.yaml import YAML
 
 from noob.tube import Tube
-
 from .paths import PIPELINE_DIR
+
+yaml = YAML()
 
 # all tubes except special cases
 _special_case_names = ("disable_node",)
@@ -12,7 +13,7 @@ _all_tubes = [
     for tube in PIPELINE_DIR.rglob("*.y*ml")
     if not any(name in tube.name for name in _special_case_names)
 ]
-_no_input_tubes = [t for t in _all_tubes if "input" not in yaml.safe_load(t.read_text())]
+_no_input_tubes = [t for t in _all_tubes if "input" not in yaml.load(t.read_text())]
 
 
 @pytest.fixture(params=[pytest.param(p, id=p.stem) for p in _all_tubes])
