@@ -99,6 +99,13 @@ class Config(BaseSettings):
         value.mkdir(parents=True, exist_ok=True)
         return value
 
+    @field_validator("user_dir", mode="after")
+    def set_rtd_dir(cls, value: Path) -> Path:
+        """RM this after PR to add configs is merged"""
+        if os.environ.get("READTHEDOCS", False):
+            return Path("docs/assets/pipelines")
+        return value
+
     @classmethod
     def settings_customise_sources(
         cls,
