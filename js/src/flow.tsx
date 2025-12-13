@@ -11,7 +11,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   useEdgesState,
   useNodesState,
 } from "@xyflow/react";
@@ -20,7 +19,8 @@ import useLayoutNodes from "./useLayoutNodes.tsx";
 import "@xyflow/react/dist/style.css";
 
 interface NoobFlowProps {
-  tube: TubeSpecification;
+  tube: TubeSpecification
+  color: "dark" | "light"
 }
 
 const nodeTypes = {
@@ -41,11 +41,11 @@ export function NoobFlow(props: NoobFlowProps) {
       nodeTypes={nodeTypes}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
+      colorMode={props.color}
       fitView
     >
       <Background />
       <Controls />
-      <MiniMap />
     </ReactFlow>
   );
 }
@@ -58,7 +58,7 @@ function tubeToElk(tube: TubeSpecification): [Edge[], ElkNodeType[]] {
 
 function getEdges(nodes: Record<string, NoobNode>): Edge[] {
   return Object.entries(nodes).flatMap<Edge>(([node_id, node]): Edge[] => {
-    if (node.depends === undefined) {
+    if (node.depends === undefined || node.depends === null) {
       return [];
     } else {
       return node.depends.map<Edge>((slotsig) => {

@@ -117,7 +117,11 @@ format.composite = [
     "ruff check --fix",
 ]
 test = "pytest"
-docs = "sphinx-autobuild docs docs/_build/html"
+docs = """sphinx-autobuild docs docs/_build/html"""
+docs-js = """concurrently
+  'npm --prefix js/ run watch:docs'
+  'sphinx-autobuild docs docs/_build/html'
+"""
 mypy = "mypy"
 
 [tool.pytest.ini_options]
@@ -138,7 +142,7 @@ line-length = 100
 
 [tool.ruff]
 target-version = "py311"
-include = ["src/noob/**/*.py", "tests/**/*.py", "pyproject.toml"]
+include = ["src/noob/**/*.py", "tests/**/*.py", "docs/_ext/**/*.py", "pyproject.toml"]
 exclude = ["docs"]
 line-length = 100
 

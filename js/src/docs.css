@@ -1,0 +1,10 @@
+.noob-tube-container.docutils {
+  height: max-content;
+  border: 1px solid var(--color-foreground-border);
+  border-radius: 1em;
+  overflow: hidden;
+
+  .noob-tube-plot {
+    height: 15em;
+  }
+}

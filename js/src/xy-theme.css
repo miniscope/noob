@@ -4,7 +4,7 @@
 /* xyflow theme files. Delete these to start from our base */
 
 .react-flow {
-  --xy-background-color: #f7f9fb;
+  /*--xy-background-color: #f7f9fb;*/
   /* Custom Variables */
   --xy-theme-selected: #f57dbd;
   --xy-theme-hover: #c5c5c5;
@@ -270,8 +270,4 @@
   margin-top: 10px;
   margin-bottom: 3px;
   display: inline-block;
-}
-
-.label {
-  color: black;
 }

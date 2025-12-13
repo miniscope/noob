@@ -6,7 +6,7 @@ import type { TubeSpecification } from "./types.ts";
 
 import "./index.css";
 
-export const renderPipeline = (selector: string, tube: TubeSpecification) => {
+export const renderPipeline = (selector: string, tube: TubeSpecification, color: "dark" | "light" = "dark") => {
   const node = document.querySelector(selector);
   if (node === null) {
     throw Error("selector not found");
@@ -14,7 +14,7 @@ export const renderPipeline = (selector: string, tube: TubeSpecification) => {
   const root = createRoot(node);
   root.render(
     <ReactFlowProvider>
-      <NoobFlow tube={tube}></NoobFlow>
+      <NoobFlow tube={tube} color={color}></NoobFlow>
     </ReactFlowProvider>,
   );
 };
