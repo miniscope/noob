@@ -135,9 +135,9 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
 
 def setup(app):
     # rm this once #79 is merged
-    from noob.config import config
+    from noob.config import add_config_source
 
-    config.user_dir = Path(__file__).parent / "assets" / "pipelines"
+    add_config_source(Path(__file__).parent / "assets" / "pipelines")
 
     logger = logging.getLogger("sphinx")
     logger.filters.insert(0, FuckTheSphinxFiltersFilter())

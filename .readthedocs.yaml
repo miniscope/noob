@@ -22,5 +22,3 @@ build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm install --with docs
     pre_build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run build-js-docs
-      # rm this once the config hooks PR is merged
-      - 'echo "config_dir: docs/assets/pipelines" > noob_config.yaml'
