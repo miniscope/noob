@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>noob-js plotting testing</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import { renderPipeline } from '/src/main.tsx';
+      let pipeline = {
+        "noob_id": "testing-branch",
+        "noob_model": "noob.tube.TubeSpecification",
+        "noob_version": "0.0.1.dev5+g4d26757.d20250320",
+        "nodes": {
+          "a": {"type": "noob.testing.count_source"},
+          "b": {"type": "noob.testing.multiply",
+            "depends": [{"left": "a.index"}]},
+          "c": {"type": "noob.testing.divide",
+            "depends": [{"numerator": "a.index"}]},
+          "d": {"type": "return", "depends": [{"multiply": "b.value"}, {"divide": "c.ratio"}]}}
+      }
+      renderPipeline('#root', pipeline)
+    </script>
+  </body>
+</html>

@@ -1,3 +1,4 @@
+import os
 import warnings
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -43,7 +44,7 @@ class LogConfig(BaseModel):
     """
     Severity for stream-based logging. If unset, use ``level``
     """
-    dir: Path = Path(_dirs.user_log_dir)
+    dir: Path | Literal[False] = Path(_dirs.user_log_dir)
     """
     Directory where logs are stored.
     """
@@ -71,8 +72,17 @@ class LogConfig(BaseModel):
         return value
 
     @field_validator("dir", mode="after")
-    def create_dir(cls, value: Path) -> Path:
+    def create_dir(cls, value: Path | Literal[False]) -> Path | Literal[False]:
+        if os.environ.get("READTHEDOCS", False) or value is False:
+            return value
         value.mkdir(parents=True, exist_ok=True)
+        return value
+
+    @field_validator("dir", mode="after")
+    def no_file_on_rtd(cls, value: Path | Literal[False]) -> Path | Literal[False]:
+        """On readthedocs, don't log to file"""
+        if os.environ.get("READTHEDOCS", False):
+            return False
         return value
 
 
@@ -99,6 +109,8 @@ class Config(BaseSettings):
 
     @field_validator("user_dir", "config_dir", "tmp_dir", mode="after")
     def create_dir(cls, value: Path) -> Path:
+        if os.environ.get("READTHEDOCS", False):
+            return value
         value.mkdir(parents=True, exist_ok=True)
         return value
 

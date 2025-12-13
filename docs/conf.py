@@ -9,6 +9,8 @@
 import importlib.metadata as metadata
 import logging
 import os
+import sys
+from pathlib import Path
 
 project = "noob"
 copyright = "2025, raymond, jonny"
@@ -17,6 +19,8 @@ release = metadata.version("noob")
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+
+sys.path.append(str((Path(__file__).parent / "_ext").resolve()))
 
 extensions = [
     "sphinx.ext.napoleon",
@@ -30,6 +34,7 @@ extensions = [
     "sphinxcontrib.mermaid",
     "myst_nb",
     "sphinx.ext.todo",
+    "plot",
 ]
 
 templates_path = ["_templates"]
@@ -51,8 +56,10 @@ html_theme = "furo"
 html_static_path = ["_static"]
 html_css_files = [
     # make myst-nb code blocks not look like shit
-    "css/notebooks.css"
+    "css/notebooks.css",
+    "css/noob-js.css",
 ]
+html_js_files = ["js/noob-js.js"]
 
 # --------------------------------------------------
 # Extension options
@@ -127,5 +134,10 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
 
 
 def setup(app):
+    # rm this once #79 is merged
+    from noob.config import add_config_source
+
+    add_config_source(Path(__file__).parent / "assets" / "pipelines")
+
     logger = logging.getLogger("sphinx")
     logger.filters.insert(0, FuckTheSphinxFiltersFilter())
