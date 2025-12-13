@@ -19,8 +19,8 @@ import useLayoutNodes from "./useLayoutNodes.tsx";
 import "@xyflow/react/dist/style.css";
 
 interface NoobFlowProps {
-  tube: TubeSpecification
-  color: "dark" | "light"
+  tube: TubeSpecification;
+  color: "dark" | "light";
 }
 
 const nodeTypes = {

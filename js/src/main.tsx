@@ -6,7 +6,11 @@ import type { TubeSpecification } from "./types.ts";
 
 import "./index.css";
 
-export const renderPipeline = (selector: string, tube: TubeSpecification, color: "dark" | "light" = "dark") => {
+export const renderPipeline = (
+  selector: string,
+  tube: TubeSpecification,
+  color: "dark" | "light" = "dark",
+) => {
   const node = document.querySelector(selector);
   if (node === null) {
     throw Error("selector not found");

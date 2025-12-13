@@ -1,3 +1,3 @@
-import {renderPipeline} from "./main.tsx";
+import { renderPipeline } from "./main.tsx";
 
 window.renderPipeline = renderPipeline;

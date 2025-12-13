@@ -1,7 +1,7 @@
-import type {TubeSpecification} from './types'
+import type { TubeSpecification } from "./types";
 
-declare global{
-    interface Window {
-        renderPipeline: (selector: string, tube: TubeSpecification) => void
-    }
+declare global {
+  interface Window {
+    renderPipeline: (selector: string, tube: TubeSpecification) => void;
+  }
 }
