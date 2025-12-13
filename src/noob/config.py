@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -64,6 +65,8 @@ class LogConfig(BaseModel):
 
     @field_validator("dir", mode="after")
     def create_dir(cls, value: Path) -> Path:
+        if os.environ.get("READTHEDOCS", False):
+            return value
         value.mkdir(parents=True, exist_ok=True)
         return value
 
@@ -91,6 +94,8 @@ class Config(BaseSettings):
 
     @field_validator("user_dir", "config_dir", "tmp_dir", mode="after")
     def create_dir(cls, value: Path) -> Path:
+        if os.environ.get("READTHEDOCS", False):
+            return value
         value.mkdir(parents=True, exist_ok=True)
         return value
 
