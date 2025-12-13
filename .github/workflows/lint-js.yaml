@@ -41,5 +41,7 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install
         run: npm --prefix js/ ci
-      - name: Run ESLint
+      - name: Build main dist
         run: npm --prefix js/ run build
+      - name: Build docs
+        run: npm --prefix js/ run build:docs
