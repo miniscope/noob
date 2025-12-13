@@ -86,8 +86,6 @@ Examples:
 class NodeSpecification(BaseModel):
     """
     Specification for a single processing node within a tube .yaml file.
-    Distinct from a :class:`.NodeConfig`, which is a generic TypedDict that each
-    node defines to declare its parameterization.
     """
 
     type_: AbsoluteIdentifier = Field(..., alias="type")
