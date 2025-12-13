@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "watch:docs": "vite build --watch --config vite.config.docs.ts",
-    "lint": "eslint .",
+    "build:docs" : "tsc -b && vite build --config vite.config.docs.ts",
+    "watch:docs": "vite build --watch --config vite.config.dev.docs.ts",
     "preview": "vite preview",
+    "lint": "eslint .",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier -w src",
     "format:check": "prettier -c src"

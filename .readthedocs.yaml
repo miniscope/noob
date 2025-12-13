@@ -13,10 +13,12 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.13"
-
-python:
-  install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - docs
+    nodejs: "25"
+  jobs:
+    pre_install:
+      - python -m pip install pdm
+    install:
+      - npm --prefix js/ ci
+      - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm install --with docs
+    pre_build:
+      - pdm run build-js-docs
