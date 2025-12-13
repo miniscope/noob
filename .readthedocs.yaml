@@ -13,7 +13,7 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.13"
-    nodejs: "25"
+    nodejs: "24"
   jobs:
     pre_install:
       - python -m pip install pdm
