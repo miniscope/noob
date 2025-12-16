@@ -156,7 +156,6 @@ window.theme_observer = theme_observer;
 """
 
 
-
 class FuckTheSphinxFiltersFilter(logging.Filter):
     """
     A filter that goes like "fuck the sphinx logging filters that ignores our warning filters"
