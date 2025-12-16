@@ -1,3 +1,5 @@
+.. _zmq:
+
 # ZMQ Runner
 
 ## Objects
