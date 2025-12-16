@@ -3,8 +3,8 @@
 An {class}`~noob.event.Event` is anything that gets returned from {class}`~noob.node.base.Node`,
 wrapped in a container with some metadata.
 The metadata includes the event's ID, when it happened, the name of the signal that emitted it, and which node emitted it. It is managed by
-{class}`~noob.store.EventStore` {class}`~noob.runner.base.TubeRunner`, and
-can be accessed with runner's {meth}`~noob.runner.base.TubeRunner.add_callback` method,
+{class}`~noob.store.EventStore` {class}`~noob.runner.base.TubeRunner`.
+Events can be accessed directly by code outside the runner with the {meth}`~noob.runner.base.TubeRunner.add_callback` method,
 like the following:
 
 ```python
