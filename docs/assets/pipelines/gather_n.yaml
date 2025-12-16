@@ -1,0 +1,20 @@
+noob_id: docs-gather-n
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+nodes:
+  a:
+    type: noob.testing.letter_source
+  b:
+    type: gather
+    params:
+      n: 5
+    depends:
+      - value: a.letter
+  c:
+    type: noob.testing.concat
+    depends:
+      - b.value
+  d:
+    type: return
+    depends:
+      - word: c.value

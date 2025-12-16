@@ -61,7 +61,7 @@ function getEdges(nodes: Record<string, NoobNode>): Edge[] {
     if (node.depends === undefined || node.depends === null) {
       return [];
     } else {
-      return node.depends.map<Edge>((slotsig) => {
+      return Array.from(node.depends).map<Edge>((slotsig) => {
         const slot = Object.keys(slotsig)[0];
         const signal = slotsig[slot];
         const sourceHandle = signal;
@@ -83,6 +83,11 @@ function getNodes(
   nodes: Record<string, NoobNode>,
   edges: Edge[],
 ): ElkNodeType[] {
+  const has_input = edges.some((e) => e.source === "input");
+  if (has_input) {
+    nodes = { ...nodes, input: { type: "input" } };
+  }
+
   return Object.keys(nodes).map((node_id) => {
     // Create handle description for node and then filter to unique entries
     const sourceHandles = edges

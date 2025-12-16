@@ -4,6 +4,7 @@
 nodes
 tubes
 runners
+assets
 events
 assets
 ```
