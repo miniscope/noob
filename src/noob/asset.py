@@ -13,18 +13,18 @@ PWrap = ParamSpec("PWrap")
 
 
 class AssetScope(StrEnum):
-    Runner = "runner"
+    runner = "runner"
     """
     Asset persists through the entire lifespan of the runner. 
     Can be modified and passed through different epochs.
     """
-    Process = "process"
+    process = "process"
     """
     Asset persists through the a single process call.
     Can be modified and passed through different nodes but are
     re-instantiated at the beginning of each epoch.
     """
-    Node = "node"
+    node = "node"
     """
     Asset is re-instantiated every node call.
     """
@@ -52,6 +52,16 @@ class AssetSpecification(BaseModel):
     """
     Roundtrip dependency. Should point to the last node in a given 
     epoch that manipulates the asset.
+    
+    May only be used with scope == "runner"
+    
+    Typically this is used with assets that are mutated by multiple nodes in a tube.
+    In that case, nodes should use dependencies to structure the order of mutation:
+    The first node that should have it should depend directly on the asset,
+    and then it and each node should emit the asset
+    so that the successive node can depend on that signal.
+    The node signal that this asset specification depends on will be the version of the asset
+    stored and used in the next processing epoch.
     """
 
 

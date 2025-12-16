@@ -27,7 +27,7 @@ def test_dependencies_exist(dep, form):
     (
         {"nodes": {"right": NodeSpecification(id="wrong", type="list")}},
         {"input": {"right": InputSpecification(id="wrong", type="list", scope=InputScope.tube)}},
-        {"assets": {"right": AssetSpecification(id="wrong", type="list", scope=AssetScope.RUNNER)}},
+        {"assets": {"right": AssetSpecification(id="wrong", type="list", scope=AssetScope.runner)}},
     ),
 )
 def test_id_mismatch(spec):
