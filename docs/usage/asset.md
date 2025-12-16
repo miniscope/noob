@@ -71,6 +71,36 @@ An Asset is specified in the YAML format spec file under the `assets` like the f
 ```yaml
 assets:
   db: # unique asset id
-    type: noob.testing.db_connection  # absolute Python path to initializer
+    type: noob.testing.array  # absolute Python path to initializer
     scope: runner
+    depends: z.result  # exits the process noob from the last node
+
+nodes:
+  a:
+    type: noob.testing.row_sum
+    params:
+      row_index: 0
+    depends:
+      - right: assets.db  # enters the process loop via the first node
+
+  ...
+
+  z:
+    type: noob.testing.multiply
+    params:
+      multiplier: 2
+    depends:
+      array: y.output  # takes the asset directly from the previous node
+```
+
+For example, since `assets.db`'s scope is `runner`, each epoch for the spec above corresponds to the following
+flowchart:
+
+```{mermaid}
+flowchart TD
+    asset_db -- "inject" --> node_a
+    node_a --> ...
+    ... --> node_z
+    node_z -- "update" --> asset_db
+    
 ```
