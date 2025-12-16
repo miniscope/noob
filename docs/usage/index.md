@@ -6,7 +6,7 @@ tubes
 runners
 assets
 events
-assets
+config
 ```
 
 ```{toctree}

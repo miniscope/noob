@@ -393,7 +393,7 @@ An event from a single signal can be branched an fed to multiple nodes:
  
 ### Gather
 
-Events from multiple rounds of calling the `process` method (or, [epochs](runner.md#epochs)) can be gathered as input to another node in two ways. Both use the special `gather` node.
+Events from multiple rounds of calling the `process` method (or, [epochs](runners.md#epochs)) can be gathered as input to another node in two ways. Both use the special `gather` node.
 
 #### Gather `n`
 
