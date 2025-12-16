@@ -5,6 +5,7 @@ nodes
 tube
 runners
 events
+assets
 ```
 
 ```{toctree}
