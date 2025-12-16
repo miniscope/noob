@@ -1,6 +1,6 @@
 # Events
 
-An {class}`~noob.event.Event` is anything that get returned from {class}`~noob.node.base.Node`,
+An {class}`~noob.event.Event` is anything that gets returned from {class}`~noob.node.base.Node`,
 wrapped in a container with some metadata.
 The metadata include the event's ID, its name, when it happened, and where it happened. It is managed by
 {class}`~noob.store.EventStore` {class}`~noob.runner.base.TubeRunner`, and
