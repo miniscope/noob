@@ -16,8 +16,8 @@ export interface NoobNode {
 // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export type ElkNodeData = {
   label: string;
-  sourceHandles: { id: string }[];
-  targetHandles: { id: string }[];
+  sourceHandles: { id: string; label: string; key: string }[];
+  targetHandles: { id: string; label: string; key: string }[];
 };
 
 export type ElkNode = Node<ElkNodeData, "elk">;

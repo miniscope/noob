@@ -14,7 +14,7 @@ import {
   useEdgesState,
   useNodesState,
 } from "@xyflow/react";
-import ElkNode from "./elk.tsx";
+import ElkNode from "./node.tsx";
 import useLayoutNodes from "./useLayoutNodes.tsx";
 import "@xyflow/react/dist/style.css";
 
@@ -84,16 +84,30 @@ function getNodes(
   edges: Edge[],
 ): ElkNodeType[] {
   return Object.keys(nodes).map((node_id) => {
+    // Create handle description for node and then filter to unique entries
     const sourceHandles = edges
       .filter((e) => e.source === node_id && e.sourceHandle !== undefined)
       .map((e) => {
-        return { id: e.sourceHandle as string };
-      });
+        const label = (e.sourceHandle as string).split(".")[1];
+        return {
+          id: e.sourceHandle as string,
+          label: label,
+          key: e.id,
+        };
+      })
+      .filter(
+        (e, index, self) => self.map((x) => x.id).indexOf(e.id) === index,
+      );
     const targetHandles = edges
       .filter((e) => e.target === node_id && e.targetHandle !== undefined)
       .map((e) => {
-        return { id: e.targetHandle as string };
-      });
+        const label = (e.targetHandle as string).split(".")[1];
+        return { id: e.targetHandle as string, label: label, key: e.id };
+      })
+      .filter(
+        (e, index, self) => self.map((x) => x.id).indexOf(e.id) === index,
+      );
+
     return {
       id: node_id,
       data: {

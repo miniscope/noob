@@ -24,6 +24,8 @@
   --xy-handle-border-color-default: #aaaaaa;
 
   --xy-edge-label-color-default: #505050;
+
+  --font-monospace: "Courier New", Courier, monospace;
 }
 
 .react-flow.dark {

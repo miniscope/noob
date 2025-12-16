@@ -18,6 +18,10 @@
   top: 0;
   height: 100%;
   transform: translate(50%, 0);
+
+  .handle-label {
+    left: 0.75em;
+  }
 }
 
 .handles.targets {
@@ -25,6 +29,10 @@
   top: 0;
   height: 100%;
   transform: translate(-50%, 0);
+
+  .handle-label {
+    right: 0.75em;
+  }
 }
 
 .handles .react-flow__handle {
@@ -32,4 +40,10 @@
   top: 0;
   left: 0;
   transform: none;
+}
+
+.handle-label {
+  font-family: var(--font-monospace), monospace;
+  position: absolute;
+  top: -50%;
 }
