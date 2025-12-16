@@ -5,6 +5,7 @@ nodes
 tube
 runners
 events
+assets
 ```
 
 ```{toctree}
@@ -12,11 +13,4 @@ events
 :caption: Runners
 
 zmq
-```
-
-```{toctree}
-:maxdepth: 2
-:caption: Assets
-
-asset
 ```
