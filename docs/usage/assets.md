@@ -5,7 +5,7 @@
 Assets are elements within noob, which is primarily a Directed Acyclic Graph (DAG) processor, that give
 it an ability to handle cycles and persistence. It is in a sense a static node that does not process but instead holds
 objects, connections, data, and whatever else you'd like to persist longer than a node processing event. You can
-determine its lifespan with the scope setting.
+determine its lifespan with the `scope` setting.
 
 ## Why we made it
 
@@ -15,8 +15,163 @@ passed from one node to another, or wipe it out when we move onto the next epoch
 
 ## How it works
 
+### Basics
+
 All Python callables that outputs a stateful object can produce an asset. Usually this would take the form of a function
-or a class.
+or a class. The way an asset persists depends on the `scope` of the asset.
+
+### Spec
+
+The yaml specification for an asset is almost identical to its {class}`~noob.node.base.Node` counterpart.
+
+```yaml
+asset_id:
+  type: absolute.python.path
+  params:
+    param1: ...
+  scope: runner  # or process or node
+  depends: node.signal
+```
+
+`asset_id` must be unique. `type` is the absolute Python path to the callable. The others have additional nuances.
+
+### Scopes
+
+There are three different scopes for an asset: `runner`, `process`, and `node`.
+
+#### Runner
+
+A `runner`-scoped asset persists as long as the runner does. It will be able to portal between two consecutive epochs,
+while remaining stateful throughout the entire run.
+
+```{mermaid}
+sequenceDiagram
+
+    activate Assets
+    Assets->>Epochs: Inject
+    activate Epochs
+    Epochs->>Assets: Update
+    deactivate Epochs
+    Assets->>Epochs: Inject
+    activate Epochs
+    Epochs->>Assets: Update
+    deactivate Epochs
+    Assets->>Epochs: Inject
+    activate Epochs
+    Epochs->>Assets: Update
+    deactivate Epochs
+    deactivate Assets
+```
+
+```yaml
+assets:
+  db: # unique asset id
+    type: noob.testing.array  # absolute Python path to initializer
+    scope: runner
+    depends: z.result  # exits the process noob from the last node
+
+nodes:
+  a:
+    type: noob.testing.row_sum
+    params:
+      row_index: 0
+    depends:
+      - right: assets.db  # enters the process loop via the first node
+
+  # ...
+
+  z:
+    type: noob.testing.multiply
+    params:
+      multiplier: 2
+    depends:
+      array: y.output  # takes the asset directly from the previous node
+```
+
+```{mermaid}
+flowchart TD
+    asset_db -- "inject" --> node_a
+    node_a --> ...
+    ... --> node_z
+    node_z -- "update" --> asset_db
+    
+```
+
+##### Depends
+
+The meaning of the `depends` entry of the asset spec is _different_ from its equivalent in {class}`~noob.node.base.Node`
+and is _only_ used when `scope: runner`. Here, `depends` should point to the _last node that changes the value of the
+asset_. The idea is that the `asset` enters the processing loop through the first {class}`~noob.node.base.Node` that
+modifies its value, travels through the rest of the nodes, and the last node to modify it puts it back where it
+came from. Therefore, an asset can only depend on a single node.
+
+```{admonition} CAUTION
+:class: caution
+
+When running an asset in a `runner` scope, make sure the asset depends on the correct node (the last one to modify it), 
+and be mindful of race-conditions, even in synchronous mode if your graph has branching / merging operations. For
+example, if nodes `B`, `C` below both modify an asset in-place, it can cause a nondeterministic result by the time it 
+reaches node `D`. 
+```{mermaid}
+flowchart LR    
+  A --> B
+  A --> C
+  B --> D
+  C --> D
+```
+
+#### Process
+
+A `process`-scoped asset persists for the duration of a runner's {meth}`~noob.runner.Base.TubeRunner.process` method.
+It is recreated on every epoch and remains stateful within that epoch.
+
+```{mermaid}
+sequenceDiagram
+
+    Assets->>Epochs: Inject
+    activate Assets
+    activate Epochs
+    Epochs-->Assets: No Update
+    deactivate Epochs
+    deactivate Assets
+    Assets->>Epochs: Inject
+    activate Assets
+    activate Epochs
+    Epochs-->Assets: No Update
+    deactivate Epochs
+    deactivate Assets
+    Assets->>Epochs: Inject
+    activate Epochs
+    activate Assets
+    Epochs->>Assets: Update
+    deactivate Epochs
+    deactivate Assets
+```
+
+Notice the missing `update` step here in contrast to the `runner` scoped asset.
+
+```{mermaid}
+flowchart TD
+    asset_db -- "inject" --> node_a
+    node_a --> ...
+    ... --> node_z
+    
+```
+
+#### Node
+
+A node-scoped asset serves a similar purpose to an input, whose value gets initialized on every call to a node's
+{meth}`~noob.node.base.Node.process` method.
+
+```{mermaid}
+flowchart TD
+    asset_db -- "inject" --> node_a
+    asset_db -- "inject" --> ...
+    asset_db -- "inject" --> node_z
+    node_a --> ...
+    ... --> node_z
+    
+```
 
 ### Function Assets
 
@@ -43,9 +198,7 @@ assets:
 
 The way it's scaffolded in spec is almost identical to the nodes. `array` is the unique ID (cannot duplicate with
 another asset.) `type` is the absolute Python path to the function. The rest, however, diverges from the spec of
-{class}`~noob.node.base.Node`. All function parameters should strictly be defined in `params` spec. `depends` entry is
-_only_ used when `scope: runner` in spec, and its meaning is _different_ from its equivalent in
-{class}`~noob.node.base.Node`. Here, `depends` should point to the _last node that changes the value of the asset_.
+{class}`~noob.node.base.Node`. All function parameters should strictly be defined in `params` spec.
 
 ### Class Assets
 
@@ -124,132 +277,3 @@ nodes:
 ```
 
 Here, node `b` will output an an instance of an `AssetCls` with an updated attribute `x` value `2 -> (2 + 1 * 5 = 9)`
-
-```{admonition} CAUTION
-:class: caution
-
-When running an asset in a `runner` scope, make sure the asset depends on the correct node (the last one to modify it), 
-and be mindful of race-conditions, even in synchronous mode if your graph has branching / merging operations. For
-example, if nodes `B`, `C` below both modify an asset in-place, it can cause a nondeterministic result by the time it 
-reaches node `D`. 
-```{mermaid}
-flowchart LR    
-  A --> B
-  A --> C
-  B --> D
-  C --> D
-```
-
-### Scopes
-
-#### Runner
-
-A `runner`-scoped asset persists as long as the runner does. It will be able to portal between two consecutive epochs,
-while remaining stateful throughout the entire run.
-
-```{mermaid}
-sequenceDiagram
-
-    activate Assets
-    Assets->>Epochs: Inject
-    activate Epochs
-    Epochs->>Assets: Update
-    deactivate Epochs
-    Assets->>Epochs: Inject
-    activate Epochs
-    Epochs->>Assets: Update
-    deactivate Epochs
-    Assets->>Epochs: Inject
-    activate Epochs
-    Epochs->>Assets: Update
-    deactivate Epochs
-    deactivate Assets
-```
-
-and within each epoch, works like the following:
-
-```yaml
-assets:
-  db: # unique asset id
-    type: noob.testing.array  # absolute Python path to initializer
-    scope: runner
-    depends: z.result  # exits the process noob from the last node
-
-nodes:
-  a:
-    type: noob.testing.row_sum
-    params:
-      row_index: 0
-    depends:
-      - right: assets.db  # enters the process loop via the first node
-
-  ...
-
-  z:
-    type: noob.testing.multiply
-    params:
-      multiplier: 2
-    depends:
-      array: y.output  # takes the asset directly from the previous node
-```
-
-```{mermaid}
-flowchart TD
-    asset_db -- "inject" --> node_a
-    node_a --> ...
-    ... --> node_z
-    node_z -- "update" --> asset_db
-    
-```
-
-#### Process
-
-A `process`-scoped asset persists for the duration of a runner's {meth}`~noob.runner.Base.TubeRunner.process` method.
-It is recreated on every epoch and remains stateful within that epoch.
-
-```{mermaid}
-sequenceDiagram
-
-    Assets->>Epochs: Inject
-    activate Assets
-    activate Epochs
-    Epochs-->Assets: No Update
-    deactivate Epochs
-    deactivate Assets
-    Assets->>Epochs: Inject
-    activate Assets
-    activate Epochs
-    Epochs-->Assets: No Update
-    deactivate Epochs
-    deactivate Assets
-    Assets->>Epochs: Inject
-    activate Epochs
-    activate Assets
-    Epochs->>Assets: Update
-    deactivate Epochs
-    deactivate Assets
-```
-
-Notice the missing `update` step here in contrast to the `runner` scoped asset.
-```{mermaid}
-flowchart TD
-    asset_db -- "inject" --> node_a
-    node_a --> ...
-    ... --> node_z
-    
-```
-
-#### Node
-
-A node-scoped asset serves a similar purpose to an input, whose value gets initialized on every call to a node's
-{meth}`~noob.node.base.Node.process` method.
-
-```{mermaid}
-flowchart TD
-    asset_db -- "inject" --> node_a
-    asset_db -- "inject" --> ...
-    asset_db -- "inject" --> node_z
-    node_a --> ...
-    ... --> node_z
-    
-```
