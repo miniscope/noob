@@ -1,9 +1,152 @@
 # Runners
 
+No, not Usain Bolt. These are the kind of runners that run _other_ things.
+In fact, these run the {class}`~noob.tube.Tube`.
+To run tubes, a runner requires a plan of how it's going to run the tube.
+It also has to awaken the tube and take inventory of what's inside the tube.
+Then, while the tube is running, it needs to monitor how it's doing.
+Finally, after the run is over, it needs to clean everything up.
+
+You can grab your favorite runners from the top level of `noob`, like the following:
+
+```python
+from noob import Tube, SynchronousRunner
+
+tube = Tube.from_specification("...")
+runner = SynchronousRunner(tube=tube)
+```
+
+and start running your tube with it `n` times...
+
+```python
+results = runner.run(n=100)  # run tube 100 times
+```
+
+or use it like an _iterator_ of your tube:
+
+```python
+gen = runner.iter()
+
+for result in gen():
+    ...  # do things with result
+```
+
+or, use it like a _function_ and call it a single time:
+
+```python
+runner.init()
+result = runner.process()
+runner.deinit()
+```
+
 ## States
 
-(describe the different states a runner can be in, inited/deinited, running, etc.)
+A track and field runner can be in a few different states,
+ranging from shooting up steroid pre-run,
+to clearing the bandage after the race.
 
-## Epochs
+_Our_ runner, on the other hand, can also be in a few different states,
+ranging from shooting up a {class}`~noob.tube.Tube`,
+to clearing returns and garbage after the run.
 
-(describe what epochs are)
+Let's take a look at some of the more notable states that you will find a {class}`~noob.runner.base.TubeRunner` in.
+
+1. **Pre-init**
+    - The runner exists. It has accepted a `Tube`
+2. **Inited**
+    - The runner has run an `init` method on all nodes and assets, bringing them into a state that can be called if
+      given inputs.
+3. **Running**
+    - The runner is picking ready nodes off the scheduler, gathering inputs for them from its EventStore,
+      executing them, and storing their outputs in its EventStore for the next ready node.
+4. **Deinited**
+    - There may be no more ready nodes that runner can execute, or the user stopped the runner.
+      Either way, all nodes and assets within the Tube has undergone a teardown process,
+      reverting the runner state to the pre-init stage.
+
+## Synchronous Runner
+
+Unfortunately, there actually isn't much happening "in sync" in {class}`~noob.runner.sync.SynchronousRunner`.
+In contrast, `SynchronousRunner` actually does only ever does one thing at a time.
+This is called a single-threaded operation.
+The word synchronous here would rather mean that every line of code "exists _in_ the same time frame."
+
+Here, the order of operation is clearer. Let's take a look at a few examples:
+
+```{mermaid}
+flowchart LR
+A --> B
+A --> C
+B --> D
+C --> D
+```
+
+When a {class}`~noob.runner.sync.SynchronousRunner` first encounters a {class}`~noob.tube.Tube` like the above,
+the first thing it does is performing a topological sort, using a {class}`~noob.scheduler.Scheduler`.
+
+```{mermaid}
+sequenceDiagram
+participant runner
+box Nodes
+participant A@{ "type" : "entity" }
+participant B@{ "type" : "entity" }
+participant C@{ "type" : "entity" }
+participant D@{ "type" : "entity" }
+end
+
+    runner ->> A: execute
+    Activate A
+    A --> runner: signal
+    Deactivate A
+    runner ->> B: execute
+    Activate B
+    B --> runner: signal
+    Deactivate B
+    runner ->> C: execute
+    Activate C
+    C --> runner: signal
+    Deactivate C
+    runner ->> D: execute
+    Activate D
+    D --> runner: signal
+    Deactivate D
+```
+
+Based on this graph, all runners will start by executing node `A`.
+As you can see, nodes `B` and `C` do not depend on each other.
+`SynchronousRunner` will choose at random which one of the two will precede the other.
+While one is processing, the other is simply idling.
+If you'd like to multitask and process both at the same time, take a look at
+[Asynchronous Runner](./runners.md#asynchronous-runner).
+Once both `B` and `C` are fully processed, it will move onto node `D`.
+After node `D` is finished, since the graph is complete,
+we move onto the next epoch, generate another one of the graph, and repeat the process.
+
+A strength of `SynchronousRunner` is a simpler architecture and thus having a more predictable control of the nodes.
+
+It also is the only runner that currently supports dynamically enabling / disabling nodes:
+
+```python
+runner.enable_node(node_id="a")
+runner.disable_node(node_id="a")
+```
+
+For more details on enabled/ disabled nodes, refer to [Tube](./tube.md).
+
+Additionally, we strictly deal with only one epoch at a time.
+Python debuggers will probably have an easier time debugging things in this runner,
+so if asynchronous operation isn't part of the core logic of your pipeline,
+it could prove helpful to try running it in a {class}`~noob.runner.sync.SynchronousRunner` first.
+
+### Scheduler
+
+When a runner accepts a {class}`~noob.tube.Tube`, and enters the running stage,
+it needs to know which node to execute next, since some nodes depend on others.
+{class}`~noob.scheduler.Scheduler` determines this order of execution.
+
+Currently, the {class}`~noob.scheduler.Scheduler` class is a wrapper around {class}`~graphlib.TopologicalSorter`.
+For each epoch, the `Scheduler` generate a new `TopologicalSorter` instance, and as runner executes the nodes,
+the `Scheduler` return the next set of ready nodes to the runner. Once the ready nodes have been depleted,
+the `Scheduler` marks the epoch complete.
+
+## Asynchronous Runner
