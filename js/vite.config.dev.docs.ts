@@ -14,7 +14,8 @@ export default defineConfig({
     },
     outDir: resolve(__dirname, '../docs/_static'),
     emptyOutDir: false,
-    minify: false
+    minify: false,
+    sourcemap: true
   },
   plugins: [
     react({

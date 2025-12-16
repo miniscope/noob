@@ -9,7 +9,7 @@ export interface TubeSpecification {
 
 export interface NoobNode {
   type: string;
-  depends: Record<string, string>[];
+  depends?: Record<string, string>[];
 }
 
 // Node class expects a type with string keys, not interface

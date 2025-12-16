@@ -1,0 +1,15 @@
+noob_id: docs-linear
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+
+nodes:
+  a:
+    type: pkg.node_a
+  b:
+    type: pkg.node_b
+    depends:
+      - slot_a: a.value
+  c:
+    type: pkg.node_c
+    depends:
+      - slot_b: b.value

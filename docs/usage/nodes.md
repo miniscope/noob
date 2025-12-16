@@ -159,7 +159,7 @@ class RollingSum:
         return self.x
 ```
 
-This node would be initialized with some `param` or `input` in the [tube specification](./tube.md#tube-specifications)
+This node would be initialized with some `param` or `input` in the [tube specification](./tubes.md#tube-specifications)
 when starting to run the tube,
 and then would have its `process` method called in each iteration of the tube. 
 
@@ -229,7 +229,7 @@ e.g. by overriding their {meth}`~noob.node.base.Node.signals` property.
 Generator functions can also be used as nodes. 
 They can't have any slots (for now), but can be used as sources when e.g. reading data from disk.
 
-Generator nodes are given any configured [params](tube.md#params) and then called once per round of processing,
+Generator nodes are given any configured [params](tubes.md#params) and then called once per round of processing,
 so e.g. one could cause output strings to become increasingly excited with a generator node like
 
 ```python
