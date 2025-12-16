@@ -202,6 +202,8 @@ dist-ssr
 docs/_static/css/noob-js.css
 docs/_static/js/noob-js*
 
+.vite
+
 
 noob_config.yaml
 noob_config.yml
