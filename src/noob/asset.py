@@ -130,7 +130,7 @@ class WrapClassAsset(Asset, Generic[T]):
     the inner class to hold the class instance as an asset object.
 
     After instantiating the outer wrapping class, instantiate the inner wrapped class
-    using the `params` given to the outer wrapping class during :meth:`.model_post_init` .
+    using the `params` given to the outer wrapping class during :meth:`.init` .
     """
 
     cls: type

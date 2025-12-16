@@ -13,3 +13,10 @@ events
 
 zmq
 ```
+
+```{toctree}
+:maxdepth: 2
+:caption: Assets
+
+asset
+```
