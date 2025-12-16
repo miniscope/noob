@@ -99,6 +99,9 @@ todo_link_only = True
 nb_render_markdown_format = "myst"
 nb_execution_show_tb = True
 
+# myst
+myst_heading_anchors = 3
+
 # inheritance-diagram
 inheritance_graph_attrs = {"rankdir": "LR", "splines": "ortho"}
 
@@ -108,11 +111,9 @@ inheritance_edge_attrs = {
 }
 
 # mermaid
-mermaid_version = "11.12.2"
-
 # mermaid dynamic light/dark switching
 # see: https://github.com/mgaitan/sphinxcontrib-mermaid/issues/78#issuecomment-2456326971
-mermaid_version = None
+mermaid_version = ""
 mermaid_use_local = "https://example.com"
 mermaid_init_js = """
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs'
