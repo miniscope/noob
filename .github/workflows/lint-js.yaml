@@ -1,0 +1,47 @@
+name: Lint JS
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - js/**
+      - src/noob/tube.py
+      - src/noob/node/spec.py
+  pull_request:
+    paths:
+      - js/**
+      - src/noob/tube.py
+      - src/noob/node/spec.py
+
+jobs:
+  # Code follows linter rules
+  eslint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install
+        run: npm --prefix js/ ci
+      - name: Run ESLint
+        run: npm --prefix js/ run lint
+
+  # Code would be unchanged by formatting
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install
+        run: npm --prefix js/ ci
+      - name: Run ESLint
+        run: npm --prefix js/ run format:check
+
+  # Code still builds
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install
+        run: npm --prefix js/ ci
+      - name: Build main dist
+        run: npm --prefix js/ run build
+      - name: Build docs
+        run: npm --prefix js/ run build:docs

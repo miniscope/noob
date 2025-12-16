@@ -1,0 +1,49 @@
+@import url("./xy-theme.css");
+@import url("./docs.css");
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+.handles {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+}
+
+.handles.sources {
+  right: 0;
+  top: 0;
+  height: 100%;
+  transform: translate(50%, 0);
+
+  .handle-label {
+    left: 0.75em;
+  }
+}
+
+.handles.targets {
+  left: 0;
+  top: 0;
+  height: 100%;
+  transform: translate(-50%, 0);
+
+  .handle-label {
+    right: 0.75em;
+  }
+}
+
+.handles .react-flow__handle {
+  position: relative;
+  top: 0;
+  left: 0;
+  transform: none;
+}
+
+.handle-label {
+  font-family: var(--font-monospace), monospace;
+  position: absolute;
+  top: -50%;
+}
