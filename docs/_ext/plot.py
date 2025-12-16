@@ -4,11 +4,13 @@ from sphinx.util.typing import ExtensionMetadata
 from docutils import nodes
 from noob.tube import TubeSpecification
 import re
+import uuid
 
 SCRIPT_TEMPLATE = """
-let {tube_id}_spec = {tube_spec};
+
 
 window.addEventListener('load', () => {{
+  let {tube_id}_spec = {tube_spec};
   window.renderPipeline("#tube-plot-{tube_id}", {tube_id}_spec);
 }});
 """
@@ -33,7 +35,7 @@ class NoobTubePlot(SphinxDirective):
 
     def run(self) -> list[nodes.Node]:
         spec = TubeSpecification.from_id(self.arguments[0])
-        tube_id_esc = re.sub(r"[^a-zA-Z0-9]", "_", self.arguments[0])
+        tube_id_esc = re.sub(r"[^a-zA-Z0-9]", "_", self.arguments[0] + "_" + str(uuid.uuid4()))
         container = nodes.container(classes=["noob-tube-container"])
         container["data-plot-for"] = f"tube-container-{tube_id_esc}"
         section = nodes.container(ids=[f"tube-plot-{tube_id_esc}"], classes=["noob-tube-plot"])

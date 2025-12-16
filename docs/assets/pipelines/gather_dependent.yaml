@@ -1,0 +1,22 @@
+noob_id: docs-gather-dependent
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+nodes:
+  a1:
+    type: noob.testing.count_source
+  a2:
+    type: noob.testing.sporadic_word
+  b:
+    type: gather
+    depends:
+      - value: a1.index
+      - trigger: a2.word
+  c:
+    type: noob.testing.dictify
+    depends:
+      - key: a2.word
+      - items: b.value
+  d:
+    type: return
+    depends:
+    - word: c.value

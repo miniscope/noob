@@ -2,10 +2,11 @@
 
 ```{toctree}
 nodes
-tube
+tubes
 runners
-events
 assets
+events
+config
 ```
 
 ```{toctree}
