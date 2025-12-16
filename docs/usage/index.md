@@ -1,7 +1,9 @@
 # Usage
 
 ```{toctree}
+nodes
 tube
+events
 ```
 
 ```{toctree}
