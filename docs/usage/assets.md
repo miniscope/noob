@@ -89,7 +89,7 @@ nodes:
 ```
 
 ```{mermaid}
-flowchart TD
+flowchart LR
     asset_db -- "inject" --> node_a
     node_a --> ...
     ... --> node_z
@@ -151,7 +151,7 @@ sequenceDiagram
 Notice the missing `update` step here in contrast to the `runner` scoped asset.
 
 ```{mermaid}
-flowchart TD
+flowchart LR
     asset_db -- "inject" --> node_a
     node_a --> ...
     ... --> node_z
@@ -164,7 +164,7 @@ A node-scoped asset serves a similar purpose to an input, whose value gets initi
 {meth}`~noob.node.base.Node.process` method.
 
 ```{mermaid}
-flowchart TD
+flowchart LR
     asset_db -- "inject" --> node_a
     asset_db -- "inject" --> ...
     asset_db -- "inject" --> node_z
