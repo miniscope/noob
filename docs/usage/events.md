@@ -61,8 +61,12 @@ meaning for `None` and the user can no longer use `None` as a semantically meani
 Let's assume the user wants to use the following function as a node.:
 
 ```python
+from typing import TypeVar
 
-def maybe_first_element(things: list):
+T = TypeVar("T")
+
+
+def maybe_first_element(things: list[T]) -> T:
     try:
         return things[0]  # what if the 0th element is None, like [None, 1, 2, ...] ??
     except IndexError:
@@ -78,8 +82,9 @@ In this case, it becomes impossible for `first_element` to distinguish
 To circumvent this issue, we implemented a singleton `NoEvent` object. It can be used like below:
 
 ```python
-from noob.event import MetaSignal
 from typing import TypeVar
+
+from noob.event import MetaSignal
 
 T = TypeVar("T")
 
