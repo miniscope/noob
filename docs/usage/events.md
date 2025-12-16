@@ -24,8 +24,8 @@ runner.add_callback(my_cb)
 
 A runner creates an {class}`~noob.runner.store.EventStore` that ... stores events.
 When you're running a {class}`~noob.runner.sync.SynchronousRunner`, the
-{class}`~noob.store.EventStore` is owned by the runner who manages all nodes, so this includes every event that gets
-emitted by every node (unless it gets cleared.)
+{class}`~noob.store.EventStore` is owned by the runner who manages all nodes, 
+so this includes every event that gets emitted by every node until they are cleared.
 
 On the other hand, {class}`~noob.runner.zmq.ZMQRunner` does not manage a global {class}`~noob.store.EventStore`. Rather,
 each {class}`~noob.runner.zmq.NodeRunner` manages events that are relevant to the single node it manages
