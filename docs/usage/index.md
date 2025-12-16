@@ -1,7 +1,10 @@
 # Usage
 
 ```{toctree}
+nodes
 tube
+runners
+events
 ```
 
 ```{toctree}

@@ -99,6 +99,9 @@ todo_link_only = True
 nb_render_markdown_format = "myst"
 nb_execution_show_tb = True
 
+# myst
+myst_heading_anchors = 3
+
 # inheritance-diagram
 inheritance_graph_attrs = {"rankdir": "LR", "splines": "ortho"}
 
@@ -106,6 +109,52 @@ inheritance_edge_attrs = {
     "color": "blue",
     "style": "bold",
 }
+
+# mermaid
+# mermaid dynamic light/dark switching
+# see: https://github.com/mgaitan/sphinxcontrib-mermaid/issues/78#issuecomment-2456326971
+mermaid_version = ""
+mermaid_use_local = "https://example.com"
+mermaid_init_js = """
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs'
+
+const make_config = () => {
+  let prefersDark = localStorage.getItem('theme') === 'dark' || (localStorage.getItem('theme') === null && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  return({
+    startOnLoad:false,
+    darkMode: prefersDark,
+    theme: prefersDark ? "dark" : "default"
+  })
+}
+
+const init_mermaid = () => {
+    let graphs = document.querySelectorAll(".mermaid");
+    [...graphs].forEach((element) => {
+        if (!element.hasAttribute("data-source")) {
+            element.setAttribute("data-source", element.innerText);
+        }
+        if (element.hasAttribute("data-processed")) {
+            let new_elt = document.createElement("pre");
+            let graph_source = element.getAttribute("data-source");
+            new_elt.appendChild(document.createTextNode(graph_source));
+            new_elt.classList.add("mermaid");
+            new_elt.setAttribute("data-source", graph_source);
+            element.replaceWith(new_elt);
+        }
+    });
+
+    let config = make_config()
+    mermaid.initialize(config);
+    mermaid.run();
+}
+
+init_mermaid();
+
+let theme_observer = new MutationObserver(init_mermaid);
+let body = document.getElementsByTagName("body")[0];
+theme_observer.observe(body, {attributes: true});
+window.theme_observer = theme_observer;
+"""
 
 
 class FuckTheSphinxFiltersFilter(logging.Filter):
