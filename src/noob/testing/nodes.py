@@ -18,8 +18,12 @@ from noob.node import Node
 
 def count_source(limit: int = 1000, start: int = 0) -> Generator[A[int, Name("index")], None, None]:
     counter = count(start=start)
-    while (val := next(counter)) < limit:
-        yield val
+    if limit == 0:
+        while True:
+            yield next(counter)
+    else:
+        while (val := next(counter)) < limit:
+            yield val
 
 
 def letter_source() -> Generator[A[str, Name("letter")]]:

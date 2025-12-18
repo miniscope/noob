@@ -5,10 +5,13 @@ noob_version: 0.0.1
 nodes:
   count:
     type: noob.testing.count_source
+    params:
+      limit: 0
   count_higher:
     type: noob.testing.count_source
     params:
       start: 5
+      limit: 0
   word:
     type: noob.testing.sporadic_word
   letter:
