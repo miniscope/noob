@@ -9,7 +9,7 @@ from importlib.metadata import version
 from io import StringIO
 from itertools import chain
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Self, Union, overload
+from typing import Any, ClassVar, Literal, Self, Union, cast, overload
 
 from pydantic import (
     BaseModel,
@@ -20,7 +20,7 @@ from pydantic import (
     field_validator,
 )
 from pydantic_core import core_schema
-from ruamel.yaml import YAML, RoundTripRepresenter, ScalarNode
+from ruamel.yaml import YAML, CommentedMap, CommentToken, RoundTripRepresenter, ScalarNode
 
 from noob.types import AbsoluteIdentifier, ConfigID, ConfigSource, valid_config_id
 
@@ -45,12 +45,16 @@ class YAMLMixin:
     classmethods
     """
 
+    def __init__(self, yaml_source: CommentedMap | None = None, **kwargs: Any):
+        super().__init__(**kwargs)
+        self._yaml_source = yaml_source
+
     @classmethod
     def from_yaml(cls: type[Self], file_path: str | Path) -> Self:
         """Instantiate this class by passing the contents of a yaml file as kwargs"""
         with open(file_path) as file:
             config_data = yaml.load(file)
-        return cls(**config_data)
+        return cls(yaml_source=config_data, **config_data)
 
     def to_yaml(self, path: Path | None = None, **kwargs: Any) -> str:
         """
@@ -72,6 +76,9 @@ class YAMLMixin:
             **kwargs: passed to :meth:`.BaseModel.model_dump`
         """
         data = self._dump_data(**kwargs)
+        if hasattr(self, "_yaml_source") and self._yaml_source is not None:
+            self._yaml_source.update(data)
+            data = self._yaml_source
         string_stream = StringIO()
         yaml.dump(data, string_stream)
         output_str = string_stream.getvalue()
@@ -113,6 +120,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         config_data = cls._complete_header(config_data, file_path)
         try:
             instance = cls(**config_data)
+            instance._yaml_source = config_data
         except ValidationError:
             if (backup_path := file_path.with_suffix(".yaml.bak")).exists():
                 from noob.logging import init_logger
@@ -244,7 +252,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         }
 
     @classmethod
-    def _complete_header(cls: type[Self], data: dict, file_path: str | Path) -> dict:
+    def _complete_header(cls: type[Self], data: CommentedMap, file_path: str | Path) -> CommentedMap:
         """fill in any missing fields in the source file needed for a header"""
         file_path = Path(file_path)
         missing_fields = set(cls.HEADER_FIELDS) - set(data.keys())
@@ -265,7 +273,23 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             logger.debug(data)
 
             header = cls._yaml_header(data)
-            data = {**header, **data}
+            comment: None | list[CommentToken] = None
+            for i, (key, value) in enumerate(header.items()):
+                if key in data:
+                    # pop it, preserving comments that start on following lines
+                    # to re-inject after the header block, if present
+                    if key in data.ca.items and data.ca.items[key][2].value.startswith("\n"):
+                        if comment is None:
+                            comment = data.ca.items.pop(key)
+                        else:
+                            comment[2].value += data.ca.items.pop(key)[2].value
+                    del data[key]
+                data.insert(i, key, value)
+            if comment:
+                # insert newline comments after noob_version,
+                # which is the last key in the header block
+                data.ca.items["noob_version"] = comment
+            # data = {**header, **data}
             shutil.copy(file_path, file_path.with_suffix(".yaml.bak"))
             with open(file_path, "w") as yfile:
                 yaml.dump(data, yfile)
