@@ -9,7 +9,7 @@ from importlib.metadata import version
 from io import StringIO
 from itertools import chain
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Self, Union, cast, overload
+from typing import Any, ClassVar, Literal, Self, Union, overload
 
 from pydantic import (
     BaseModel,
@@ -252,7 +252,9 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         }
 
     @classmethod
-    def _complete_header(cls: type[Self], data: CommentedMap, file_path: str | Path) -> CommentedMap:
+    def _complete_header(
+        cls: type[Self], data: CommentedMap, file_path: str | Path
+    ) -> CommentedMap:
         """fill in any missing fields in the source file needed for a header"""
         file_path = Path(file_path)
         missing_fields = set(cls.HEADER_FIELDS) - set(data.keys())
