@@ -11,7 +11,6 @@ dependencies = [
     "pydantic>=2.10.6",
     "pydantic-settings>=2.8.1",
     "platformdirs>=4.3.7",
-    "PyYAML>=6.0.2",
     'typing-extensions>=4.15.0;python_version<"3.12"',
     "ruamel-yaml>=0.18.16",
 ]
