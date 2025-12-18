@@ -1,3 +1,4 @@
+import asyncio
 import random
 import sqlite3
 import string
@@ -159,3 +160,19 @@ def input_party(
 
 def read_db(conn: sqlite3.Connection) -> A[tuple[int, str], Name("payload")]:
     return conn.cursor().execute("SELECT * FROM users").fetchone()
+
+
+async def number_to_letter(number: int, offset: int = 0) -> str:
+    sleep_for = random.random() / 10
+    await asyncio.sleep(sleep_for)
+    return string.ascii_lowercase[(number + offset) % len(string.ascii_lowercase)]
+
+
+class NumberToLetterCls:
+    def __init__(self, offset: int = 0):
+        self.offset = offset
+
+    async def process(self, number: int) -> str:
+        sleep_for = random.random() / 10
+        await asyncio.sleep(sleep_for)
+        return string.ascii_lowercase[(number + self.offset) % len(string.ascii_lowercase)]

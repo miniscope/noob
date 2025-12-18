@@ -351,6 +351,23 @@ dependencies = [
 ]
 
 [[packages]]
+name = "pytest-asyncio"
+version = "1.3.0"
+requires-python = ">=3.10"
+sdist = {name = "pytest_asyncio-1.3.0.tar.gz", url = "https://files.pythonhosted.org/packages/90/2c/8af215c0f776415f3590cac4f9086ccefd6fd463befeae41cd4d3f193e5a/pytest_asyncio-1.3.0.tar.gz", hashes = {sha256 = "d7f52f36d231b80ee124cd216ffb19369aa168fc10095013c6b014a34d3ee9e5"}}
+wheels = [
+    {name = "pytest_asyncio-1.3.0-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/e5/35/f8b19922b6a25bc0880171a2f1a003eaeb93657475193ab516fd87cac9da/pytest_asyncio-1.3.0-py3-none-any.whl",hashes = {sha256 = "611e26147c7f77640e6d0a92a38ed17c3e9848063698d5c93d5aa7aa11cebff5"}},
+]
+marker = "\"dev\" in extras or \"tests\" in extras"
+
+[packages.tool.pdm]
+dependencies = [
+    "backports-asyncio-runner<2,>=1.1; python_version < \"3.11\"",
+    "pytest<10,>=8.2",
+    "typing-extensions>=4.12; python_version < \"3.13\"",
+]
+
+[[packages]]
 name = "pytest-cov"
 version = "7.0.0"
 requires-python = ">=3.9"
@@ -3347,7 +3364,7 @@ marker = "\"dev\" in extras or \"docs\" in extras"
 dependencies = []
 
 [tool.pdm]
-hashes = {sha256 = "3f1e93e50b9caf9417e58511ccb041bf33be2bda207ed693273992f83c3684d4"}
+hashes = {sha256 = "95baf3fe1d4649a2a4b569c72f2c929eb2df88bba3e562b8175c549c5d2b13f0"}
 strategy = ["inherit_metadata", "static_urls"]
 
 [[tool.pdm.targets]]
