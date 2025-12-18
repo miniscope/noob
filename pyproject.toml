@@ -13,7 +13,6 @@ dependencies = [
     "platformdirs>=4.3.7",
     'typing-extensions>=4.15.0;python_version<"3.12"',
     "ruamel-yaml>=0.18.16",
-    "anyio>=4.12.0",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
