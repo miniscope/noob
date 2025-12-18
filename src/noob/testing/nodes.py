@@ -33,7 +33,7 @@ def letter_source() -> Generator[A[str, Name("letter")]]:
 def word_source() -> Generator[A[str, Name("word")]]:
     fake = Faker()
     while True:
-        yield fake.unique.word()
+        yield fake.word()
 
 
 def multi_words_source(n: int) -> Generator[A[list[str], Name("multi_words")]]:
