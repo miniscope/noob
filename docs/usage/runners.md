@@ -131,14 +131,14 @@ runner.enable_node(node_id="a")
 runner.disable_node(node_id="a")
 ```
 
-For more details on enabled/ disabled nodes, refer to [Tube](./tube.md).
+For more details on enabled/ disabled nodes, refer to [Tube](./tubes.md).
 
 Additionally, we strictly deal with only one epoch at a time.
 Python debuggers will probably have an easier time debugging things in this runner,
 so if asynchronous operation isn't part of the core logic of your pipeline,
 it could prove helpful to try running it in a {class}`~noob.runner.sync.SynchronousRunner` first.
 
-### Scheduler
+## Scheduler
 
 When a runner accepts a {class}`~noob.tube.Tube`, and enters the running stage,
 it needs to know which node to execute next, since some nodes depend on others.
@@ -148,5 +148,11 @@ Currently, the {class}`~noob.scheduler.Scheduler` class is a wrapper around {cla
 For each epoch, the `Scheduler` generate a new `TopologicalSorter` instance, and as runner executes the nodes,
 the `Scheduler` return the next set of ready nodes to the runner. Once the ready nodes have been depleted,
 the `Scheduler` marks the epoch complete.
+
+### Epochs
+
+```{todo}
+Document epochs
+```
 
 ## Asynchronous Runner

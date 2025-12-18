@@ -483,6 +483,11 @@ You can include it in some "parent" tube like this:
 ```{noob-tube} docs-recursive-parent
 ```
 
+## Disabling Nodes
+
+```{todo}
+Document disabling nodes
+```
 
 
 
