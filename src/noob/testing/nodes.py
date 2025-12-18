@@ -48,7 +48,7 @@ def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")] | None, None
     while True:
         i += 1
         if i % every == 0:
-            yield fake.unique.word()
+            yield fake.word()
         else:
             yield None
 
