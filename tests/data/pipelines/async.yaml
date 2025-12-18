@@ -1,0 +1,33 @@
+noob_id: testing-async
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.0
+
+nodes:
+  count:
+    type: noob.testing.count_source
+
+  letter_1:
+    type: noob.testing.number_to_letter
+    depends:
+      - number: count.index
+
+  letter_2:
+    type: noob.testing.number_to_letter
+    params:
+      offset: 1
+    depends:
+      - number: count.index
+
+  letter_3:
+    type: noob.testing.NumberToLetterCls
+    params:
+      offset: 2
+    depends:
+      - number: count.index
+
+  return:
+    type: return
+    depends:
+      - letter_1.value
+      - letter_2.value
+      - letter_3.value

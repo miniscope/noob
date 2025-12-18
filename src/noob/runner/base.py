@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Callable, Coroutine, Generator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
@@ -62,7 +62,7 @@ class TubeRunner(ABC):
         """
 
     @abstractmethod
-    def init(self) -> None:
+    def init(self) -> None | Coroutine:
         """
         Start processing data with the tube graph.
 
@@ -73,7 +73,7 @@ class TubeRunner(ABC):
         """
 
     @abstractmethod
-    def deinit(self) -> None:
+    def deinit(self) -> None | Coroutine:
         """
         Stop processing data with the tube graph
         """
