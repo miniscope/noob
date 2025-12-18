@@ -1,19 +1,23 @@
-noob_id: docs-branch
+noob_id: docs-merge
 noob_model: noob.tube.TubeSpecification
 noob_version: 0.0.1
 nodes:
   a:
     type: noob.testing.count_source
   b:
+    type: noob.testing.count_source
+    params:
+      start: 5
+  c:
     type: noob.testing.multiply
     depends:
-      - left: a.index
-  c:
+    - left: a.index
+  d:
     type: noob.testing.divide
     depends:
-      - numerator: a.index
-  d:
+    - numerator: c.value
+    - denominator: b.index
+  e:
     type: return
-    depends:
-      - multiply: b.value
-      - divide: c.ratio
+    depends: 
+      - ratio: d.ratio
