@@ -366,6 +366,13 @@ class Scheduler(BaseModel):
         """
         self.nodes[node_id].enabled = False
 
+    def clear(self) -> None:
+        """
+        Remove epoch records, restarting the scheduler
+        """
+        self._epochs = {}
+        self._epoch_log = deque(maxlen=100)
+
     @staticmethod
     def _init_graph(nodes: dict[str, NodeSpecification], edges: list[Edge]) -> TopologicalSorter:
         """

@@ -5,6 +5,7 @@ import string
 from collections.abc import Generator
 from datetime import datetime
 from itertools import count, cycle
+from time import sleep
 from typing import Annotated as A
 from typing import Any
 
@@ -160,6 +161,11 @@ def input_party(
 
 def read_db(conn: sqlite3.Connection) -> A[tuple[int, str], Name("payload")]:
     return conn.cursor().execute("SELECT * FROM users").fetchone()
+
+
+def long_add(value: float) -> float:
+    sleep(0.5)
+    return value + 1
 
 
 async def number_to_letter(number: int, offset: int = 0) -> str:

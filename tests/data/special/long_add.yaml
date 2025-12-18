@@ -1,0 +1,31 @@
+noob_id: testing-long-add
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+
+nodes:
+  count:
+    type: noob.testing.count_source
+  a:
+    type: noob.testing.long_add
+    depends:
+      - value: count.index
+  b:
+    type: noob.testing.long_add
+    depends:
+      - value: count.index
+  c:
+    type: noob.testing.long_add
+    depends:
+      - value: count.index
+  d:
+    type: noob.testing.long_add
+    depends:
+      - value: count.index
+  e:
+    type: noob.testing.long_add
+    depends:
+      - value: count.index
+  f:
+    type: noob.testing.long_add
+    depends:
+      - value: count.index

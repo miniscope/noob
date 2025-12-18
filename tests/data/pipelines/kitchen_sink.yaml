@@ -1,0 +1,39 @@
+noob_id: testing-kitchen-sink
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+
+nodes:
+  count:
+    type: noob.testing.count_source
+  count_higher:
+    type: noob.testing.count_source
+    params:
+      start: 5
+  word:
+    type: noob.testing.sporadic_word
+  letter:
+    type: noob.testing.letter_source
+  multiply:
+    type: noob.testing.multiply
+    depends:
+      - left: count.index
+  divide:
+    type: noob.testing.divide
+    depends:
+      - numerator: count.index
+      - denominator: count_higher.index
+
+  gather_n:
+    type: gather
+    params:
+      n: 5
+    depends:
+      - value: letter.letter
+
+
+  return:
+    type: return
+    depends:
+      - multiply: multiply.value
+      - divide: divide.ratio
+      - gather_n: gather_n.value
