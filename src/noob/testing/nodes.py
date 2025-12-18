@@ -5,6 +5,7 @@ import string
 from collections.abc import Generator
 from datetime import datetime
 from itertools import count, cycle
+from time import sleep
 from typing import Annotated as A
 from typing import Any
 
@@ -17,8 +18,12 @@ from noob.node import Node
 
 def count_source(limit: int = 1000, start: int = 0) -> Generator[A[int, Name("index")], None, None]:
     counter = count(start=start)
-    while (val := next(counter)) < limit:
-        yield val
+    if limit == 0:
+        while True:
+            yield next(counter)
+    else:
+        while (val := next(counter)) < limit:
+            yield val
 
 
 def letter_source() -> Generator[A[str, Name("letter")]]:
@@ -28,7 +33,7 @@ def letter_source() -> Generator[A[str, Name("letter")]]:
 def word_source() -> Generator[A[str, Name("word")]]:
     fake = Faker()
     while True:
-        yield fake.unique.word()
+        yield fake.word()
 
 
 def multi_words_source(n: int) -> Generator[A[list[str], Name("multi_words")]]:
@@ -43,7 +48,7 @@ def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")] | None, None
     while True:
         i += 1
         if i % every == 0:
-            yield fake.unique.word()
+            yield fake.word()
         else:
             yield None
 
@@ -160,6 +165,11 @@ def input_party(
 
 def read_db(conn: sqlite3.Connection) -> A[tuple[int, str], Name("payload")]:
     return conn.cursor().execute("SELECT * FROM users").fetchone()
+
+
+def long_add(value: float) -> float:
+    sleep(0.5)
+    return value + 1
 
 
 async def number_to_letter(number: int, offset: int = 0) -> str:

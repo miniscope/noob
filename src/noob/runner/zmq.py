@@ -192,6 +192,9 @@ class CommandNode(EventloopMixin):
         """
         self._callbacks[type_].append(cb)
 
+    def clear_callbacks(self) -> None:
+        self._callbacks = defaultdict(list)
+
     def await_ready(self, node_ids: list[NodeID]) -> None:
         """
         Wait until all the node_ids have announced themselves
@@ -661,6 +664,8 @@ class ZMQRunner(TubeRunner):
                 )
                 proc.kill()
                 proc.close()
+            self.command.clear_callbacks()
+            self.tube.scheduler.clear()
             self._running.clear()
 
     def process(self, **kwargs: Any) -> ReturnNodeType:
