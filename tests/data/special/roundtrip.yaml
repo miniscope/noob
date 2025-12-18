@@ -1,0 +1,10 @@
+noob_id: testing-roundtrip
+noob_model: tests.test_yaml.Roundtrip
+noob_version: v0.1.0
+
+# some comment that should be preserved
+
+# whitespace too
+x: 1
+y: |
+  some multiline string that should stay multiline

@@ -1,11 +1,13 @@
+from collections import OrderedDict
 from importlib.metadata import version
 from pathlib import Path
 
 import pytest
-import yaml
 from pydantic import BaseModel, ConfigDict
 
-from noob.yaml import ConfigYAMLMixin, YAMLMixin, yaml_peek
+from noob.yaml import ConfigYAMLMixin, YAMLMixin, yaml, yaml_peek
+
+from .conftest import SPECIAL_DIR
 
 
 class NestedModel(BaseModel):
@@ -20,6 +22,11 @@ class MyModel(ConfigYAMLMixin):
     b: str = "1"
     c: float = 2.2
     child: NestedModel = NestedModel()
+
+
+class Roundtrip(ConfigYAMLMixin):
+    x: int
+    y: str
 
 
 class LoaderModel(ConfigYAMLMixin):
@@ -43,7 +50,7 @@ def test_yaml_mixin(tmp_path):
 
     yaml_file = tmp_path / "temp.yaml"
     with open(yaml_file, "w") as yfile:
-        yaml.safe_dump(data, yfile)
+        yaml.dump(data, yfile)
 
     instance = MyModel.from_yaml(yaml_file)
     assert instance.model_dump() == data
@@ -71,6 +78,17 @@ def test_config_from_id(yaml_config, id, path, valid):
             MyModel.from_id(id)
 
 
+def test_roundtrip_dump_load_yaml(tmp_config_source):
+    """yaml dump and load preserve key order"""
+    yaml_file = tmp_config_source / "test_config.yaml"
+
+    instance = MyModel()
+    instance.to_yaml(yaml_file)
+    expected = instance._dump_data()
+    result = yaml.load(yaml_file)
+    assert OrderedDict(expected) == OrderedDict(result)
+
+
 def test_roundtrip_to_from_yaml(tmp_config_source):
     """Config models can roundtrip to and from yaml"""
     yaml_file = tmp_config_source / "test_config.yaml"
@@ -81,6 +99,60 @@ def test_roundtrip_to_from_yaml(tmp_config_source):
     assert loaded == instance
     assert loaded.child == instance.child
     assert isinstance(loaded.child, NestedModel)
+
+
+def test_roundtrip_complete_header(tmp_path):
+    """
+    Config models preserve comments and other non-data
+    when the header is completed by the yaml mixin
+    """
+    noob_version = version("noob")
+    original = """# comment at the start of the file    
+
+noob_model: tests.test_yaml.Roundtrip # this comment should stay on the same line
+noob_id: testing-roundtrip-header
+# some comment that should be preserved
+
+# whitespace too
+x: 1
+y: |
+  some multiline string that should stay multiline
+"""
+    expected = f"""# comment at the start of the file    
+
+noob_id: testing-roundtrip-header
+noob_model: tests.test_yaml.Roundtrip # this comment should stay on the same line
+noob_version: {noob_version}
+# some comment that should be preserved
+
+# whitespace too
+x: 1
+y: |
+  some multiline string that should stay multiline
+"""
+
+    fn = tmp_path / "roundtrip_header.yaml"
+    with open(fn, "w") as f:
+        f.write(original)
+    assert "noob_version" not in original
+    instance = Roundtrip.from_yaml(fn)
+    mutated = fn.read_text()
+    assert "noob_version" in mutated
+    assert mutated == expected
+
+
+def test_roundtrip_from_to_yaml(tmp_path):
+    """
+    yaml comments and whitespace are preserved on a from/to yaml loop
+    """
+    yaml_file = SPECIAL_DIR / "roundtrip.yaml"
+    out_fn = tmp_path / "roundtrip.yaml"
+    original = yaml_file.read_text()
+    instance = Roundtrip.from_id("testing-roundtrip")
+    mutated = yaml_file.read_text()
+    assert original == mutated
+    instance.to_yaml(out_fn)
+    assert original == out_fn.read_text()
 
 
 @pytest.mark.parametrize(
@@ -125,7 +197,7 @@ def test_complete_header(tmp_config_source, src: str):
     _ = MyModel.from_yaml(yaml_file)
 
     with open(yaml_file) as yfile:
-        loaded = yaml.safe_load(yfile)
+        loaded = yaml.load(yfile)
 
     loaded_str = yaml_file.read_text()
 
