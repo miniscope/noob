@@ -1,5 +1,4 @@
 from datetime import datetime
-from graphlib import TopologicalSorter
 from multiprocessing import Queue
 from queue import Empty
 
@@ -7,6 +6,7 @@ import pytest
 
 from noob import SynchronousRunner, Tube
 from noob.event import Event, MetaEventType
+from noob.scheduler import TopoSorter
 
 
 def test_epoch_increment():
@@ -18,11 +18,11 @@ def test_epoch_increment():
     scheduler = tube.scheduler
 
     # accessing makes the epoch
-    assert isinstance(scheduler[0], TopologicalSorter)
+    assert isinstance(scheduler[0], TopoSorter)
 
     for i in range(5):
         assert scheduler.add_epoch() == i + 1
-        assert isinstance(scheduler[i], TopologicalSorter)
+        assert isinstance(scheduler[i], TopoSorter)
 
     # if we create an epoch out of order, the next call without epoch specified increments
     assert scheduler.add_epoch(10) == 10
