@@ -5,7 +5,6 @@ from collections.abc import MutableSequence
 from copy import deepcopy
 from datetime import UTC, datetime
 from enum import StrEnum
-from graphlib import _NODE_OUT  # type: ignore[attr-defined]
 from itertools import count
 from threading import Condition
 from typing import Self
@@ -49,7 +48,7 @@ class TopoSorter(nx.DiGraph):
     def init_attrs(self) -> None:
         nx.set_node_attributes(self, dict(self.in_degree), NodeState.n_preds)
         for state in (NodeState.ready, NodeState.out, NodeState.done):
-            nx.set_node_attributes(self, False, state)
+            nx.set_node_attributes(self, False, state)  # type: ignore[call-overload]
 
     def mark_ready(self, *nodes: NodeID) -> None:
         nx.set_node_attributes(self, {node: True for node in nodes}, NodeState.ready)
@@ -114,8 +113,7 @@ class TopoSorter(nx.DiGraph):
         graph by using "add" or if called without calling "prepare" previously or if
         node has not yet been returned by "get_ready".
         """
-        nx.set_node_attributes(self, {node: False for node in node_ids}, NodeState.out)
-        nx.set_node_attributes(self, {node: True for node in node_ids}, NodeState.done)
+        self.mark_done(*node_ids)
 
         # next set of nodes need to be ready
         for node in node_ids:
@@ -244,7 +242,7 @@ class Scheduler(BaseModel):
             return True
 
         graphs = self._epochs.items() if epoch is None else [(epoch, self[epoch])]
-        is_ready = any(node_id == node for epoch, graph in graphs for node_id in graph._ready_nodes)  # type: ignore[attr-defined]
+        is_ready = any(node_id == node for epoch, graph in graphs for node_id in graph.ready_nodes)
         return is_ready
 
     def __getitem__(self, epoch: int) -> TopoSorter:
@@ -266,8 +264,7 @@ class Scheduler(BaseModel):
 
         graph = self[-1] if epoch is None else self._epochs[epoch]
         return all(
-            graph._node2info[src].npredecessors != _NODE_OUT  # type: ignore[attr-defined]
-            and src not in graph._ready_nodes  # type: ignore[attr-defined]
+            graph.nodes[src][NodeState.out] is not True and src not in graph.ready_nodes
             for src in self.source_nodes
         )
 
@@ -329,12 +326,8 @@ class Scheduler(BaseModel):
                 # in parallel mode, we don't `get_ready` the preceding ready nodes
                 # so we have to manually mark them as "out"
                 # FIXME: so ugly - need to make our own topo sorter
-                if node_id not in self[epoch]._node2info:  # type: ignore[attr-defined]
+                if node_id not in self[epoch].nodes:
                     raise e
-                self[epoch]._node2info[node_id].npredecessors = _NODE_OUT  # type: ignore[attr-defined]
-                self[epoch]._nfinished += 1  # type: ignore[attr-defined]
-                if node_id in self[epoch]._ready_nodes:  # type: ignore[attr-defined]
-                    self[epoch]._ready_nodes.remove(node_id)  # type: ignore[attr-defined]
                 self[epoch].done(node_id)
 
             self._ready_condition.notify_all()
@@ -384,10 +377,9 @@ class Scheduler(BaseModel):
                     "locked between threads."
                 )
 
-            # do a little graphlib surgery to mark just one event as done.
+            # do a little graphlib surgery to mark just one event as out.
             # threadsafe because we are holding the lock that protects graph mutation
-            self._epochs[epoch]._node2info[node_id].npredecessors = _NODE_OUT  # type: ignore[attr-defined]
-            self._epochs[epoch]._ready_nodes.remove(node_id)  # type: ignore[attr-defined]
+            self._epochs[epoch].mark_out(node_id)
 
         return MetaEvent(
             id=uuid4().int,
