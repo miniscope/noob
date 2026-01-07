@@ -233,7 +233,7 @@ class TopoSorter(TopologicalSorter):
                     break
         return None
 
-    def _get_nodeinfo(self, node: str) -> dict[str, _NodeInfo]:
+    def _get_nodeinfo(self, node: str) -> _NodeInfo:
         if (result := self._node2info.get(node)) is None:
             self._node2info[node] = result = _NodeInfo(node)
         return result

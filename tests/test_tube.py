@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from noob.tube import Tube, TubeSpecification
 
 
@@ -56,3 +59,8 @@ def test_enable_nodes():
 
     tube.enable_node("c")
     assert list(tube.enabled_nodes.keys()) == ["a", "b", "c"]
+
+
+def test_cycle_check():
+    with pytest.raises(ValidationError):
+        Tube.from_specification("testing-cycle")
