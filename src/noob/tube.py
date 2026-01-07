@@ -160,6 +160,9 @@ class Tube(BaseModel):
             scheduler = cls._init_scheduler(info.data["nodes"], info.data["edges"])
         else:
             scheduler = value
+
+        scheduler.assert_acyclic()
+
         return scheduler
 
     def in_edges(self, node: Node | str) -> list[Edge]:

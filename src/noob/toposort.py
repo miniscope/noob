@@ -1,5 +1,5 @@
 from enum import Enum
-from graphlib import CycleError, TopologicalSorter
+from graphlib import TopologicalSorter
 
 
 class _SchedulerNodeStatus(Enum):
@@ -90,14 +90,6 @@ class TopoSorter(TopologicalSorter):
             raise ValueError("cannot prepare() more than once")
 
         self._ready_nodes = [i.node for i in self._node2info.values() if i.npredecessors == 0]
-        # ready_nodes is set before we look for cycles on purpose:
-        # if the user wants to catch the CycleError, that's fine,
-        # they can continue using the instance to grab as many
-        # nodes as possible before cycles block more progress
-        cycle = self._find_cycle()
-        if cycle:
-            raise CycleError("nodes are in a cycle", cycle)
-
         self._prepared = True
 
     def get_ready(self) -> tuple[str, ...]:
@@ -203,3 +195,45 @@ class TopoSorter(TopologicalSorter):
             self._nfinished += 1
             if node in self.ready_nodes:
                 self._ready_nodes.remove(node)
+
+    def find_cycle(self) -> list[str] | None:
+        n2i = self._node2info
+        stack: list[str] = []
+        itstack = []
+        seen = set()
+        node2stacki: dict[str, int] = {}
+
+        for node in n2i:
+            if node in seen:
+                continue
+
+            while True:
+                if node in seen:
+                    # If we have seen already the node and is in the
+                    # current stack we have found a cycle.
+                    if node in node2stacki:
+                        return stack[node2stacki[node] :] + [node]
+                    # else go on to get next successor
+                else:
+                    seen.add(node)
+                    itstack.append(iter(n2i[node].successors).__next__)
+                    node2stacki[node] = len(stack)
+                    stack.append(node)
+
+                # Backtrack to the topmost stack entry with
+                # at least another successor.
+                while stack:
+                    try:
+                        node = itstack[-1]()
+                        break
+                    except StopIteration:
+                        del node2stacki[stack.pop()]
+                        itstack.pop()
+                else:
+                    break
+        return None
+
+    def _get_nodeinfo(self, node: str) -> dict[str, _NodeInfo]:
+        if (result := self._node2info.get(node)) is None:
+            self._node2info[node] = result = _NodeInfo(node)
+        return result
