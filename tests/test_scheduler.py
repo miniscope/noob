@@ -6,7 +6,7 @@ import pytest
 
 from noob import SynchronousRunner, Tube
 from noob.event import Event, MetaEventType
-from noob.scheduler import TopoSorter
+from noob.toposort import TopoSorter
 
 
 def test_epoch_increment():
@@ -110,8 +110,8 @@ def test_scheduler_disable_node():
     scheduler.disable_node("c")
     scheduler.add_epoch()
     assert list(scheduler.nodes.keys()) == ["a", "b", "c"]
-    assert list(scheduler[0].nodes) == ["a", "b", "c"]
-    assert list(scheduler[1].nodes) == ["a", "b"]
+    assert list(scheduler[0]._node2info.keys()) == ["a", "b", "c"]
+    assert list(scheduler[1]._node2info.keys()) == ["a", "b"]
 
 
 @pytest.mark.parametrize(
