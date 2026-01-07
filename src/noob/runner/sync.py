@@ -6,8 +6,9 @@ from typing import Any
 
 from noob.input import InputScope
 from noob.node import Return
-from noob.runner.base import TubeRunner
+from noob.runner.base import TubeRunner, call_async_from_sync
 from noob.types import ReturnNodeType
+from noob.utils import iscoroutinefunction_partial
 
 
 @dataclass
@@ -92,7 +93,10 @@ class SynchronousRunner(TubeRunner):
                 # need to eventually distinguish "still waiting" vs "there is none"
                 args = [] if maybe_args is None else maybe_args
                 kwargs = {} if maybe_kwargs is None else maybe_kwargs
-                value = node.process(*args, **kwargs)
+                if iscoroutinefunction_partial(node.process):
+                    value = call_async_from_sync(node.process, *args, **kwargs)
+                else:
+                    value = node.process(*args, **kwargs)
 
                 # take the value from state first. if it's taken by an asset,
                 # the value is converted to its id, and returned again.

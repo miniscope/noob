@@ -135,9 +135,10 @@ addopts = [
     "--timeout=15"
 ]
 markers = [
+    "asyncio: any usage of asyncio",
+    "async_runner: uses the async runner",
     "sync_runner: uses the sync runner",
-    "zmq_runner: uses the zmq runner"
-
+    "zmq_runner: uses the zmq runner",
 ]
 
 [tool.black]

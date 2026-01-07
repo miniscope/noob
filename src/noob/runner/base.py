@@ -1,20 +1,28 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import inspect
+import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine, Generator, Sequence
+from concurrent.futures import Future as ConcurrentFuture
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from logging import Logger
-from typing import Any, Self
+from typing import Any, ParamSpec, Self, TypeVar
 
 from noob import Tube, init_logger
 from noob.event import Event, MetaEvent
 from noob.node import Node
 from noob.store import EventStore
 from noob.types import PythonIdentifier, ReturnNodeType, RunnerContext
+from noob.utils import iscoroutinefunction_partial
+
+_TReturn = TypeVar("_TReturn")
+_PProcess = ParamSpec("_PProcess")
 
 
 @dataclass
@@ -219,3 +227,54 @@ class TubeRunner(ABC):
 
     def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: ANN001
         self.deinit()
+
+
+def call_async_from_sync(
+    fn: Callable[_PProcess, Coroutine[Any, Any, _TReturn]],
+    executor: ThreadPoolExecutor | None = None,
+    *args: _PProcess.args,
+    **kwargs: _PProcess.kwargs,
+) -> _TReturn:
+    if not iscoroutinefunction_partial(fn):
+        raise RuntimeError(
+            "Called a synchronous function from call_async_from_sync, "
+            "something has gone wrong in however this runner is implemented"
+        )
+
+    coro = fn(*args, **kwargs)
+
+    try:
+        return asyncio.run(coro)
+    except RuntimeError as e:
+        if "cannot be called from a running event loop" in str(e):
+            # async coroutine called in a sync runner context
+            # while the runner is inside another asyncio eventloop
+            # continue to this evil motherfucker of a fallback
+            pass
+        else:
+            raise e
+
+    if executor is None:
+        executor = ThreadPoolExecutor(1)
+
+    result_future: asyncio.Future[_TReturn] = asyncio.Future()
+    work_ready = threading.Condition()
+
+    # Closures because this code should never escape the containment tomb of this crime against god
+    async def _wrap(call_result: asyncio.Future[_TReturn], fn: Coroutine) -> None:
+        try:
+            result = await fn
+            call_result.set_result(result)
+        except Exception as e:
+            call_result.set_exception(e)
+
+    def _done(_: ConcurrentFuture) -> None:
+        with work_ready:
+            work_ready.notify_all()
+
+    future_inner = executor.submit(asyncio.run, _wrap(result_future, coro))
+    future_inner.add_done_callback(_done)
+
+    with work_ready:
+        work_ready.wait()
+    return result_future.result()
