@@ -1,11 +1,5 @@
-from enum import Enum
-from graphlib import TopologicalSorter
-
-
-class _SchedulerNodeStatus(Enum):
-    READY = 0
-    OUT = -1
-    DONE = -2
+from noob.node import Edge, NodeSpecification
+from noob.types import NodeID
 
 
 class _NodeInfo:
@@ -22,37 +16,63 @@ class _NodeInfo:
 
         # List of successor nodes. The list can contain duplicated elements as
         # long as they're all reflected in the successor's npredecessors attribute.
-        self.successors: list[str] = []
+        self.successors: list[NodeID] = []
 
 
-class TopoSorter(TopologicalSorter):
+class TopoSorter:
     """
-    Provides functionality to topologically sort a graph of hashable nodes.
-    Based on graphlib.TopologicalSorter.
+    Provides functionality to topologically sort a graph of `class: .node.base.Node`.
     """
 
-    def __init__(self, graph: dict | None = None):
-        self._node2info: dict[str, _NodeInfo] = {}
-        self._prepared = False  # mypy complains about _ready_nodes otherwise.
-        self._ready_nodes: list[str] = []
-        self._done_nodes: list[str] = []
+    def __init__(self, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> None:
+        self._node2info: dict[str, _NodeInfo] = dict()
+        self._ready_nodes: set[NodeID] = set()
+        self._out_nodes: set[NodeID] = set()
+        self._done_nodes: set[NodeID] = set()
         self._npassedout = 0
         self._nfinished = 0
 
-        if graph is not None:
-            for node, predecessors in graph.items():
-                self.add(node, *predecessors)
+        enabled_nodes = [node_id for node_id, node in nodes.items() if node.enabled]
+        for node_id in enabled_nodes:
+            required_edges = [
+                e.source_node
+                for e in edges
+                if e.target_node == node_id and e.target_node in enabled_nodes
+            ]
+            self.add(node_id, *required_edges)
 
     @property
-    def ready_nodes(self) -> list[str]:
+    def ready_nodes(self) -> set[NodeID]:
         return self._ready_nodes
 
     @property
-    def done_nodes(self) -> list[str]:
+    def out_nodes(self) -> set[NodeID]:
+        return self._out_nodes
+
+    @property
+    def done_nodes(self) -> set[NodeID]:
         return self._done_nodes
 
-    def add(self, node: str, *predecessors: str) -> None:
-        """Add a new node and its predecessors to the graph.
+    def mark_ready(self, *nodes: NodeID) -> None:
+        self._ready_nodes.update(nodes)
+
+    def mark_out(self, *nodes: NodeID) -> None:
+        for node in nodes:
+            # there isn't a good way to discard multiple elements in bulk
+            self._ready_nodes.discard(node)  # missing ok
+        self._out_nodes.update(nodes)
+        self._npassedout += len(nodes)
+
+    def mark_done(self, *nodes: NodeID) -> None:
+        for node in nodes:
+            self._ready_nodes.discard(node)
+            self._out_nodes.discard(node)
+        self._done_nodes.update(nodes)
+        self._nfinished += len(nodes)
+
+    def add(self, node: NodeID, *predecessors: NodeID) -> None:
+        """
+        Add a new node and its predecessors to the graph.
 
         Both the *node* and all elements in *predecessors* must be hashable.
 
@@ -63,58 +83,35 @@ class TopoSorter(TopologicalSorter):
         as well as provide a dependency twice. If a node that has not been provided before
         is included among *predecessors* it will be automatically added to the graph with
         no predecessors of its own.
-
-        Raises ValueError if called after "prepare".
         """
-        if self._prepared:
-            raise ValueError("Nodes cannot be added after a call to prepare()")
-
         # Create the node -> predecessor edges
         nodeinfo = self._get_nodeinfo(node)
         nodeinfo.npredecessors += len(predecessors)
+        if nodeinfo.npredecessors == 0:
+            self.mark_ready(node)
+        else:
+            # in case node is called multiple times
+            self._ready_nodes.discard(node)
 
         # Create the predecessor -> node edges
         for pred in predecessors:
             pred_info = self._get_nodeinfo(pred)
             pred_info.successors.append(node)
-
-    def prepare(self) -> None:
-        """Mark the graph as finished and check for cycles in the graph.
-
-        If any cycle is detected, "CycleError" will be raised, but "get_ready" can
-        still be used to obtain as many nodes as possible until cycles block more
-        progress. After a call to this function, the graph cannot be modified and
-        therefore no more nodes can be added using "add".
-        """
-        if self._prepared:
-            raise ValueError("cannot prepare() more than once")
-
-        self._ready_nodes = [i.node for i in self._node2info.values() if i.npredecessors == 0]
-        self._prepared = True
+            if pred_info.npredecessors == 0:
+                self.mark_ready(pred)
 
     def get_ready(self) -> tuple[str, ...]:
-        """Return a tuple of all the nodes that are ready.
+        """
+        Return a tuple of all the nodes that are ready.
 
         Initially it returns all nodes with no predecessors; once those are marked
         as processed by calling "done", further calls will return all new nodes that
         have all their predecessors already processed. Once no more progress can be made,
         empty tuples are returned.
-
-        Raises ValueError if called without calling "prepare" previously.
         """
-        if not self._prepared:
-            raise ValueError("prepare() must be called first")
-
         # Get the nodes that are ready and mark them
-        result = tuple(self._ready_nodes)
-        n2i = self._node2info
-        for node in result:
-            n2i[node].npredecessors = _SchedulerNodeStatus.OUT.value
-
-        # Clean the list of nodes that are ready and update
-        # the counter of nodes that we have returned.
-        self._ready_nodes.clear()
-        self._npassedout += len(result)
+        result = tuple(self.ready_nodes)
+        self.mark_out(*result)
 
         return result
 
@@ -128,18 +125,7 @@ class TopoSorter(TopologicalSorter):
 
         Raises ValueError if called without calling "prepare" previously.
         """
-        if not self._prepared:
-            raise ValueError("prepare() must be called first")
-        return self._nfinished < self._npassedout or bool(self._ready_nodes)
-
-    def mark_out(self, *nodes: str) -> None:
-        """
-        Manually mark a node as "out"
-        """
-        for node in nodes:
-            self._node2info[node].npredecessors = _SchedulerNodeStatus.OUT.value
-            if node in self.ready_nodes:
-                self._ready_nodes.remove(node)
+        return self._nfinished < self._npassedout or bool(self.ready_nodes)
 
     def done(self, *nodes: str) -> None:
         """Marks a set of nodes returned by "get_ready" as processed.
@@ -152,10 +138,6 @@ class TopoSorter(TopologicalSorter):
         graph by using "add" or if called without calling "prepare" previously or if
         node has not yet been returned by "get_ready".
         """
-
-        if not self._prepared:
-            raise ValueError("prepare() must be called first")
-
         n2i = self._node2info
 
         for node in nodes:
@@ -164,37 +146,23 @@ class TopoSorter(TopologicalSorter):
             if (nodeinfo := n2i.get(node)) is None:
                 raise ValueError(f"node {node!r} was not added using add()")
 
-            # If the node has not being returned (marked as ready) previously, inform the user.
-            stat = nodeinfo.npredecessors
-            if stat != _SchedulerNodeStatus.OUT.value:
-                if stat >= 0:
-                    raise ValueError(f"node {node!r} was not passed out (still not ready)")
-                elif stat == _SchedulerNodeStatus.DONE.value:
+            # If the node has not been marked as "out" previously, inform the user.
+            if node not in self.out_nodes:
+                if node in self.done_nodes:
                     raise ValueError(f"node {node!r} was already marked done")
                 else:
-                    raise AssertionError(f"node {node!r}: unknown status {stat}")
+                    raise ValueError(f"node {node!r} was not passed out")
 
             # Mark the node as processed
-            nodeinfo.npredecessors = _SchedulerNodeStatus.DONE.value
-            self._done_nodes.append(node)
+            self.mark_done(node)
 
             # Go to all the successors and reduce the number of predecessors,
             # collecting all the ones that are ready to be returned in the next get_ready() call.
             for successor in nodeinfo.successors:
                 successor_info = n2i[successor]
                 successor_info.npredecessors -= 1
-                if successor_info.npredecessors == _SchedulerNodeStatus.READY.value:
-                    self._ready_nodes.append(successor)
-            self._nfinished += 1
-
-    def mark_done(self, *nodes: str) -> None:
-        """Mark nodes "done" without making their dependent nodes ready."""
-        for node in nodes:
-            self._node2info[node].npredecessors = _SchedulerNodeStatus.DONE.value
-            self._done_nodes.append(node)
-            self._nfinished += 1
-            if node in self.ready_nodes:
-                self._ready_nodes.remove(node)
+                if successor_info.npredecessors == 0:
+                    self.mark_ready(successor)
 
     def find_cycle(self) -> list[str] | None:
         n2i = self._node2info

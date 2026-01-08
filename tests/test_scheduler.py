@@ -128,7 +128,7 @@ def test_identify_source_node(spec, input, expected):
 
     """
     tube = Tube.from_specification(spec, input)
-    assert tube.scheduler.source_nodes == expected
+    assert set(tube.scheduler.source_nodes) == set(expected)
 
 
 @pytest.mark.parametrize(
@@ -211,4 +211,14 @@ def test_metaevents():
 @pytest.mark.xfail(raises=NotImplementedError)
 def test_noevent_ends_epoch():
     """If a node in the middle of a tube emits a noevent, the epoch should no longer be active"""
+    raise NotImplementedError("Write this test!")
+
+
+@pytest.mark.xfail(raises=NotImplementedError)
+def test_disable_nodes():
+    """
+    For A->B->C graph, when B is disabled,
+    the scheduler only yields A and then becomes inactive,
+    rather than yielding C.
+    """
     raise NotImplementedError("Write this test!")

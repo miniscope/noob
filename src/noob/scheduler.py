@@ -51,7 +51,6 @@ class Scheduler(BaseModel):
         """
         if not self.source_nodes:
             graph = self._init_graph(nodes=self.nodes, edges=self.edges)
-            graph.prepare()
             self.source_nodes = [id_ for id_ in graph.ready_nodes if id_ not in ("input", "assets")]
         return self
 
@@ -74,7 +73,6 @@ class Scheduler(BaseModel):
                 raise EpochCompletedError(f"Epoch {this_epoch} has already been completed!")
 
             graph = self._init_graph(nodes=self.nodes, edges=self.edges)
-            graph.prepare()
             self._epochs[this_epoch] = graph
             self._ready_condition.notify_all()
         return this_epoch
@@ -379,16 +377,7 @@ class Scheduler(BaseModel):
             see: https://github.com/miniscope/noob/issues/26,
 
         """
-        sorter: TopoSorter = TopoSorter()
-        enabled_nodes = [node_id for node_id, node in nodes.items() if node.enabled]
-        for node_id in enabled_nodes:
-            required_edges = [
-                e.source_node
-                for e in edges
-                if e.target_node == node_id and e.target_node in enabled_nodes
-            ]
-            sorter.add(node_id, *required_edges)
-        return sorter
+        return TopoSorter(nodes, edges)
 
     def assert_acyclic(self) -> None:
         """
