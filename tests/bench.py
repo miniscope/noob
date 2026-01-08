@@ -1,4 +1,3 @@
-
 import pytest
 from pytest_codspeed.plugin import BenchmarkFixture
 
