@@ -8,8 +8,6 @@ from noob import SynchronousRunner, Tube
 from noob.runner import TubeRunner
 from noob.utils import iscoroutinefunction_partial
 
-pytestmark = pytest.mark.asyncio
-
 
 @pytest.mark.parametrize("loaded_tube", ["testing-async"], indirect=True)
 def test_async_in_sync(loaded_tube: Tube):
@@ -33,10 +31,11 @@ def test_async_in_sync(loaded_tube: Tube):
 
 @pytest.mark.parametrize("loaded_tube", ["testing-async"], indirect=True)
 @pytest.mark.asyncio
-async def test_async_in_async(loaded_tube: Tube, runner: TubeRunner) -> None:
+async def test_async_in_async(loaded_tube: Tube, all_runners: TubeRunner) -> None:
     """
     All runners should be able to handle async nodes when run in an outer eventloop
     """
+    runner = all_runners
     for i in range(10):
         if iscoroutinefunction_partial(runner.process):
             res = await runner.process()
@@ -47,3 +46,17 @@ async def test_async_in_async(loaded_tube: Tube, runner: TubeRunner) -> None:
             string.ascii_lowercase[i + 1],
             string.ascii_lowercase[i + 2],
         )
+
+
+@pytest.mark.parametrize("loaded_tube", ["testing-async-error"], indirect=True)
+@pytest.mark.asyncio
+async def test_async_errors(loaded_tube: Tube, all_runners: TubeRunner) -> None:
+    """
+    All runners can correctly raise async errors without hanging
+    """
+    runner = all_runners
+    with pytest.raises(ValueError, match="This is the error"):
+        if iscoroutinefunction_partial(runner.process):
+            res = await runner.process()
+        else:
+            res = runner.process()
