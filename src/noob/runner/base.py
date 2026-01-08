@@ -337,7 +337,6 @@ def call_async_from_sync(
 
     # Closures because this code should never escape the containment tomb of this crime against god
     async def _wrap(call_result: asyncio.Future[_TReturn], fn: Coroutine) -> None:
-        # return await fn
         try:
             result = await fn
             call_result.set_result(result)
