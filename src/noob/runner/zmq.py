@@ -132,8 +132,8 @@ class CommandNode(EventloopMixin):
 
     def start(self) -> None:
         self.logger.debug("Starting command runner")
-        self._init_sockets()
         self.start_loop()
+        self._init_sockets()
         self.logger.debug("Command runner started")
 
     def stop(self) -> None:
@@ -449,8 +449,8 @@ class NodeRunner(EventloopMixin):
             self._dealer.send_multipart([msg.to_bytes()])
 
     def start_sockets(self) -> None:
-        self._init_sockets()
         self.start_loop()
+        self._init_sockets()
 
     def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
