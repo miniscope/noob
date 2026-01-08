@@ -258,7 +258,7 @@ def call_async_from_sync(
 
     We need to make a new thread in **some** way,
     Django's ``asgiref`` has a mindblowingly complicated
-    `async_to_sync <https://github.com/django/asgiref/blob/2b28409ab83b3e4cf6fed9019403b71f8d7d1c51/asgiref/sync.py#L585>`
+    `async_to_sync <https://github.com/django/asgiref/blob/2b28409ab83b3e4cf6fed9019403b71f8d7d1c51/asgiref/sync.py#L585>`_
     function that works **roughly** by creating a new thread
     and then calling :func:`asyncio.run` from *within that*
     (plus about a thousand other things to manage all the edge cases).
@@ -305,8 +305,8 @@ def call_async_from_sync(
     Returns: The result of the called function
 
     References:
-        https://github.com/django/asgiref/blob/2b28409ab83b3e4cf6fed9019403b71f8d7d1c51/asgiref/sync.py#L152
-        https://stackoverflow.com/questions/79663750/call-async-code-inside-sync-code-inside-async-code
+        * https://github.com/django/asgiref/blob/2b28409ab83b3e4cf6fed9019403b71f8d7d1c51/asgiref/sync.py#L152
+        * https://stackoverflow.com/questions/79663750/call-async-code-inside-sync-code-inside-async-code
     """
     if not iscoroutinefunction_partial(fn):
         raise RuntimeError(
