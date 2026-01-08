@@ -11,6 +11,12 @@ except ImportError as e:
 
 
 class EventloopMixin:
+    """
+    Provide an eventloop in a separate thread to an inheriting class.
+    Any eventloop that is running in the current context is not used
+    because the inheriting classes are presumed to operate mostly synchronously for now,
+    pending a refactor to all async networking classes.
+    """
 
     def __init__(self):
         self._context = None
@@ -26,16 +32,11 @@ class EventloopMixin:
 
     @property
     def loop(self) -> IOLoop:
-        # tornado requires an eventloop to be created manually now
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            # Create a new asyncio event loop for this thread.
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
+        # To ensure that the loop is always created in the spawned thread,
+        # we don't create it here (since this property could be accessed elsewhere)
+        # and throw to protect that.
         if self._loop is None:
-            self._loop = IOLoop.current()
+            raise RuntimeError("Loop is not running")
         return self._loop
 
     def start_loop(self) -> None:
@@ -50,6 +51,9 @@ class EventloopMixin:
             _ready.set()
 
         def _run() -> None:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            self._loop = IOLoop.current()
             if hasattr(self, "logger"):
                 self.logger.debug("Starting eventloop")
             while not self._quitting.is_set():

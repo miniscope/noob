@@ -96,12 +96,12 @@ def test_map():
 
 
 @pytest.mark.parametrize("loaded_tube", ["testing-multi-signal"], indirect=True)
-def test_multi_signal(loaded_tube: Tube, runner_cls: type[TubeRunner]):
+def test_multi_signal(loaded_tube: Tube, sync_runner_cls):
     """
     Nodes that emit multiple signals can have each used independently
     """
     tube = Tube.from_specification("testing-multi-signal")
-    runner = runner_cls(tube)
+    runner = sync_runner_cls(tube)
 
     for value in runner.iter(n=5):
         assert isinstance(value, dict)

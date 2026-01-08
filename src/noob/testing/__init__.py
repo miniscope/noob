@@ -12,6 +12,7 @@ from noob.testing.nodes import (
     Volume,
     VolumeProcess,
     array_add_to_left,
+    async_error,
     concat,
     count_source,
     dictify,
@@ -32,6 +33,7 @@ from noob.testing.nodes import (
 )
 
 __all__ = [
+    "async_error",
     "concat",
     "count_source",
     "dictify",

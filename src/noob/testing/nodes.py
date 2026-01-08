@@ -186,3 +186,8 @@ class NumberToLetterCls:
         sleep_for = random.random() / 10
         await asyncio.sleep(sleep_for)
         return string.ascii_lowercase[(number + self.offset) % len(string.ascii_lowercase)]
+
+
+async def async_error(value: Any) -> None:
+    """Just raise an error!"""
+    raise ValueError("This is the error that should be raised")

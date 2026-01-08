@@ -67,10 +67,11 @@ from noob.network.message import (
     StopMsg,
 )
 from noob.node import Node, NodeSpecification, Return
-from noob.runner.base import TubeRunner
+from noob.runner.base import TubeRunner, call_async_from_sync
 from noob.scheduler import Scheduler
 from noob.store import EventStore
 from noob.types import NodeID, ReturnNodeType
+from noob.utils import iscoroutinefunction_partial
 
 if TYPE_CHECKING:
     pass
@@ -131,8 +132,8 @@ class CommandNode(EventloopMixin):
 
     def start(self) -> None:
         self.logger.debug("Starting command runner")
-        self._init_sockets()
         self.start_loop()
+        self._init_sockets()
         self.logger.debug("Command runner started")
 
     def stop(self) -> None:
@@ -344,11 +345,17 @@ class NodeRunner(EventloopMixin):
             runner._freerun.clear()
             runner._process_one.clear()
 
+            is_async = iscoroutinefunction_partial(runner._node.process)
+
             for args, kwargs, epoch in runner.await_inputs():
                 runner.logger.debug(
                     "Running with args: %s, kwargs: %s, epoch: %s", args, kwargs, epoch
                 )
-                value = runner._node.process(*args, **kwargs)
+                if is_async:
+                    # mypy fails here because it can't propagate the type guard above
+                    value = call_async_from_sync(runner._node.process, *args, **kwargs)  # type: ignore[arg-type]
+                else:
+                    value = runner._node.process(*args, **kwargs)
                 events = runner.store.add_value(runner._node.signals, value, runner._node.id, epoch)
                 runner.scheduler.add_epoch()
 
@@ -442,8 +449,8 @@ class NodeRunner(EventloopMixin):
             self._dealer.send_multipart([msg.to_bytes()])
 
     def start_sockets(self) -> None:
-        self._init_sockets()
         self.start_loop()
+        self._init_sockets()
 
     def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)

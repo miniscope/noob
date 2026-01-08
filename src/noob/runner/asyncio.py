@@ -20,6 +20,11 @@ else:
 class AsyncRunner(TubeRunner):
 
     eventloop: asyncio.AbstractEventLoop | None = None
+    exception_timeout: float = 10
+    """
+    When a node raises an error, wait this long (in seconds)
+    before cancelling the other currently running nodes. 
+    """
 
     def __post_init__(self):
         super().__post_init__()
@@ -27,6 +32,7 @@ class AsyncRunner(TubeRunner):
         self._node_ready = asyncio.Event()
         self._init_lock = asyncio.Lock()
         self._pending_futures = set()
+        self._exception: BaseException | None = None
         if not self.eventloop or self.eventloop.is_closed():
             self.eventloop = asyncio.get_running_loop()
 
@@ -68,6 +74,17 @@ class AsyncRunner(TubeRunner):
         calling their process method and passing events as they are emitted.
 
         Process-scoped ``input`` s can be passed as kwargs.
+
+        We don't want to cancel nodes on the first error,
+        as would happen with a task group.
+        e.g. some nodes might be writing data, and we want that to succeed
+        even if some other node in this generation fails.
+        We also want to schedule nodes opportunistically,
+        as soon as their dependencies are satisfied,
+        without needing to wait for the entire graph generation to finish
+        so we queue as many as we can and use futures/callbacks to signal completion.
+        If a node raises an error, we allow the other running nodes to complete
+        (with some timeout
         """
         self.eventloop = cast(asyncio.AbstractEventLoop, self.eventloop)
         if not self._running.is_set():
@@ -80,21 +97,14 @@ class AsyncRunner(TubeRunner):
         scheduler.add_epoch()
 
         while scheduler.is_active():
+            if self._exception:
+                await self._raise_exception()
             ready = scheduler.get_ready()
             if not ready:
                 # if none are ready, wait until another node is complete and check again
                 self._node_ready.clear()
                 await self._node_ready.wait()
                 continue
-
-            # we don't want to cancel nodes on the first error,
-            # as would happen with a task group.
-            # e.g. some nodes might be writing data, and we want that to succeed
-            # even if some other node in this generation fails.
-            # We also want to schedule nodes opportunistically,
-            # as soon as their dependencies are satisfied,
-            # without needing to wait for the entire graph generation to finish
-            # so we queue as many as we can and use futures/callbacks to signal completion
 
             for node_info in ready:
                 node_id, epoch = node_info["value"], node_info["epoch"]
@@ -127,6 +137,12 @@ class AsyncRunner(TubeRunner):
         return self.collect_return()
 
     def _node_complete(self, future: asyncio.Future, node: Node, epoch: int) -> None:
+        self._pending_futures.remove(future)
+        if future.exception():
+            self._logger.debug("Node %s raised exception, re-raising outside of callback")
+            self._exception = future.exception()
+            self._node_ready.set()
+            return
         value = future.result()
         events = self.store.add_value(node.signals, value, node.id, epoch)
         if events is not None:
@@ -134,6 +150,30 @@ class AsyncRunner(TubeRunner):
             self._call_callbacks(all_events)
         self._node_ready.set()
         self._logger.debug("Node %s emitted %s in epoch %s", node.id, value, epoch)
+
+    async def _raise_exception(self) -> None:
+        if not self._exception:
+            raise RuntimeError("Told to raise an exception, but no exception was found!")
+
+        if not self._pending_futures:
+            raise self._exception
+
+        try:
+            async for completed in asyncio.as_completed(
+                self._pending_futures, timeout=self.exception_timeout
+            ):
+                # do nothing with the completed results here, we just want them to complete
+                await completed
+        except TimeoutError:
+            self._logger.warning(
+                "Nodes still running after timeout while waiting to raise exception: %s",
+                self._pending_futures,
+            )
+        except Exception as e:
+            # another node raised an exception, now we're really quitting
+            raise self._exception from e
+        else:
+            raise self._exception
 
     def enable_node(self, node_id: str) -> None:
         self.tube.nodes[node_id].init()

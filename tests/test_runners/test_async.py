@@ -5,6 +5,8 @@ import pytest
 from noob import Tube
 from noob.runner import AsyncRunner
 
+pytestmark = [pytest.mark.asyncio, pytest.mark.async_runner]
+
 
 @pytest.mark.asyncio
 async def test_async_base():

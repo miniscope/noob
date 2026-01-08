@@ -1,20 +1,28 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import inspect
+import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine, Generator, Sequence
+from concurrent.futures import Future as ConcurrentFuture
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from logging import Logger
-from typing import Any, Self
+from typing import Any, ParamSpec, Self, TypeVar
 
 from noob import Tube, init_logger
 from noob.event import Event, MetaEvent
 from noob.node import Node
 from noob.store import EventStore
 from noob.types import PythonIdentifier, ReturnNodeType, RunnerContext
+from noob.utils import iscoroutinefunction_partial
+
+_TReturn = TypeVar("_TReturn")
+_PProcess = ParamSpec("_PProcess")
 
 
 @dataclass
@@ -219,3 +227,134 @@ class TubeRunner(ABC):
 
     def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: ANN001
         self.deinit()
+
+
+def call_async_from_sync(
+    fn: Callable[_PProcess, Coroutine[Any, Any, _TReturn]],
+    executor: ThreadPoolExecutor | None = None,
+    *args: _PProcess.args,
+    **kwargs: _PProcess.kwargs,
+) -> _TReturn:
+    """
+    Call an async function synchronously, either in this thread or a subthread.
+
+    So here's the deal with this nonsense:
+
+    * Calling async from sync is easy when there is no running eventloop in the thread
+    * Calling async from sync is **almost comically hard** when there is a running eventloop.
+
+    We are likely to encounter the second case where, e.g.,
+    some async application calls some other code that uses a :class:`.SyncRunner`
+    to run a tube that has an async node.
+
+    :func:`asyncio.run` and :class:`asyncio.Runner` refuse to run when there is live eventloop,
+    and attempting to use any of the :class:`~asyncio.Task` or :class:`~asyncio.Future`
+    spawning methods from the running eventloop like :meth:`~asyncio.AbstractEventLoop.call_soon`
+    or :func:`asyncio.run_coroutine_threadsafe`
+    and then polling for the result with :meth:`asyncio.Future.result`
+    causes a deadlock between the outer sync thread and the eventloop.
+    The basic problem is that there is no way to wait in the thread (synchronously)
+    that yields the thread to the eventloop (which is what async functions are for).
+
+    We need to make a new thread in **some** way,
+    Django's ``asgiref`` has a mindblowingly complicated
+    `async_to_sync <https://github.com/django/asgiref/blob/2b28409ab83b3e4cf6fed9019403b71f8d7d1c51/asgiref/sync.py#L585>`_
+    function that works **roughly** by creating a new thread
+    and then calling :func:`asyncio.run` from *within that*
+    (plus about a thousand other things to manage all the edge cases).
+    That's more than a little bit cursed, because ideally,
+    since the hard case here is where there is already an eventloop in the outer thread,
+    we would be able to just *use that eventloop*.
+    Normally one would just ``await`` the coro directly,
+    which is what :class:`.AsyncRunner` does,
+    but the :class:`.SyncRunner` can't do that because :meth:`.SyncRunner.process` is sync.
+
+    However if one creates a new thread with a new eventloop,
+    that will break any stateful nodes that e.g. have objects like :class:`asyncio.Event`
+    that are bound to the first eventloop.
+
+    Until we can figure out how to reuse the outer eventloop,
+    we do the best we can with a modified version of ``asgiref`` 's approach.
+
+    * Create a :class:`asyncio.Future` to store the eventual result we will return
+      (the "result future")
+    * Wrap the coroutine to call in another coroutine that calls :meth:`~asyncio.Future.set_result`
+      or :meth:`~asyncio.Future.set_exception` on some passed future
+      rather than returning the result directly
+    * Use a :class:`~concurrent.futures.ThreadPoolExecutor` to run the wrapped coroutine
+      in a **new** :class:`asyncio.AbstractEventLoop` in a separate thread,
+      returning a second :class:`~concurrent.futures.Future` (the "completion future")
+    * Add a callback to the completion future that notifies a :class:`~threading.Condition`
+    * Wait in the main thread for the :class:`~threading.Condition` to be notified
+    * Return the result from the result future.
+
+    The reason we don't just directly return the value of the process coroutine
+    in the inner wrapper coroutine
+    and then return the result of the completion future is error handling -
+    Errors raised in the wrapping coroutine have a large amount of noise in the traceback,
+    so instead we use :meth:`~asyncio.Future.set_exception` to propagate the raised error
+    up to the main thread and raise it there.
+
+    Args:
+        fn: The callable that returns a coroutine to run
+        executor (concurrent.futures.ThreadPoolExecutor | None): Provide an already-created
+            thread pool executor. If ``None`` , creates one and shuts it down before returning
+        *args: Passed to ``fn``
+        **kwargs: Passed to ``fn``
+
+    Returns: The result of the called function
+
+    References:
+        * https://github.com/django/asgiref/blob/2b28409ab83b3e4cf6fed9019403b71f8d7d1c51/asgiref/sync.py#L152
+        * https://stackoverflow.com/questions/79663750/call-async-code-inside-sync-code-inside-async-code
+    """
+    if not iscoroutinefunction_partial(fn):
+        raise RuntimeError(
+            "Called a synchronous function from call_async_from_sync, "
+            "something has gone wrong in however this runner is implemented"
+        )
+
+    coro = fn(*args, **kwargs)
+
+    try:
+        return asyncio.run(coro)
+    except RuntimeError as e:
+        if "cannot be called from a running event loop" in str(e):
+            # async coroutine called in a sync runner context
+            # while the runner is inside another asyncio eventloop
+            # continue to this evil motherfucker of a fallback
+            pass
+        else:
+            raise e
+
+    created = False
+    if executor is None:
+        created = True
+        executor = ThreadPoolExecutor(1)
+
+    result_future: asyncio.Future[_TReturn] = asyncio.Future()
+    work_ready = threading.Condition()
+
+    # Closures because this code should never escape the containment tomb of this crime against god
+    async def _wrap(call_result: asyncio.Future[_TReturn], fn: Coroutine) -> None:
+        try:
+            result = await fn
+            call_result.set_result(result)
+        except Exception as e:
+            call_result.set_exception(e)
+
+    def _done(_: ConcurrentFuture) -> None:
+        with work_ready:
+            work_ready.notify_all()
+
+    future_inner = executor.submit(asyncio.run, _wrap(result_future, coro))
+    future_inner.add_done_callback(_done)
+
+    with work_ready:
+        work_ready.wait()
+    try:
+        res = result_future.result()
+        return res
+    finally:
+        if created:
+            executor.shutdown(wait=False)
