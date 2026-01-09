@@ -214,7 +214,6 @@ def test_noevent_ends_epoch():
     raise NotImplementedError("Write this test!")
 
 
-@pytest.mark.xfail(raises=NotImplementedError)
 def test_disable_nodes():
     """
     For A->B->C graph, when B is disabled,
