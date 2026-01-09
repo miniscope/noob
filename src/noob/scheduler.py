@@ -241,7 +241,7 @@ class Scheduler(BaseModel):
         Mark a node as completed without making its dependent nodes ready
         """
         with self._ready_condition, self._epoch_condition:
-            self[epoch].mark_done(node_id)
+            self[epoch].mark_expired(node_id)
             self._ready_condition.notify_all()
             if not self[epoch].is_active():
                 return self.end_epoch(epoch)

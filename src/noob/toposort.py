@@ -111,10 +111,17 @@ class TopoSorter:
         is included among *predecessors* it will be automatically added to the graph with
         no predecessors of its own.
         """
+        # Refuse to add nodes that are out / done
+        reject = [(self.out_nodes, "already out"), (self.done_nodes, "already done")]
+        reasons = [reason for group, reason in reject if node in group]
+        if reasons:
+            raise ValueError(f"{node} cannot be added: {', '.join(reasons)}")
+
         # Create the node -> predecessor edges
         nodeinfo = self._get_nodeinfo(node)
-        nodeinfo.npredecessors += len(predecessors)
-        if nodeinfo.npredecessors == 0:
+        ndone_predeccesors = len(self.done_nodes.intersection(predecessors))
+        nodeinfo.nqueue += len(predecessors) - ndone_predeccesors
+        if nodeinfo.nqueue == 0:
             self.mark_ready(node)
         else:
             # in case node is called multiple times
@@ -124,7 +131,7 @@ class TopoSorter:
         for pred in predecessors:
             pred_info = self._get_nodeinfo(pred)
             pred_info.successors.append(node)
-            if pred_info.npredecessors == 0:
+            if pred_info.nqueue == 0 and pred not in self.out_nodes and pred not in self.done_nodes:
                 self.mark_ready(pred)
 
     def get_ready(self) -> tuple[str, ...]:
