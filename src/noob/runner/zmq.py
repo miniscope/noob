@@ -49,7 +49,7 @@ from zmq.eventloop.zmqstream import ZMQStream
 
 from noob.config import config
 from noob.event import Event
-from noob.input import InputCollection
+from noob.input import InputCollection, InputScope
 from noob.logging import init_logger
 from noob.network.message import (
     AnnounceMsg,
@@ -66,7 +66,7 @@ from noob.network.message import (
     StatusMsg,
     StopMsg,
 )
-from noob.node import Node, NodeSpecification, Return
+from noob.node import Node, NodeSpecification, Return, Signal
 from noob.runner.base import TubeRunner, call_async_from_sync
 from noob.scheduler import Scheduler
 from noob.store import EventStore
@@ -180,9 +180,16 @@ class CommandNode(EventloopMixin):
         )
         self._outbox.send_multipart([b"announce", msg.to_bytes()])
 
-    def process(self) -> None:
+    def process(self, epoch: int, input: dict | None = None) -> None:
         """Emit a ProcessMsg to process a single round through the graph"""
-        self._outbox.send_multipart([b"process", ProcessMsg(node_id="command").to_bytes()])
+        # no empty dicts
+        input = input if input else None
+        self._outbox.send_multipart(
+            [
+                b"process",
+                ProcessMsg(node_id="command", value={"input": input, "epoch": epoch}).to_bytes(),
+            ]
+        )
         self.logger.debug("Sent process message")
 
     def add_callback(self, type_: Literal["inbox", "router"], cb: Callable[[Message], Any]) -> None:
@@ -205,9 +212,16 @@ class CommandNode(EventloopMixin):
                 return
 
             def _is_ready() -> bool:
-                return set(node_ids) == {
+                ready_nodes = {
                     node_id for node_id, state in self._nodes.items() if state["status"] == "ready"
                 }
+                waiting_for = set(node_ids)
+                self.logger.debug(
+                    "Checking if ready, ready nodes are: %s, waiting for %s",
+                    ready_nodes,
+                    waiting_for,
+                )
+                return waiting_for == ready_nodes
 
             self._ready_condition.wait_for(_is_ready)
 
@@ -287,6 +301,7 @@ class NodeRunner(EventloopMixin):
         self._inbox: ZMQStream = None  # type: ignore[assignment]
         self._node: Node | None = None
         self._depends: tuple[tuple[str, str], ...] | None = None
+        self._has_input: bool | None = None
         self._nodes: dict[str, IdentifyValue] = {}
         self._counter = count()
         self._process_quitting = mp.Event()
@@ -314,7 +329,16 @@ class NodeRunner(EventloopMixin):
             self._depends = tuple(
                 (edge.source_node, edge.source_signal) for edge in self._node.edges
             )
+            self.logger.debug("Depends on: %s", self._depends)
         return self._depends
+
+    @property
+    def has_input(self) -> bool:
+        if self._has_input is None:
+            self._has_input = (
+                False if not self.depends else any(d[0] == "input" for d in self.depends)
+            )
+        return self._has_input
 
     @property
     def status(self) -> NodeStatus:
@@ -543,7 +567,7 @@ class NodeRunner(EventloopMixin):
                     self._inbox.connect(outbox)
                     self.logger.debug("Subscribed to %s at %s", node_id, outbox)
             self._nodes = msg.value["nodes"]
-            if set(self._nodes) >= depended_nodes and self.status == NodeStatus.waiting:
+            if set(self._nodes) >= depended_nodes - {"input"} and self.status == NodeStatus.waiting:
                 self.update_status(NodeStatus.ready)
 
     def on_event(self, msg: EventMsg) -> None:
@@ -562,8 +586,31 @@ class NodeRunner(EventloopMixin):
         """
         Process a single graph iteration
         """
-        # TODO: handle inputs
+        self.logger.debug("Received Process message: %s", msg)
         self._to_process += 1
+        if self.has_input and self.depends:  # for mypy - depends is always true if has_input is
+            # combine with any tube-scoped input and store as events
+            # when calling the node, we get inputs from the eventstore rather than input collection
+            process_input = msg.value["input"] if msg.value["input"] else {}
+            # filter to only the input that we depend on
+            combined = {
+                dep[1]: self.input_collection.get(dep[1], process_input)
+                for dep in self.depends
+                if dep[0] == "input"
+            }
+            if len(combined) == 1:
+                value = combined[next(iter(combined.keys()))]
+            else:
+                value = list(combined.values())
+            events = self.store.add_value(
+                [Signal(name=k, type_=None) for k in combined],
+                value,
+                node_id="input",
+                epoch=msg.value["epoch"],
+            )
+            scheduler_events = self.scheduler.update(events)
+
+            self.logger.debug("Updated scheduler with process events: %s", scheduler_events)
         self._process_one.set()
 
     def on_stop(self, msg: StopMsg) -> None:
@@ -679,10 +726,16 @@ class ZMQRunner(TubeRunner):
         if not self.running:
             self._logger.info("Runner called process without calling `init`, initializing now.")
             self.init()
+        input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
 
         self._current_epoch = self.tube.scheduler.add_epoch()
+        # FIXME: Replace this with a __contains__ in the topo sorter once we take it over
+        # we want to mark 'input' as done if it's in the topo graph,
+        # but input can be present and only used as a param, so we can't check presence of inputs
+        if "input" in self.tube.scheduler._epochs[self._current_epoch]._ready_nodes:  # type: ignore[attr-defined]
+            self.tube.scheduler.done(self._current_epoch, "input")
         self.command = cast(CommandNode, self.command)
-        self.command.process()
+        self.command.process(self._current_epoch, input)
         self._logger.debug("awaiting epoch %s", self._current_epoch)
         self.tube.scheduler.await_epoch(self._current_epoch)
         if self._to_throw:

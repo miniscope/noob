@@ -92,6 +92,11 @@ class ErrorValue(TypedDict):
     traceback: str
 
 
+class ProcessValue(TypedDict):
+    epoch: int
+    input: dict | None
+
+
 class AnnounceMsg(Message):
     """Command node 'announces' identities of other peers and the events they emit"""
 
@@ -110,7 +115,8 @@ class ProcessMsg(Message):
     """Process a single iteration of the graph"""
 
     type_: Literal[MessageType.process] = Field(MessageType.process, alias="type")
-    value: None = None
+    value: ProcessValue
+    """Any process-scoped input passed to the `process` call"""
 
 
 class StartMsg(Message):
