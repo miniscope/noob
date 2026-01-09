@@ -6,7 +6,7 @@ from noob.yaml import yaml
 from .paths import PIPELINE_DIR
 
 # all tubes except special cases
-_special_case_names = ("disable_node",)
+_special_case_names = ("disable_node", "cycle")
 _all_tubes = [
     tube
     for tube in PIPELINE_DIR.rglob("*.y*ml")
