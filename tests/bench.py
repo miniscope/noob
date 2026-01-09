@@ -29,3 +29,20 @@ def test_long_add(benchmark: BenchmarkFixture, runner: TubeRunner) -> None:
     and there's lots of concurrency possibilities
     """
     benchmark(lambda: runner.process())
+
+
+@pytest.mark.parametrize("loaded_tube", ["testing-kitchen-sink"], indirect=True)
+def test_topo_sorter(benchmark: BenchmarkFixture, loaded_tube: Tube) -> None:
+    """
+    Our TopoSorter should not get uh slower
+    """
+    benchmark(lambda: _run_sorter(loaded_tube))
+
+
+def _run_sorter(tube: Tube) -> None:
+    epoch = tube.scheduler.add_epoch()
+    sorter = tube.scheduler._epochs[epoch]
+    while sorter.is_active():
+        ready_nodes = sorter.get_ready()
+        for node in ready_nodes:
+            sorter.done(node)
