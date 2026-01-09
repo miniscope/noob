@@ -17,6 +17,8 @@ from noob.node import Edge, NodeSpecification
 from noob.toposort import TopoSorter
 from noob.types import NodeID
 
+SPECIAL_NODES = ("input", "assets")
+
 
 class Scheduler(BaseModel):
     nodes: dict[str, NodeSpecification]
@@ -51,7 +53,7 @@ class Scheduler(BaseModel):
         """
         if not self.source_nodes:
             graph = self._init_graph(nodes=self.nodes, edges=self.edges)
-            self.source_nodes = [id_ for id_ in graph.ready_nodes if id_ not in ("input", "assets")]
+            self.source_nodes = [id_ for id_ in graph.ready_nodes if id_ not in SPECIAL_NODES]
         return self
 
     def add_epoch(self, epoch: int | None = None) -> int:
@@ -102,6 +104,18 @@ class Scheduler(BaseModel):
 
         graphs = self._epochs.items() if epoch is None else [(epoch, self._epochs[epoch])]
 
+        maybe_ready = set()
+        special_nodes = True
+        while special_nodes:
+            special_nodes = False
+            for epoch, graph in graphs:
+                for node_id in graph.get_ready():
+                    if node_id in SPECIAL_NODES:
+                        self.done(epoch, node_id)
+                        special_nodes = True
+                    else:
+                        maybe_ready.add((epoch, node_id))
+
         with self._ready_condition:
             ready_nodes = [
                 MetaEvent(
@@ -112,8 +126,8 @@ class Scheduler(BaseModel):
                     epoch=epoch,
                     value=node_id,
                 )
-                for epoch, graph in graphs
-                for node_id in graph.get_ready()
+                for epoch, node_id in maybe_ready
+                if self.nodes[node_id].enabled
             ]
 
         return ready_nodes

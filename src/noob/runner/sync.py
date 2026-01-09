@@ -78,11 +78,6 @@ class SynchronousRunner(TubeRunner):
                 break
             for node_info in ready:
                 node_id, epoch = node_info["value"], node_info["epoch"]
-
-                if node_id in ("assets", "input"):
-                    # graph autogenerates "assets" node if something depends on it
-                    scheduler.done(epoch, node_id)
-                    continue
                 node = self.tube.nodes[node_id]
                 if not node.enabled:
                     # nodes can be in the graph while disabled if something else depends on them
