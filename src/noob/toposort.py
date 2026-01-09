@@ -3,7 +3,7 @@ from noob.types import NodeID
 
 
 class _NodeInfo:
-    __slots__ = "node", "npredecessors", "successors"
+    __slots__ = "node", "nqueue", "successors"
 
     def __init__(self, node: str) -> None:
         # The node this class is augmenting.
@@ -12,7 +12,7 @@ class _NodeInfo:
         # Number of predecessors, generally >= 0. When this value falls to 0,
         # and is returned by get_ready(), this is set to _NODE_OUT and when the
         # node is marked done by a call to done(), set to _NODE_DONE.
-        self.npredecessors = 0
+        self.nqueue = 0
 
         # List of successor nodes. The list can contain duplicated elements as
         # long as they're all reflected in the successor's npredecessors attribute.
@@ -63,7 +63,7 @@ class TopoSorter:
         self._out_nodes.update(nodes)
         self._npassedout += len(nodes)
 
-    def mark_done(self, *nodes: NodeID) -> None:
+    def mark_expired(self, *nodes: NodeID) -> None:
         for node in nodes:
             self._ready_nodes.discard(node)
             self._out_nodes.discard(node)
@@ -154,14 +154,14 @@ class TopoSorter:
                     raise ValueError(f"node {node!r} was not passed out")
 
             # Mark the node as processed
-            self.mark_done(node)
+            self.mark_expired(node)
 
             # Go to all the successors and reduce the number of predecessors,
             # collecting all the ones that are ready to be returned in the next get_ready() call.
             for successor in nodeinfo.successors:
                 successor_info = n2i[successor]
-                successor_info.npredecessors -= 1
-                if successor_info.npredecessors == 0:
+                successor_info.nqueue -= 1
+                if successor_info.nqueue == 0:
                     self.mark_ready(successor)
 
     def find_cycle(self) -> list[str] | None:
