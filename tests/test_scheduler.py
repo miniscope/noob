@@ -220,4 +220,16 @@ def test_disable_nodes():
     the scheduler only yields A and then becomes inactive,
     rather than yielding C.
     """
-    raise NotImplementedError("Write this test!")
+    tube = Tube.from_specification("testing-basic")
+    scheduler = tube.scheduler
+    scheduler.disable_node("b")
+    scheduler.add_epoch()
+    ready_nodes = scheduler.get_ready()
+
+    # only "a" is returned, even though "b" also has no dependencies,
+    # since "b" is disabled.
+    assert {node["value"] for node in ready_nodes} == {"a"}
+    scheduler.done(epoch=-1, node_id="a")
+
+    # nothing ready anymore
+    assert not scheduler.get_ready()
