@@ -1,3 +1,7 @@
+from graphlib import CycleError
+from operator import attrgetter
+from typing import Any
+
 from noob.node import Edge, NodeSpecification
 from noob.types import NodeID
 
@@ -18,11 +22,34 @@ class _NodeInfo:
         # long as they're all reflected in the successor's npredecessors attribute.
         self.successors: list[NodeID] = []
 
+    def __eq__(self, other: Any) -> bool:
+        """https://stackoverflow.com/a/4522896/14537948"""
+        if isinstance(other, self.__class__) and self.__slots__ == other.__slots__:
+            attr_getters = [attrgetter(attr) for attr in self.__slots__]
+            return all(getter(self) == getter(other) for getter in attr_getters)
+
+        return False
+
+    def __ne__(self, other: Any) -> bool:
+        return not self.__eq__(other)
+
 
 class TopoSorter:
     """
     Provides functionality to topologically sort a graph of `class: .node.base.Node`.
+
+    Based on graphlib.TopologicalSorter, with some minor changes
+    to allow querying nodes at different stages,
+    and modifying graph mid-iteration.
     """
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
+        return False
+
+    def __ne(self, other: Any) -> bool:
+        return not self.__eq__(other)
 
     def __init__(self, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> None:
         self._node2info: dict[str, _NodeInfo] = dict()
