@@ -379,12 +379,10 @@ class Scheduler(BaseModel):
         """
         return TopoSorter(nodes, edges)
 
-    def assert_acyclic(self) -> None:
+    def has_cycle(self) -> bool:
         """
         Checks that the graph is acyclic.
         """
         graph = self._init_graph(nodes=self.nodes, edges=self.edges)
         cycle = graph.find_cycle()
-        if cycle:
-            raise AssertionError("nodes are in a cycle", cycle)
-        return None
+        return bool(cycle)

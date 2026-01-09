@@ -161,7 +161,7 @@ class Tube(BaseModel):
         else:
             scheduler = value
 
-        scheduler.assert_acyclic()
+        assert not scheduler.has_cycle()
 
         return scheduler
 
