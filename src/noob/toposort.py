@@ -156,9 +156,10 @@ class TopoSorter:
         are still nodes ready that haven't yet been returned by "get_ready" or the
         number of nodes marked "done" is less than the number that have been returned
         by "get_ready".
-
-        Raises ValueError if called without calling "prepare" previously.
         """
+        if self.ready_nodes == {} and (self._nfinished + self._npassedout < len(self._node2info)):
+            cycle = self.find_cycle()
+            raise CycleError(f"cycle detected: {cycle}")
         return self._nfinished < self._npassedout or bool(self.ready_nodes)
 
     def done(self, *nodes: str) -> None:
