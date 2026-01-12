@@ -222,8 +222,8 @@ class TopoSorter:
             # Go to all the successors and reduce the number of predecessors,
             # collecting all the ones that are ready to be returned in the next get_ready() call.
             for successor in nodeinfo.successors:
-                # if successor in self.done_nodes or successor in self.out_nodes:
-                #     continue
+                if successor in self.done_nodes or successor in self.out_nodes:
+                    continue
                 successor_info = n2i[successor]
                 successor_info.nqueue -= 1
                 if successor_info.nqueue == 0:
