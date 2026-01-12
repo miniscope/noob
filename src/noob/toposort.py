@@ -43,14 +43,6 @@ class TopoSorter:
     and modifying graph mid-iteration.
     """
 
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, self.__class__):
-            return self.__dict__ == other.__dict__
-        return False
-
-    def __ne(self, other: Any) -> bool:
-        return not self.__eq__(other)
-
     def __init__(
         self, nodes: dict[str, NodeSpecification] | None = None, edges: list[Edge] | None = None
     ) -> None:
@@ -79,6 +71,14 @@ class TopoSorter:
             if node.enabled and node_id not in self._node2info:
                 self.add(node_id)
 
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
+        return False
+
+    def __ne__(self, other: Any) -> bool:
+        return not self.__eq__(other)
+
     @property
     def ready_nodes(self) -> set[NodeID]:
         return self._ready_nodes
@@ -92,16 +92,27 @@ class TopoSorter:
         return self._done_nodes
 
     def mark_ready(self, *nodes: NodeID) -> None:
+        """
+        Manually mark a node as ready.
+
+        Normally this is done automatically when marking predecessor nodes as :meth:`.done`
+        or when adding nodes with no predecessors.
+        """
         self._ready_nodes.update(nodes)
 
     def mark_out(self, *nodes: NodeID) -> None:
-        for node in nodes:
-            # there isn't a good way to discard multiple elements in bulk
-            self._ready_nodes.discard(node)  # missing ok
+        """
+        Mark a node as being out for processing
+        """
+        self._ready_nodes -= set(nodes)
         self._out_nodes.update(nodes)
         self._npassedout += len(nodes)
 
     def mark_expired(self, *nodes: NodeID) -> None:
+        """
+        Mark node(s) as having been completed without making its dependent nodes ready -
+        used when a node emits ``NoEvent``
+        """
         for node in nodes:
             self._ready_nodes.discard(node)
             self._out_nodes.discard(node)

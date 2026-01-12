@@ -193,7 +193,7 @@ class Scheduler(BaseModel):
                     marked_done.add(done_marker)
 
                 if e["signal"] == META_SIGNAL and e["value"] == MetaSignal.NoEvent:
-                    epoch_ended = self.cancel(epoch=e["epoch"], node_id=e["node_id"])
+                    epoch_ended = self.expire(epoch=e["epoch"], node_id=e["node_id"])
                 else:
                     epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"])
 
@@ -236,9 +236,10 @@ class Scheduler(BaseModel):
                 return self.end_epoch(epoch)
         return None
 
-    def cancel(self, epoch: int, node_id: str) -> MetaEvent | None:
+    def expire(self, epoch: int, node_id: str) -> MetaEvent | None:
         """
-        Mark a node as completed without making its dependent nodes ready
+        Mark a node as having been completed without making its dependent nodes ready.
+        i.e. when the node emitted ``NoEvent``
         """
         with self._ready_condition, self._epoch_condition:
             self[epoch].mark_expired(node_id)
