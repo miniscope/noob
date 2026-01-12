@@ -2,6 +2,7 @@ from graphlib import CycleError
 from operator import attrgetter
 from typing import Any
 
+from noob.exceptions import AlreadyDoneError, NotAddedError, NotOutYetError
 from noob.node import Edge, NodeSpecification
 from noob.types import NodeID
 
@@ -206,14 +207,14 @@ class TopoSorter:
 
             # Check if we know about this node (it was added previously using add()
             if (nodeinfo := n2i.get(node)) is None:
-                raise ValueError(f"node {node!r} was not added using add()")
+                raise NotAddedError(f"node {node!r} was not added using add()")
 
             # If the node has not been marked as "out" previously, inform the user.
             if node not in self.out_nodes:
                 if node in self.done_nodes:
-                    raise ValueError(f"node {node!r} was already marked done")
+                    raise AlreadyDoneError(f"node {node!r} was already marked done")
                 else:
-                    raise ValueError(f"node {node!r} was not passed out")
+                    raise NotOutYetError(f"node {node!r} was not passed out")
 
             # Mark the node as processed
             self.mark_expired(node)
@@ -221,6 +222,8 @@ class TopoSorter:
             # Go to all the successors and reduce the number of predecessors,
             # collecting all the ones that are ready to be returned in the next get_ready() call.
             for successor in nodeinfo.successors:
+                # if successor in self.done_nodes or successor in self.out_nodes:
+                #     continue
                 successor_info = n2i[successor]
                 successor_info.nqueue -= 1
                 if successor_info.nqueue == 0:

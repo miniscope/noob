@@ -758,7 +758,10 @@ class ZMQRunner(TubeRunner):
             # to avoid an unnecessary pickling/unpickling across the network
             epochs = set(e["epoch"] for e in msg.value)
             for epoch in epochs:
-                if self.tube.scheduler.node_is_ready(self._return_node.id, epoch):
+                if (
+                    self.tube.scheduler.node_is_ready(self._return_node.id, epoch)
+                    and epoch in self.tube.scheduler._epochs
+                ):
                     self._logger.debug("Marking return node ready in epoch %s", epoch)
                     self.tube.scheduler.done(epoch, self._return_node.id)
 

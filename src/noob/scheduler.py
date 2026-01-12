@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from noob.const import META_SIGNAL
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import EpochCompletedError, EpochExistsError
+from noob.exceptions import EpochCompletedError, EpochExistsError, NotOutYetError
 from noob.logging import init_logger
 from noob.node import Edge, NodeSpecification
 from noob.toposort import TopoSorter
@@ -225,7 +225,7 @@ class Scheduler(BaseModel):
 
             try:
                 self[epoch].done(node_id)
-            except ValueError:
+            except NotOutYetError:
                 # in parallel mode, we don't `get_ready` the preceding ready nodes
                 # so we have to manually mark them as "out"
                 self[epoch].mark_out(node_id)

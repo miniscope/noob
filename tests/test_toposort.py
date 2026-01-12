@@ -109,6 +109,28 @@ def test_add_deduplicates():
     assert ts._node2info["b"].nqueue == 0
 
 
+def test_not_reready_when_out_of_order(ts: TopoSorter):
+    """
+    When the topo sorter is run out of order
+    (e.g. when used by the ZMQRunner to track epoch progress rather than schedule nodes),
+    nodes that were previously manually marked `done` are not returned to `ready_nodes`
+    """
+    ts.mark_out("c")
+    ts.done("c")
+    assert "c" in ts.done_nodes
+    out = ts.get_ready()
+    assert out == ("a",)
+    ts.done("a")
+    assert ts.done_nodes == {"a", "c"}
+    assert ts.ready_nodes == {"b"}
+    out = ts.get_ready()
+    assert out == ("b",)
+    ts.done("b")
+    assert ts.done_nodes == {"a", "b", "c"}
+    assert ts.ready_nodes == set()
+    assert not ts.is_active()
+
+
 # --------------------------------------------------
 # Tests from original graphlib implementation adapted for pytest
 # https://github.com/python/cpython/blob/main/Lib/test/test_graphlib.py
