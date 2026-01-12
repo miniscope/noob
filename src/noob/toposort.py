@@ -51,7 +51,14 @@ class TopoSorter:
     def __ne(self, other: Any) -> bool:
         return not self.__eq__(other)
 
-    def __init__(self, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> None:
+    def __init__(
+        self, nodes: dict[str, NodeSpecification] | None = None, edges: list[Edge] | None = None
+    ) -> None:
+        if nodes is None:
+            nodes = {}
+        if edges is None:
+            edges = []
+
         self._node2info: dict[str, _NodeInfo] = dict()
         self._ready_nodes: set[NodeID] = set()
         self._out_nodes: set[NodeID] = set()
@@ -59,14 +66,18 @@ class TopoSorter:
         self._npassedout = 0
         self._nfinished = 0
 
-        enabled_nodes = [node_id for node_id, node in nodes.items() if node.enabled]
-        for node_id in enabled_nodes:
-            required_edges = [
-                e.source_node
-                for e in edges
-                if e.target_node == node_id and e.target_node in enabled_nodes
-            ]
-            self.add(node_id, *required_edges)
+        # Since we can be passed edges without node specifications,
+        # filter on disabled nodes rather than enabled nodes -
+        # i.e., we filter edges to any node that are explicitly disabled, but pass others.
+        disabled_nodes = [node_id for node_id, node in nodes.items() if not node.enabled]
+        for e in edges:
+            if e.target_node in disabled_nodes:
+                continue
+            self.add(e.target_node, e.source_node)
+        # add enabled nodes that have no edges
+        for node_id, node in nodes.items():
+            if node.enabled and node_id not in self._node2info:
+                self.add(node_id)
 
     @property
     def ready_nodes(self) -> set[NodeID]:
@@ -117,22 +128,27 @@ class TopoSorter:
         if reasons:
             raise ValueError(f"{node} cannot be added: {', '.join(reasons)}")
 
+        # Create the predecessor -> node edges
+        # filter predecessors to only those that are newly being created
+        new_predecessors = []
+        for pred in predecessors:
+            pred_info = self._get_nodeinfo(pred)
+            if node in pred_info.successors:
+                continue
+            new_predecessors.append(pred)
+            pred_info.successors.append(node)
+            if pred_info.nqueue == 0 and pred not in self.out_nodes and pred not in self.done_nodes:
+                self.mark_ready(pred)
+
         # Create the node -> predecessor edges
         nodeinfo = self._get_nodeinfo(node)
-        ndone_predeccesors = len(self.done_nodes.intersection(predecessors))
-        nodeinfo.nqueue += len(predecessors) - ndone_predeccesors
+        ndone_predeccesors = len(self.done_nodes.intersection(new_predecessors))
+        nodeinfo.nqueue += len(new_predecessors) - ndone_predeccesors
         if nodeinfo.nqueue == 0:
             self.mark_ready(node)
         else:
             # in case node is called multiple times
             self._ready_nodes.discard(node)
-
-        # Create the predecessor -> node edges
-        for pred in predecessors:
-            pred_info = self._get_nodeinfo(pred)
-            pred_info.successors.append(node)
-            if pred_info.nqueue == 0 and pred not in self.out_nodes and pred not in self.done_nodes:
-                self.mark_ready(pred)
 
     def get_ready(self) -> tuple[str, ...]:
         """
