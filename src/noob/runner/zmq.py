@@ -729,10 +729,9 @@ class ZMQRunner(TubeRunner):
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
 
         self._current_epoch = self.tube.scheduler.add_epoch()
-        # FIXME: Replace this with a __contains__ in the topo sorter once we take it over
         # we want to mark 'input' as done if it's in the topo graph,
         # but input can be present and only used as a param, so we can't check presence of inputs
-        if "input" in self.tube.scheduler._epochs[self._current_epoch]._ready_nodes:  # type: ignore[attr-defined]
+        if "input" in self.tube.scheduler._epochs[self._current_epoch].ready_nodes:
             self.tube.scheduler.done(self._current_epoch, "input")
         self.command = cast(CommandNode, self.command)
         self.command.process(self._current_epoch, input)
