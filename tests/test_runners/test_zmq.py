@@ -164,13 +164,9 @@ async def test_statelessness():
         # assert len(events) == 7
         # then when we send epoch 0, we should get all of them
         runner.command.process(0, input={"multiply": 11})
-        # start = time()
-        # while len(events) < 12 and time() - start < 1:
-        #     await sleep(0.1)
-        runner.tube.scheduler.done(2, "e")
-        runner.tube.scheduler[2].mark_out('input')
-        runner.tube.scheduler[2].done('input')
-        runner.tube.scheduler.await_epoch(2)
+        start = time()
+        while len(events) < 12 and time() - start < 5:
+            await sleep(0.1)
 
     # should have gotten 3 events from 4 nodes, so 12 total events
     assert len(events) == 12
