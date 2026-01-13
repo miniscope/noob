@@ -1,0 +1,41 @@
+noob_id: testing-stateless
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+
+input:
+  multiply:
+    scope: process
+    type: int
+
+nodes:
+  a:
+    type: noob.testing.StatefulMultiply
+    stateful: false
+    params:
+      start: 1
+    depends:
+      - left: input.multiply
+  b:
+    type: noob.testing.multiply
+    params:
+      left: 1
+    depends:
+    - right: input.multiply
+  c:
+    type: noob.testing.count_source
+    params:
+      start: 1
+  d:
+    type: noob.testing.StatefulMultiply
+    stateful: false
+    params:
+      start: 1
+    depends:
+      - left: c.index
+      - right: input.multiply
+  e:
+    type: return
+    depends:
+    - cls: a.value
+    - fn: b.value
+    - chained_cls: d.value

@@ -269,17 +269,24 @@ class Node(BaseModel):
             ):
                 raise ValueError("No input collection supplied, but inputs specified in params")
 
+        # additional kwargs that can be present or absent without default
+        kwargs = {}
+        if spec.stateful is not None:
+            kwargs["stateful"] = spec.stateful
+
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec, enabled=spec.enabled, **params)
+                return obj(id=spec.id, spec=spec, enabled=spec.enabled, **params, **kwargs)
             else:
                 return WrapClassNode(
-                    id=spec.id, cls=obj, spec=spec, params=params, enabled=spec.enabled
+                    id=spec.id, cls=obj, spec=spec, params=params, enabled=spec.enabled, **kwargs
                 )
         else:
-            return WrapFuncNode(id=spec.id, fn=obj, spec=spec, params=params, enabled=spec.enabled)
+            return WrapFuncNode(
+                id=spec.id, fn=obj, spec=spec, params=params, enabled=spec.enabled, **kwargs
+            )
 
     @property
     def signals(self) -> list[Signal]:
@@ -486,7 +493,7 @@ class WrapFuncNode(Node):
         If no `stateful` argument is provided explicitly,
         set stateful default False for functions and True for generators
         """
-        statefulness_set = isinstance(data, dict) and "stateful" in data
+        statefulness_set = isinstance(data, dict) and data.get("stateful", None) is not None
         value = handler(data)
         if statefulness_set:
             return value

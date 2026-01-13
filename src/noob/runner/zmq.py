@@ -414,7 +414,9 @@ class NodeRunner(EventloopMixin):
                 if self._to_process == 0:
                     self._process_one.clear()
 
-            ready = self.scheduler.await_node(self.spec.id)
+            epoch = next(self._counter) if self._node.stateful else None
+
+            ready = self.scheduler.await_node(self.spec.id, epoch=epoch)
             edges = self._node.edges
             inputs = self.store.collect(edges, ready["epoch"])
             if inputs is None:

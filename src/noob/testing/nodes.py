@@ -191,3 +191,14 @@ class NumberToLetterCls:
 async def async_error(value: Any) -> None:
     """Just raise an error!"""
     raise ValueError("This is the error that should be raised")
+
+
+class StatefulMultiply:
+    def __init__(self, start: int = 0) -> None:
+        self.start = start
+        self.current = self.start
+
+    def process(self, left: float, right: float = 1) -> float:
+        value = left * right * self.current
+        self.current += 1
+        return value
