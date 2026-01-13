@@ -439,7 +439,9 @@ class NodeRunner(EventloopMixin):
         self.init_node()
         self.start_sockets()
         self.status = (
-            NodeStatus.waiting if [d for d in self.depends if d[0] != "input"] else NodeStatus.ready
+            NodeStatus.waiting
+            if self.depends and [d for d in self.depends if d[0] != "input"]
+            else NodeStatus.ready
         )
         self.identify()
         self.logger.debug("Initialization finished")

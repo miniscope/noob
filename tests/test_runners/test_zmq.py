@@ -87,14 +87,6 @@ async def test_statefulness():
         # skip first epoch
         runner.command.process(1, input={"multiply": 3})
 
-        # the fine-grain event assertions have been commented out here
-        # pending a migration of zmqrunner to async
-        # waiting seems to screw up the command node,
-        # and we need it to send the process messages.
-        # however waiting at the end doesn't seem to break the callbacks,
-        # so that's left intact.
-        # FIXME: Re-enable waiting once zmq is moved to asyncio
-
         start = time()
         while len(events) < 1 and time() - start < 1:
             await sleep(0.1)
@@ -106,12 +98,14 @@ async def test_statefulness():
         # it should emit an event with epoch 0 because the first thing out of the generator
         # is, by definition, epoch 0.
         assert events[0]["epoch"] == 0
+
         # just for good measure, skip another
         runner.command.process(2, input={"multiply": 7})
         start = time()
         while len(events) < 2 and time() - start < 1:
             await sleep(0.1)
         assert len(events) == 2
+
         # then when we send epoch 0, we should get all of them
         runner.command.process(0, input={"multiply": 11})
         start = time()
