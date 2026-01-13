@@ -175,6 +175,7 @@ class Scheduler(BaseModel):
         """
         if not events:
             return events
+
         end_events: MutableSequence[MetaEvent] = []
         with self._ready_condition, self._epoch_condition:
             marked_done = set()

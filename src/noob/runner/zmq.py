@@ -408,13 +408,17 @@ class NodeRunner(EventloopMixin):
             # if we are not freerunning, keep track of how many times we are supposed to run,
             # and run until we aren't supposed to anymore!
             if not self._freerun.is_set():
-                if self._to_process == 0:
+                if self._to_process <= 0:
+                    self._to_process = 0
                     self._process_one.wait()
                 self._to_process -= 1
-                if self._to_process == 0:
+                if self._to_process <= 0:
+                    self._to_process = 0
                     self._process_one.clear()
 
-            ready = self.scheduler.await_node(self.spec.id)
+            epoch = next(self._counter) if self._node.stateful else None
+
+            ready = self.scheduler.await_node(self.spec.id, epoch=epoch)
             edges = self._node.edges
             inputs = self.store.collect(edges, ready["epoch"])
             if inputs is None:
@@ -434,7 +438,11 @@ class NodeRunner(EventloopMixin):
 
         self.init_node()
         self.start_sockets()
-        self.status = NodeStatus.waiting if self.depends else NodeStatus.ready
+        self.status = (
+            NodeStatus.waiting
+            if self.depends and [d for d in self.depends if d[0] != "input"]
+            else NodeStatus.ready
+        )
         self.identify()
         self.logger.debug("Initialization finished")
 
@@ -577,11 +585,11 @@ class NodeRunner(EventloopMixin):
                 self.update_status(NodeStatus.ready)
             # status and announce messages can be received out of order,
             # so if we observe the command node being out of sync, we update it.
-            if (
+            elif (
                 self._node.id in msg.value["nodes"]
-                and msg.value["nodes"][self._node.id]["status"] != self.status
+                and msg.value["nodes"][self._node.id]["status"] != self.status.value
             ):
-                self.identify()
+                self.update_status(self.status)
 
     def on_event(self, msg: EventMsg) -> None:
         events = msg.value

@@ -113,6 +113,12 @@ class NodeSpecification(BaseModel):
     If this flag is False, the node will not be initialized 
     or included in the `:meth:.Tube.graph`.
     """
+    stateful: bool | None = None
+    """
+    See :attr:`.Node.stateful` ,
+    explicitly set statefulness on a node, overriding its default.
+    If ``None`` , use the default set on the node class.
+    """
 
     @field_validator("depends", mode="after")
     @classmethod
