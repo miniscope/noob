@@ -16,6 +16,8 @@ from typing import Any, ParamSpec, Self, TypeVar
 
 from noob import Tube, init_logger
 from noob.event import Event, MetaEvent
+from noob.exceptions import InputMissingError
+from noob.input import InputScope
 from noob.node import Node
 from noob.store import EventStore
 from noob.types import PythonIdentifier, ReturnNodeType, RunnerContext
@@ -94,6 +96,14 @@ class TubeRunner(ABC):
         (e.g. multiple times in the case of any ``gather`` s
         that change the cardinality of the graph.)
         """
+        try:
+            _ = self.tube.input_collection.validate_input(InputScope.process, {})
+        except InputMissingError as e:
+            raise InputMissingError(
+                "Can't use the `iter` method with tubes with process-scoped input "
+                "that was not provided when instantiating the tube! "
+                "Use `process()` directly, providing required inputs to each call."
+            ) from e
 
         self.init()
         current_iter = 0
@@ -113,6 +123,14 @@ class TubeRunner(ABC):
             self.deinit()
 
     def run(self, n: int | None = None) -> None | list[ReturnNodeType]:
+        try:
+            _ = self.tube.input_collection.validate_input(InputScope.process, {})
+        except InputMissingError as e:
+            raise InputMissingError(
+                "Can't use the `run` method with tubes with process-scoped input "
+                "that was not provided when instantiating the tube! "
+                "Use `process()` directly, providing required inputs to each call."
+            ) from e
         outputs = []
         current_iter = 0
         if not self.running:
