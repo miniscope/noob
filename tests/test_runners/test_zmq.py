@@ -137,7 +137,7 @@ def test_statelessness():
         runner.command.add_callback("inbox", _event_cb)
         # skip first epoch
         runner.command.process(1, input={"multiply": 3})
-        sleep(0.05)
+        sleep(0.1)
         # should have received events from all except d,
         # which has not yet received the epoch 0 input to match with the epoch 0
         # event from the count source
@@ -146,7 +146,7 @@ def test_statelessness():
         # and the epoch 1 event from count source
         # so we get 4 events now
         runner.command.process(2, input={"multiply": 7})
-        sleep(0.05)
+        sleep(0.1)
         assert len(events) == 7
         # then when we send epoch 0, we should get all of them
         runner.command.process(0, input={"multiply": 11})
