@@ -5,14 +5,14 @@ import hashlib
 import inspect
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Coroutine, Generator, Sequence
+from collections.abc import Callable, Coroutine, Generator, MutableSequence, Sequence
 from concurrent.futures import Future as ConcurrentFuture
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from logging import Logger
-from typing import Any, ParamSpec, Self, TypeVar
+from typing import TYPE_CHECKING, Any, ParamSpec, Self, TypeVar
 
 from noob import Tube, init_logger
 from noob.event import Event, MetaEvent
@@ -22,6 +22,10 @@ from noob.node import Node
 from noob.store import EventStore
 from noob.types import PythonIdentifier, ReturnNodeType, RunnerContext
 from noob.utils import iscoroutinefunction_partial
+
+if TYPE_CHECKING:
+    from noob.scheduler import Scheduler
+    from noob.types import NodeID
 
 _TReturn = TypeVar("_TReturn")
 _PProcess = ParamSpec("_PProcess")
@@ -157,9 +161,49 @@ class TubeRunner(ABC):
         """
         pass
 
-    def collect_input(
+    def _before_process(self) -> None:
+        """
+        Hook for subclasses to do some work before the main body of the process method
+        """
+        return
+
+    def _after_process(self) -> None:
+        """
+        Hook for subclasses to do some work after the main body of the process method,
+        before collecting return values.
+        """
+        return
+
+    def _filter_ready(self, nodes: list[MetaEvent], scheduler: Scheduler) -> list[MetaEvent]:
+        """
+        Before running, filter or add nodes to run in a sorter generation,
+        optionally mutating the scheduler.
+
+        Default is a no-op, subclasses may override to customize behavior.
+
+        Args:
+            nodes (Sequence[MetaEvent]): A sequence of ``ReadyNode`` events whose ``value``
+                is the node_id and ``epoch`` is the epoch they are ready in.
+            scheduler (Scheduler): The Scheduler that yielded the set of ready nodes.
+        """
+        return nodes
+
+    def _validate_input(self, **kwargs: Any) -> dict:
+        """
+        Validate input given to the process method, if any is specified
+        """
+        return self.tube.input_collection.validate_input(InputScope.process, kwargs)
+
+    def _get_node(self, node_id: NodeID) -> Node:
+        """
+        Get a node.
+        Usually from the tube, but separated to allow subclasses to customize behavior
+        """
+        return self.tube.nodes[node_id]
+
+    def _collect_input(
         self, node: Node, epoch: int, input: dict | None = None
-    ) -> tuple[list[Any] | None, dict[PythonIdentifier, Any] | None]:
+    ) -> tuple[list[Any], dict[PythonIdentifier, Any]]:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
 
@@ -169,7 +213,7 @@ class TubeRunner(ABC):
             None: if no input is available
         """
         if not node.spec or not node.spec.depends:
-            return None, None
+            return [], {}
         if input is None:
             input = {}
 
@@ -189,6 +233,32 @@ class TubeRunner(ABC):
         args, kwargs = self.store.split_args_kwargs(inputs)
 
         return args, kwargs
+
+    def _call_node(self, node: Node, *args: Any, **kwargs: Any) -> Any:
+        """
+        Call a node's process method with provided args and kwargs,
+        returning its values.
+
+        By default, try and call sync normally,
+        and async with :func:`.call_async_from_sync` .
+
+        Subclasses may override to customize behavior
+        """
+        if iscoroutinefunction_partial(node.process):
+            return call_async_from_sync(node.process, *args, **kwargs)
+        else:
+            return node.process(*args, **kwargs)
+
+    def _store_events(
+        self, node: Node, value: Any, epoch: int
+    ) -> MutableSequence[Event] | MutableSequence[Event | MetaEvent]:
+        """
+        Store events in the :class:`.EventStore` and update the scheduler,
+        Accepting raw node return values and returning finished Events
+        """
+
+        events = self.store.add_value(node.signals, value, node.id, epoch)
+        return self.tube.scheduler.update(events)
 
     @abstractmethod
     def collect_return(self, epoch: int | None = None) -> ReturnNodeType:

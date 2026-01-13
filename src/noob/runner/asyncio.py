@@ -119,7 +119,7 @@ class AsyncRunner(TubeRunner):
                     # FIXME when we stop using the builtin graphlib
                     continue
 
-                maybe_args, maybe_kwargs = self.collect_input(node, epoch, input)
+                maybe_args, maybe_kwargs = self._collect_input(node, epoch, input)
 
                 # need to eventually distinguish "still waiting" vs "there is none"
                 args = [] if maybe_args is None else maybe_args

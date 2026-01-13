@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from threading import Event as ThreadEvent
 from typing import Any
 
-from noob.input import InputScope
+from noob.event import MetaEvent
 from noob.node import Return
-from noob.runner.base import TubeRunner, call_async_from_sync
+from noob.runner.base import TubeRunner
+from noob.scheduler import Scheduler
 from noob.types import ReturnNodeType
-from noob.utils import iscoroutinefunction_partial
 
 
 @dataclass
@@ -62,52 +62,45 @@ class SynchronousRunner(TubeRunner):
 
         Process-scoped ``input`` s can be passed as kwargs.
         """
+        input = self._validate_input(**kwargs)
+        self._before_process()
+
+        while self.tube.scheduler.is_active():
+            ready = self.tube.scheduler.get_ready()
+            ready = self._filter_ready(ready, self.tube.scheduler)
+            for node_info in ready:
+                node_id, epoch = node_info["value"], node_info["epoch"]
+                node = self._get_node(node_id)
+                args, kwargs = self._collect_input(node, epoch, input)
+                value = self._call_node(node, *args, **kwargs)
+                events = self._store_events(node, value, epoch)
+                self._call_callbacks(events)
+                self._logger.debug("Node %s emitted %s in epoch %s", node_id, value, epoch)
+
+        self._after_process()
+
+        return self.collect_return()
+
+    def _before_process(self) -> None:
+        """
+        Clear the eventstore and add a new epoch.
+        Initialize if not already done.
+        """
+        self.store.clear()
+        self.tube.scheduler.add_epoch()
         if not self._running.is_set():
             self.init()
 
-        input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
-        self.store.clear()
-
-        scheduler = self.tube.scheduler
-        scheduler.add_epoch()
-
-        while scheduler.is_active():
-            ready = scheduler.get_ready()
-            if not ready:
-                scheduler.end_epoch()
-                break
-            for node_info in ready:
-                node_id, epoch = node_info["value"], node_info["epoch"]
-                if node_id in ("assets", "input"):
-                    # graph autogenerates "assets" and "inputs" nodes if something depends on it
-                    # but in the sync runner we always have assets and inputs handy
-                    scheduler.done(epoch, node_id)
-                    continue
-                node = self.tube.nodes[node_id]
-                if not node.enabled:
-                    # nodes can be in the graph while disabled if something else depends on them
-                    # FIXME when we stop using the builtin graphlib
-                    continue
-                maybe_args, maybe_kwargs = self.collect_input(node, epoch, input)
-
-                # need to eventually distinguish "still waiting" vs "there is none"
-                args = [] if maybe_args is None else maybe_args
-                kwargs = {} if maybe_kwargs is None else maybe_kwargs
-                if iscoroutinefunction_partial(node.process):
-                    value = call_async_from_sync(node.process, *args, **kwargs)
-                else:
-                    value = node.process(*args, **kwargs)
-
-                # take the value from state first. if it's taken by an asset,
-                # the value is converted to its id, and returned again.
-                events = self.store.add_value(node.signals, value, node_id, epoch)
-                if events is None:
-                    continue
-                all_events = scheduler.update(events)
-                self._call_callbacks(all_events)
-                self._logger.debug("Node %s emitted %s in epoch %s", node_id, value, epoch)
-
-        return self.collect_return()
+    def _filter_ready(self, nodes: list[MetaEvent], scheduler: Scheduler) -> list[MetaEvent]:
+        # graph autogenerates "assets" and "inputs" nodes if something depends on it
+        # but in the sync runner we always have assets and inputs handy
+        evts = []
+        for node in nodes:
+            if node["value"] in ("assets", "input"):
+                scheduler.done(node["epoch"], node["value"])
+            else:
+                evts.append(node)
+        return evts
 
     def enable_node(self, node_id: str) -> None:
         self.tube.nodes[node_id].init()

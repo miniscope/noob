@@ -322,7 +322,7 @@ class Scheduler(BaseModel):
             return previously_completed or active_completed
 
     def end_epoch(self, epoch: int | None = None) -> MetaEvent | None:
-        if epoch is None:
+        if epoch is None or epoch == -1:
             if len(self._epochs) == 0:
                 return None
             epoch = list(self._epochs)[-1]
@@ -356,6 +356,8 @@ class Scheduler(BaseModel):
 
         """
         self.nodes[node_id].enabled = False
+        for graph in self._epochs.values():
+            graph.mark_expired(node_id)
 
     def clear(self) -> None:
         """

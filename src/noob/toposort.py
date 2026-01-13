@@ -56,15 +56,16 @@ class TopoSorter:
         self._ready_nodes: set[NodeID] = set()
         self._out_nodes: set[NodeID] = set()
         self._done_nodes: set[NodeID] = set()
+        self._disabled_nodes: set[NodeID] = set()
         self._npassedout = 0
         self._nfinished = 0
 
         # Since we can be passed edges without node specifications,
         # filter on disabled nodes rather than enabled nodes -
         # i.e., we filter edges to any node that are explicitly disabled, but pass others.
-        disabled_nodes = [node_id for node_id, node in nodes.items() if not node.enabled]
+        self._disabled_nodes = set(node_id for node_id, node in nodes.items() if not node.enabled)
         for e in edges:
-            if e.target_node in disabled_nodes:
+            if e.target_node in self._disabled_nodes:
                 continue
             self.add(e.target_node, e.source_node)
         # add enabled nodes that have no edges
@@ -116,7 +117,10 @@ class TopoSorter:
         """
         for node in nodes:
             self._ready_nodes.discard(node)
-            self._out_nodes.discard(node)
+            if node in self._out_nodes:
+                self._out_nodes.discard(node)
+            else:
+                self._npassedout += 1
         self._done_nodes.update(nodes)
         self._nfinished += len(nodes)
 
@@ -149,7 +153,12 @@ class TopoSorter:
                 continue
             new_predecessors.append(pred)
             pred_info.successors.append(node)
-            if pred_info.nqueue == 0 and pred not in self.out_nodes and pred not in self.done_nodes:
+            if (
+                pred_info.nqueue == 0
+                and pred not in self.out_nodes
+                and pred not in self.done_nodes
+                and pred not in self._disabled_nodes
+            ):
                 self.mark_ready(pred)
 
         # Create the node -> predecessor edges
@@ -185,9 +194,13 @@ class TopoSorter:
         number of nodes marked "done" is less than the number that have been returned
         by "get_ready".
         """
-        if self.ready_nodes == {} and (self._nfinished + self._npassedout < len(self._node2info)):
+        if self.ready_nodes == set() and (
+            self._nfinished + self._npassedout < len(self._node2info)
+        ):
             cycle = self.find_cycle()
-            raise CycleError(f"cycle detected: {cycle}")
+            if cycle:
+                raise CycleError(f"cycle detected: {cycle}")
+
         return self._nfinished < self._npassedout or bool(self.ready_nodes)
 
     def done(self, *nodes: str) -> None:
@@ -227,7 +240,10 @@ class TopoSorter:
                 successor_info = n2i[successor]
                 successor_info.nqueue -= 1
                 if successor_info.nqueue == 0:
-                    self.mark_ready(successor)
+                    if successor in self._disabled_nodes:
+                        self.mark_expired(successor)
+                    else:
+                        self.mark_ready(successor)
 
     def find_cycle(self) -> list[str] | None:
         n2i = self._node2info
