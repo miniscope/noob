@@ -102,7 +102,8 @@ def test_multi_signal(loaded_tube: Tube, sync_runner_cls):
     tube = Tube.from_specification("testing-multi-signal")
     runner = sync_runner_cls(tube)
 
-    for value in runner.iter(n=5):
-        assert isinstance(value, dict)
-        assert isinstance(value["word"], str)
-        assert value["count_sum"] == sum(value["counts"])
+    with runner:
+        for value in runner.iter(n=5):
+            assert isinstance(value, dict)
+            assert isinstance(value["word"], str)
+            assert value["count_sum"] == sum(value["counts"])

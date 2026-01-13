@@ -64,6 +64,7 @@ from noob.network.message import (
     MessageType,
     NodeStatus,
     ProcessMsg,
+    StartMsg,
     StatusMsg,
     StopMsg,
 )
@@ -131,7 +132,7 @@ class CommandNode(EventloopMixin):
         else:
             raise NotImplementedError()
 
-    def start(self) -> None:
+    def init(self) -> None:
         self.logger.debug("Starting command runner")
         self.start_loop()
         self._init_sockets()
@@ -180,6 +181,13 @@ class CommandNode(EventloopMixin):
             node_id="command", value=AnnounceValue(inbox=self.router_address, nodes=self._nodes)
         )
         self._outbox.send_multipart([b"announce", msg.to_bytes()])
+
+    def start(self) -> None:
+        """
+        Start running in free-run mode
+        """
+        self._outbox.send_multipart([b"start", StartMsg(node_id="command").to_bytes()])
+        self.logger.debug("Sent start message")
 
     def process(self, epoch: int, input: dict | None = None) -> None:
         """Emit a ProcessMsg to process a single round through the graph"""
@@ -560,6 +568,9 @@ class NodeRunner(EventloopMixin):
         elif message.type_ == MessageType.process:
             message = cast(ProcessMsg, message)
             self.on_process(message)
+        elif message.type_ == MessageType.start:
+            message = cast(StartMsg, message)
+            self.on_start(message)
         elif message.type_ == MessageType.stop:
             message = cast(StopMsg, message)
             self.on_stop(message)
@@ -603,6 +614,13 @@ class NodeRunner(EventloopMixin):
             self.store.add(event)
 
         self.scheduler.update(events)
+
+    def on_start(self, msg: StartMsg) -> None:
+        """
+        Start running in free mode
+        """
+        self._freerun.set()
+        self._process_one.set()
 
     def on_process(self, msg: ProcessMsg) -> None:
         """
@@ -674,16 +692,23 @@ class ZMQRunner(TubeRunner):
     """time in seconds to wait after calling deinit to wait before killing runner processes"""
     store: EventStore = field(default_factory=EventStore)
 
+    _initialized: EventType = field(default_factory=mp.Event)
     _running: EventType = field(default_factory=mp.Event)
-    _return_node: Return | None = None
     _init_lock: threading.Lock = field(default_factory=threading.Lock)
+    _running_lock: threading.Lock = field(default_factory=threading.Lock)
+    _return_node: Return | None = None
     _to_throw: ErrorValue | None = None
     _current_epoch: int | None = None
 
     @property
     def running(self) -> bool:
-        with self._init_lock:
+        with self._running_lock:
             return self._running.is_set()
+
+    @property
+    def initialized(self) -> bool:
+        with self._init_lock:
+            return self._initialized.is_set()
 
     def init(self) -> None:
         if self.running:
@@ -693,7 +718,7 @@ class ZMQRunner(TubeRunner):
             self.command = CommandNode(runner_id=self.runner_id)
             self.command.add_callback("inbox", self.on_event)
             self.command.add_callback("router", self.on_router)
-            self.command.start()
+            self.command.init()
             self._logger.debug("Command node initialized")
 
             for node_id, node in self.tube.nodes.items():
@@ -718,10 +743,10 @@ class ZMQRunner(TubeRunner):
                 [k for k, v in self.tube.nodes.items() if not isinstance(v, Return)]
             )
             self._logger.debug("Nodes ready")
-            self._running.set()
+            self._initialized.set()
 
     def deinit(self) -> None:
-        if not self.running:
+        if not self.initialized:
             return
 
         with self._init_lock:
@@ -746,12 +771,16 @@ class ZMQRunner(TubeRunner):
                 proc.close()
             self.command.clear_callbacks()
             self.tube.scheduler.clear()
-            self._running.clear()
+            self._initialized.clear()
 
     def process(self, **kwargs: Any) -> ReturnNodeType:
-        if not self.running:
+        if not self.initialized:
             self._logger.info("Runner called process without calling `init`, initializing now.")
             self.init()
+        if self.running:
+            raise RuntimeError(
+                "Runner is already running in free run mode! use iter to gather results"
+            )
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
 
         self._current_epoch = self.tube.scheduler.add_epoch()
@@ -767,6 +796,65 @@ class ZMQRunner(TubeRunner):
             self._throw_error()
         self._logger.debug("collecting return")
         return self.collect_return(self._current_epoch)
+
+    def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
+        """
+        Iterate over results as they are available.
+
+        Tube runs in free-run mode for n iterations,
+        This method is usually only useful for tubes with :class:`.Return` nodes.
+        This method yields only when return is available:
+        the tube will run more than n ``process`` calls if there are e.g. gather nodes
+        that cause the return value to be empty.
+
+        To call the tube a specific number of times and do something with the events
+        other than returning a value, use callbacks and :meth:`.run` !
+
+        Note that backpressure control is not yet implemented!!!
+        If the outer iter method is slow, or there is a bottleneck in your tube,
+        you might incur some serious memory usage!
+        Backpressure and observability is a WIP!
+
+        If you need a version of this method that *always* makes a fixed number of process calls,
+        raise an issue!
+        """
+        if not self.initialized:
+            raise RuntimeError(
+                "ZMQRunner must be explicitly initialized and deinitialized, "
+                "use the runner as a contextmanager or call `init()` and `deinit()`"
+            )
+        # TODO: after #125 is merged, raise error if tube required process scoped inputs
+        if self.running:
+            raise RuntimeError("Already Running!")
+
+        epoch = self._current_epoch
+        # start running without a limit - we'll check as we go.
+        self.command.start()
+        self._running.set()
+        current_iter = 0
+        try:
+            while n is None or current_iter < n:
+                ret = None
+                loop = 0
+                while ret is None:
+                    self._logger.debug("Awaiting epoch %s", epoch)
+                    self.tube.scheduler.await_epoch(epoch)
+                    epoch += 1
+                    ret = self.collect_return(epoch)
+                    if ret:
+                        self._logger.debug("Returning value from epoch %s", epoch)
+                    else:
+                        self._logger.debug("No return value for %s", epoch)
+                    if loop > self.max_iter_loops:
+                        raise RuntimeError("Reached maximum process calls per iteration")
+
+                yield ret
+                current_iter += 1
+
+        finally:
+            # FIXME: Separate stopping and deinit so we can pause running more cheaply.
+            self._running.clear()
+            self.deinit()
 
     def on_event(self, msg: Message) -> None:
         self._logger.debug("EVENT received: %s", msg)
