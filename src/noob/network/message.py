@@ -33,6 +33,7 @@ class MessageType(StrEnum):
     announce = "announce"
     identify = "identify"
     process = "process"
+    init = "init"
     start = "start"
     status = "status"
     stop = "stop"
@@ -119,12 +120,18 @@ class ProcessMsg(Message):
     """Any process-scoped input passed to the `process` call"""
 
 
+class InitMsg(Message):
+    """Initialize nodes within node runners"""
+
+    type_: Literal[MessageType.init] = Field(MessageType.init, alias="type")
+    value: None = None
+
+
 class StartMsg(Message):
-    """Start free running nodes"""
+    """Start free-running nodes"""
 
     type_: Literal[MessageType.start] = Field(MessageType.start, alias="type")
     value: None = None
-
 
 class StatusMsg(Message):
     """Node updating its current status"""
@@ -196,6 +203,7 @@ MessageUnion = A[
     A[AnnounceMsg, Tag("announce")]
     | A[IdentifyMsg, Tag("identify")]
     | A[ProcessMsg, Tag("process")]
+    | A[InitMsg, Tag("init")]
     | A[StartMsg, Tag("start")]
     | A[StatusMsg, Tag("status")]
     | A[StopMsg, Tag("stop")]
