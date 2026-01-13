@@ -7,7 +7,7 @@ assets:
     type: noob.testing.Counter
     params:
       start: 1
-    scope: runner
+    scope: tube
 
 nodes:
   increment:
@@ -16,4 +16,4 @@ nodes:
       - generator: assets.counter
   return:
     type: return
-    depends: assets.counter
+    depends: increment.next

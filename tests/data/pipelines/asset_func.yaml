@@ -16,4 +16,4 @@ nodes:
       - generator: assets.counter
   return:
     type: return
-    depends: assets.counter
+    depends: increment.next

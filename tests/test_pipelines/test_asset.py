@@ -12,7 +12,10 @@ def test_runner_scoped():
     tube = Tube.from_specification("testing-class-asset")
     runner = SynchronousRunner(tube=tube)
 
-    output = runner.run(n=5)
+    n = 5
+    output = runner.run(n=n)
+    assert all(o is output[0] for o in output)
+    assert output[0].current == n
 
 
 def test_process_scoped():
@@ -20,8 +23,6 @@ def test_process_scoped():
     same setup as above, except we should get back the same integer each time
     (it is reset between process calls, but also test that it is mutable within a
     process call - e.g. if we had two nodes that increment the value, it should return 2)
-
-    inplace operations, only.
     """
     tube = Tube.from_specification("testing-func-asset")
     runner = SynchronousRunner(tube=tube)

@@ -1,6 +1,5 @@
 import asyncio
 import random
-import sqlite3
 import string
 from collections.abc import Generator
 from datetime import datetime
@@ -9,7 +8,6 @@ from time import sleep
 from typing import Annotated as A
 from typing import Any
 
-import xarray as xr
 from faker import Faker
 
 from noob import Name, process_method
@@ -195,5 +193,6 @@ class StatefulMultiply:
         return value
 
 
-def get_next(generator: Generator) -> A[int, Name("next")]:
-    return next(generator)
+def get_next(generator: Generator) -> A[Generator[int], Name("next")]:
+    _ = next(generator)
+    return generator

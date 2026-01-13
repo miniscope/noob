@@ -1,4 +1,4 @@
-from noob.testing.assets import counter, Counter
+from noob.testing.assets import Counter, counter
 from noob.testing.nodes import (
     CountSource,
     CountSourceDecor,
@@ -16,6 +16,7 @@ from noob.testing.nodes import (
     divide,
     error,
     exclaim,
+    get_next,
     input_party,
     letter_source,
     long_add,
@@ -26,7 +27,6 @@ from noob.testing.nodes import (
     sporadic_word,
     word_counts,
     word_source,
-    get_next,
 )
 
 __all__ = [
@@ -54,6 +54,7 @@ __all__ = [
     "NumberToLetterCls",
     "StatefulMultiply",
     "UnannotatedGenerator",
+    "Counter",
     "counter",
     "CountSourceDecor",
     "input_party",
