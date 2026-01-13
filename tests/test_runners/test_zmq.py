@@ -149,18 +149,18 @@ async def test_statelessness():
         # should have received events from all except d,
         # which has not yet received the epoch 0 input to match with the epoch 0
         # event from the count source
-        # start = time()
-        # while len(events) < 3 and time() - start < 1:
-        #     await sleep(0.1)
+        start = time()
+        while len(events) < 3 and time() - start < 1:
+            await sleep(0.1)
         # assert len(events) == 3
 
         # here we should get an overlap between the epoch 1 input
         # and the epoch 1 event from count source
         # so we get 4 events now
         runner.command.process(2, input={"multiply": 7})
-        # start = time()
-        # while len(events) < 7 and time() - start < 1:
-        #     await sleep(0.1)
+        start = time()
+        while len(events) < 7 and time() - start < 1:
+            await sleep(0.1)
         # assert len(events) == 7
         # then when we send epoch 0, we should get all of them
         runner.command.process(0, input={"multiply": 11})
