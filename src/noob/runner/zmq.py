@@ -263,6 +263,12 @@ class CommandNode(EventloopMixin):
 
     def on_status(self, msg: StatusMsg) -> None:
         with self._ready_condition:
+            if msg.node_id not in self._nodes:
+                self.logger.warning(
+                    "Node %s sent us a status before sending its full identify message, ignoring",
+                    msg.node_id,
+                )
+                return
             self._nodes[msg.node_id]["status"] = msg.value
             self._ready_condition.notify_all()
 
@@ -569,6 +575,13 @@ class NodeRunner(EventloopMixin):
             self._nodes = msg.value["nodes"]
             if set(self._nodes) >= depended_nodes - {"input"} and self.status == NodeStatus.waiting:
                 self.update_status(NodeStatus.ready)
+            # status and announce messages can be received out of order,
+            # so if we observe the command node being out of sync, we update it.
+            if (
+                self._node.id in msg.value["nodes"]
+                and msg.value["nodes"][self._node.id]["status"] != self.status
+            ):
+                self.identify()
 
     def on_event(self, msg: EventMsg) -> None:
         events = msg.value
@@ -655,6 +668,7 @@ class ZMQRunner(TubeRunner):
     _return_node: Return | None = None
     _init_lock: threading.Lock = field(default_factory=threading.Lock)
     _to_throw: ErrorValue | None = None
+    _current_epoch: int | None = None
 
     @property
     def running(self) -> bool:
@@ -786,7 +800,13 @@ class ZMQRunner(TubeRunner):
         """Cancel current epoch, stash error for process method to throw"""
         self._logger.error("Received error from node: %s", msg)
         self._to_throw = msg.value
-        self.tube.scheduler.end_epoch(self._current_epoch)
+        if self._current_epoch is not None:
+            # if we're waiting in the process method,
+            # end epoch and raise error there
+            self.tube.scheduler.end_epoch(self._current_epoch)
+        else:
+            # e.g. errors during init, raise here.
+            self._throw_error()
 
     def _throw_error(self) -> None:
         errval = self._to_throw
