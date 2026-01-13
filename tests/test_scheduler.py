@@ -1,5 +1,4 @@
 from datetime import datetime
-from graphlib import TopologicalSorter
 from multiprocessing import Queue
 from queue import Empty
 
@@ -7,6 +6,7 @@ import pytest
 
 from noob import SynchronousRunner, Tube
 from noob.event import Event, MetaEventType
+from noob.toposort import TopoSorter
 
 
 def test_epoch_increment():
@@ -18,11 +18,11 @@ def test_epoch_increment():
     scheduler = tube.scheduler
 
     # accessing makes the epoch
-    assert isinstance(scheduler[0], TopologicalSorter)
+    assert isinstance(scheduler[0], TopoSorter)
 
     for i in range(5):
         assert scheduler.add_epoch() == i + 1
-        assert isinstance(scheduler[i], TopologicalSorter)
+        assert isinstance(scheduler[i], TopoSorter)
 
     # if we create an epoch out of order, the next call without epoch specified increments
     assert scheduler.add_epoch(10) == 10
@@ -128,7 +128,7 @@ def test_identify_source_node(spec, input, expected):
 
     """
     tube = Tube.from_specification(spec, input)
-    assert tube.scheduler.source_nodes == expected
+    assert set(tube.scheduler.source_nodes) == set(expected)
 
 
 @pytest.mark.parametrize(
@@ -212,3 +212,24 @@ def test_metaevents():
 def test_noevent_ends_epoch():
     """If a node in the middle of a tube emits a noevent, the epoch should no longer be active"""
     raise NotImplementedError("Write this test!")
+
+
+def test_disable_nodes():
+    """
+    For A->B->C graph, when B is disabled,
+    the scheduler only yields A and then becomes inactive,
+    rather than yielding C.
+    """
+    tube = Tube.from_specification("testing-basic")
+    scheduler = tube.scheduler
+    scheduler.disable_node("b")
+    scheduler.add_epoch()
+    ready_nodes = scheduler.get_ready()
+
+    # only "a" is returned, even though "b" also has no dependencies,
+    # since "b" is disabled.
+    assert {node["value"] for node in ready_nodes} == {"a"}
+    scheduler.done(epoch=-1, node_id="a")
+
+    # nothing ready anymore
+    assert not scheduler.get_ready()

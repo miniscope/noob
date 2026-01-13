@@ -94,3 +94,21 @@ class EpochExistsError(SchedulerError, ValueError):
     """
     Epoch already exists and is active, but attempted to create it.
     """
+
+
+class NotOutYetError(SchedulerError, ValueError):
+    """
+    Node was marked done but wasn't passed out yet!
+    """
+
+
+class NotAddedError(SchedulerError, ValueError):
+    """
+    Node was marked done but wasn't added!
+    """
+
+
+class AlreadyDoneError(SchedulerError, ValueError):
+    """
+    Node was marked done, but it was already done!
+    """

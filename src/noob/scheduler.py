@@ -2,7 +2,6 @@ import logging
 from collections import deque
 from collections.abc import MutableSequence
 from datetime import UTC, datetime
-from graphlib import _NODE_DONE, _NODE_OUT, TopologicalSorter  # type: ignore[attr-defined]
 from itertools import count
 from threading import Condition
 from typing import Self
@@ -12,10 +11,18 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from noob.const import META_SIGNAL
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import EpochCompletedError, EpochExistsError
+from noob.exceptions import EpochCompletedError, EpochExistsError, NotOutYetError
 from noob.logging import init_logger
 from noob.node import Edge, NodeSpecification
+from noob.toposort import TopoSorter
 from noob.types import NodeID
+
+_VIRTUAL_NODES = ("input", "assets")
+"""
+Virtual nodes that don't actually exist as nodes,
+but can be depended on 
+(and can be present or absent, and so shouldn't be marked as trivially done)
+"""
 
 
 class Scheduler(BaseModel):
@@ -25,7 +32,7 @@ class Scheduler(BaseModel):
     logger: logging.Logger = Field(default_factory=lambda: init_logger("noob.scheduler"))
 
     _clock: count = PrivateAttr(default_factory=count)
-    _epochs: dict[int, TopologicalSorter] = PrivateAttr(default_factory=dict)
+    _epochs: dict[int, TopoSorter] = PrivateAttr(default_factory=dict)
     _ready_condition: Condition = PrivateAttr(default_factory=Condition)
     _epoch_condition: Condition = PrivateAttr(default_factory=Condition)
     _epoch_log: deque = PrivateAttr(default_factory=lambda: deque(maxlen=100))
@@ -51,11 +58,7 @@ class Scheduler(BaseModel):
         """
         if not self.source_nodes:
             graph = self._init_graph(nodes=self.nodes, edges=self.edges)
-            self.source_nodes = [
-                id_
-                for id_, info in graph._node2info.items()  # type: ignore[attr-defined]
-                if info.npredecessors == 0 and id_ not in ("input", "assets")
-            ]
+            self.source_nodes = [id_ for id_ in graph.ready_nodes if id_ not in _VIRTUAL_NODES]
         return self
 
     def add_epoch(self, epoch: int | None = None) -> int:
@@ -77,7 +80,6 @@ class Scheduler(BaseModel):
                 raise EpochCompletedError(f"Epoch {this_epoch} has already been completed!")
 
             graph = self._init_graph(nodes=self.nodes, edges=self.edges)
-            graph.prepare()
             self._epochs[this_epoch] = graph
             self._ready_condition.notify_all()
         return this_epoch
@@ -119,6 +121,7 @@ class Scheduler(BaseModel):
                 )
                 for epoch, graph in graphs
                 for node_id in graph.get_ready()
+                if node_id in _VIRTUAL_NODES or self.nodes[node_id].enabled
             ]
 
         return ready_nodes
@@ -132,17 +135,17 @@ class Scheduler(BaseModel):
             epoch (int | None): the epoch to check, if ``None`` , any epoch
         """
         # slight duplication of the above because we don't want to *get* the ready nodes,
-        # which marks them as "out" in the TopologicalSorter
+        # which marks them as "out" in the TopoSorter
 
         # if we've already run this, the node is ready - don't create another epoch
         if epoch in self._epoch_log:
             return True
 
         graphs = self._epochs.items() if epoch is None else [(epoch, self[epoch])]
-        is_ready = any(node_id == node for epoch, graph in graphs for node_id in graph._ready_nodes)  # type: ignore[attr-defined]
+        is_ready = any(node_id == node for epoch, graph in graphs for node_id in graph.ready_nodes)
         return is_ready
 
-    def __getitem__(self, epoch: int) -> TopologicalSorter:
+    def __getitem__(self, epoch: int) -> TopoSorter:
         if epoch == -1:
             return self._epochs[max(self._epochs.keys())]
 
@@ -160,18 +163,14 @@ class Scheduler(BaseModel):
             return True
 
         graph = self[-1] if epoch is None else self._epochs[epoch]
-        return all(
-            graph._node2info[src].npredecessors != _NODE_OUT  # type: ignore[attr-defined]
-            and src not in graph._ready_nodes  # type: ignore[attr-defined]
-            for src in self.source_nodes
-        )
+        return all(src in graph.done_nodes for src in self.source_nodes)
 
     def update(
         self, events: MutableSequence[Event | MetaEvent] | MutableSequence[Event]
     ) -> MutableSequence[Event] | MutableSequence[Event | MetaEvent]:
         """
         When a set of events are received, update the graphs within the scheduler.
-        Currently only has :meth:`TopologicalSorter.done` implemented.
+        Currently only has :meth:`TopoSorter.done` implemented.
 
         """
         if not events:
@@ -188,7 +187,7 @@ class Scheduler(BaseModel):
                     marked_done.add(done_marker)
 
                 if e["signal"] == META_SIGNAL and e["value"] == MetaSignal.NoEvent:
-                    epoch_ended = self.cancel(epoch=e["epoch"], node_id=e["node_id"])
+                    epoch_ended = self.expire(epoch=e["epoch"], node_id=e["node_id"])
                 else:
                     epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"])
 
@@ -220,16 +219,10 @@ class Scheduler(BaseModel):
 
             try:
                 self[epoch].done(node_id)
-            except ValueError as e:
+            except NotOutYetError:
                 # in parallel mode, we don't `get_ready` the preceding ready nodes
                 # so we have to manually mark them as "out"
-                # FIXME: so ugly - need to make our own topo sorter
-                if node_id not in self[epoch]._node2info:  # type: ignore[attr-defined]
-                    raise e
-                self[epoch]._node2info[node_id].npredecessors = _NODE_OUT  # type: ignore[attr-defined]
-                self[epoch]._nfinished += 1  # type: ignore[attr-defined]
-                if node_id in self[epoch]._ready_nodes:  # type: ignore[attr-defined]
-                    self[epoch]._ready_nodes.remove(node_id)  # type: ignore[attr-defined]
+                self[epoch].mark_out(node_id)
                 self[epoch].done(node_id)
 
             self._ready_condition.notify_all()
@@ -237,15 +230,13 @@ class Scheduler(BaseModel):
                 return self.end_epoch(epoch)
         return None
 
-    def cancel(self, epoch: int, node_id: str) -> MetaEvent | None:
+    def expire(self, epoch: int, node_id: str) -> MetaEvent | None:
         """
-        Mark a node as completed without making its dependent nodes ready
+        Mark a node as having been completed without making its dependent nodes ready.
+        i.e. when the node emitted ``NoEvent``
         """
         with self._ready_condition, self._epoch_condition:
-            self[epoch]._node2info[node_id].npredecessors = _NODE_DONE  # type: ignore[attr-defined]
-            self[epoch]._nfinished += 1  # type: ignore[attr-defined]
-            if node_id in self[epoch]._ready_nodes:  # type: ignore[attr-defined]
-                self[epoch]._ready_nodes.remove(node_id)  # type: ignore[attr-defined]
+            self[epoch].mark_expired(node_id)
             self._ready_condition.notify_all()
             if not self[epoch].is_active():
                 return self.end_epoch(epoch)
@@ -282,10 +273,9 @@ class Scheduler(BaseModel):
                     "locked between threads."
                 )
 
-            # do a little graphlib surgery to mark just one event as done.
+            # mark just one event as "out."
             # threadsafe because we are holding the lock that protects graph mutation
-            self._epochs[epoch]._node2info[node_id].npredecessors = _NODE_OUT  # type: ignore[attr-defined]
-            self._epochs[epoch]._ready_nodes.remove(node_id)  # type: ignore[attr-defined]
+            self._epochs[epoch].mark_out(node_id)
 
         return MetaEvent(
             id=uuid4().int,
@@ -374,9 +364,9 @@ class Scheduler(BaseModel):
         self._epoch_log = deque(maxlen=100)
 
     @staticmethod
-    def _init_graph(nodes: dict[str, NodeSpecification], edges: list[Edge]) -> TopologicalSorter:
+    def _init_graph(nodes: dict[str, NodeSpecification], edges: list[Edge]) -> TopoSorter:
         """
-        Produce a :class:`.TopologicalSorter` based on the graph induced by
+        Produce a :class:`.TopoSorter` based on the graph induced by
         a set of :class:`.Node` and a set of :class:`.Edge` that yields node ids.
 
         .. note:: Optional params
@@ -396,13 +386,12 @@ class Scheduler(BaseModel):
             see: https://github.com/miniscope/noob/issues/26,
 
         """
-        sorter: TopologicalSorter = TopologicalSorter()
-        enabled_nodes = [node_id for node_id, node in nodes.items() if node.enabled]
-        for node_id in enabled_nodes:
-            required_edges = [
-                e.source_node
-                for e in edges
-                if e.target_node == node_id and e.target_node in enabled_nodes
-            ]
-            sorter.add(node_id, *required_edges)
-        return sorter
+        return TopoSorter(nodes, edges)
+
+    def has_cycle(self) -> bool:
+        """
+        Checks that the graph is acyclic.
+        """
+        graph = self._init_graph(nodes=self.nodes, edges=self.edges)
+        cycle = graph.find_cycle()
+        return bool(cycle)
