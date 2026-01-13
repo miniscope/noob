@@ -142,6 +142,8 @@ async def test_statelessness():
         events.extend(event.value)
 
     runner = ZMQRunner(tube=tube)
+    for i in range(3):
+        runner.tube.scheduler.add_epoch(i)
     with runner:
         runner.command.add_callback("inbox", _event_cb)
         # skip first epoch
