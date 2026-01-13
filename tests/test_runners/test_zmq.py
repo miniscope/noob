@@ -1,4 +1,4 @@
-from time import sleep
+from time import sleep, time
 from typing import cast
 
 import pytest
@@ -137,20 +137,27 @@ def test_statelessness():
         runner.command.add_callback("inbox", _event_cb)
         # skip first epoch
         runner.command.process(1, input={"multiply": 3})
-        sleep(0.1)
         # should have received events from all except d,
         # which has not yet received the epoch 0 input to match with the epoch 0
         # event from the count source
+        start = time()
+        while len(events) < 3 and time() - start < 1:
+            sleep(0.01)
         assert len(events) == 3
+
         # here we should get an overlap between the epoch 1 input
         # and the epoch 1 event from count source
         # so we get 4 events now
         runner.command.process(2, input={"multiply": 7})
-        sleep(0.1)
+        start = time()
+        while len(events) < 7 and time() - start < 1:
+            sleep(0.01)
         assert len(events) == 7
         # then when we send epoch 0, we should get all of them
         runner.command.process(0, input={"multiply": 11})
-        sleep(0.1)
+        start = time()
+        while len(events) < 12 and time() - start < 1:
+            sleep(0.01)
 
     # should have gotten 3 events from 4 nodes, so 12 total events
     assert len(events) == 12
