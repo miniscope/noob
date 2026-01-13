@@ -3,7 +3,7 @@ from collections import deque
 from collections.abc import MutableSequence
 from datetime import UTC, datetime
 from itertools import count
-from threading import Condition
+from threading import Condition, Lock
 from typing import Self
 from uuid import uuid4
 
@@ -36,6 +36,7 @@ class Scheduler(BaseModel):
     _ready_condition: Condition = PrivateAttr(default_factory=Condition)
     _epoch_condition: Condition = PrivateAttr(default_factory=Condition)
     _epoch_log: deque = PrivateAttr(default_factory=lambda: deque(maxlen=100))
+    _update_lock = PrivateAttr(default_factory=Lock)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -176,30 +177,31 @@ class Scheduler(BaseModel):
         """
         if not events:
             return events
-        end_events: MutableSequence[MetaEvent] = []
-        with self._ready_condition, self._epoch_condition:
-            marked_done = set()
-            for e in events:
-                if (done_marker := (e["epoch"], e["node_id"])) in marked_done or e[
-                    "node_id"
-                ] == "meta":
-                    continue
-                else:
-                    marked_done.add(done_marker)
+        with self._update_lock:
+            end_events: MutableSequence[MetaEvent] = []
+            with self._ready_condition, self._epoch_condition:
+                marked_done = set()
+                for e in events:
+                    if (done_marker := (e["epoch"], e["node_id"])) in marked_done or e[
+                        "node_id"
+                    ] == "meta":
+                        continue
+                    else:
+                        marked_done.add(done_marker)
 
-                if e["signal"] == META_SIGNAL and e["value"] == MetaSignal.NoEvent:
-                    epoch_ended = self.expire(epoch=e["epoch"], node_id=e["node_id"])
-                else:
-                    epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"])
+                    if e["signal"] == META_SIGNAL and e["value"] == MetaSignal.NoEvent:
+                        epoch_ended = self.expire(epoch=e["epoch"], node_id=e["node_id"])
+                    else:
+                        epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"])
 
-                if epoch_ended:
-                    end_events.append(epoch_ended)
+                    if epoch_ended:
+                        end_events.append(epoch_ended)
 
-            # condition uses an RLock, so waiters only run here,
-            # even though `done` also notifies.
-            self._ready_condition.notify_all()
+                # condition uses an RLock, so waiters only run here,
+                # even though `done` also notifies.
+                self._ready_condition.notify_all()
 
-        ret_events = [*events, *end_events]
+            ret_events = [*events, *end_events]
 
         return ret_events
 
