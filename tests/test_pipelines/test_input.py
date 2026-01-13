@@ -89,3 +89,24 @@ def test_input_integration(sync_runner_cls):
             this_process = multiply_process * 2 * (i + 1)
             expected = (start + i) * multiply_tube * this_process
             assert runner.process(multiply_process=this_process) == expected
+
+
+@pytest.mark.parametrize("loaded_tube", ["testing-input-process-depends"], indirect=True)
+@pytest.mark.asyncio
+async def test_no_run_with_process_input(loaded_tube, all_runners):
+    """
+    Trying to use `run` with a tube with process-scoped inputs should fail!
+    """
+    with pytest.raises(InputMissingError):
+        all_runners.run(n=5)
+
+
+@pytest.mark.parametrize("loaded_tube", ["testing-input-process-depends"], indirect=True)
+@pytest.mark.asyncio
+async def test_no_iter_with_process_input(loaded_tube, all_runners):
+    """
+    Trying to use `run` with a tube with process-scoped inputs should fail!
+    """
+    with pytest.raises(InputMissingError):
+        for _ in all_runners.iter(n=5):
+            pass
