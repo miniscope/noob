@@ -1,4 +1,5 @@
-from time import sleep, time
+from asyncio import sleep
+from time import time
 from typing import cast
 
 import pytest
@@ -65,7 +66,8 @@ def test_error_reporting():
     assert "testing/nodes.py" in note
 
 
-def test_statefulness():
+@pytest.mark.asyncio
+async def test_statefulness():
     """
     Nodes that are marked as stateful should process events in order,
     even when they are received out of order.
@@ -86,7 +88,7 @@ def test_statefulness():
         runner.command.process(1, input={"multiply": 3})
         start = time()
         while len(events) < 1 and time() - start < 1:
-            sleep(0.01)
+            await sleep(0.1)
         # we should have only received an event from the stateless count source
         assert len(events) == 1
         assert events[0]["node_id"] == "c"
@@ -99,13 +101,13 @@ def test_statefulness():
         runner.command.process(2, input={"multiply": 7})
         start = time()
         while len(events) < 2 and time() - start < 1:
-            sleep(0.01)
+            await sleep(0.1)
         assert len(events) == 2
         # then when we send epoch 0, we should get all of them
         runner.command.process(0, input={"multiply": 11})
         start = time()
         while len(events) < 12 and time() - start < 1:
-            sleep(0.01)
+            await sleep(0.1)
 
     # should have gotten 3 events from 4 nodes, so 12 total events
     assert len(events) == 12
@@ -122,7 +124,8 @@ def test_statefulness():
     assert runner.store.events[2]["d"]["value"][0]["value"] == 7 * 3 * 3
 
 
-def test_statelessness():
+@pytest.mark.asyncio
+async def test_statelessness():
     """
     Nodes that are marked as stateless should process as soon as they are ready in any epoch,
     but they should still match events according to their epoch -
@@ -148,7 +151,7 @@ def test_statelessness():
         # event from the count source
         start = time()
         while len(events) < 3 and time() - start < 1:
-            sleep(0.01)
+            await sleep(0.1)
         assert len(events) == 3
 
         # here we should get an overlap between the epoch 1 input
@@ -157,13 +160,13 @@ def test_statelessness():
         runner.command.process(2, input={"multiply": 7})
         start = time()
         while len(events) < 7 and time() - start < 1:
-            sleep(0.01)
+            await sleep(0.1)
         assert len(events) == 7
         # then when we send epoch 0, we should get all of them
         runner.command.process(0, input={"multiply": 11})
         start = time()
         while len(events) < 12 and time() - start < 1:
-            sleep(0.01)
+            await sleep(0.1)
 
     # should have gotten 3 events from 4 nodes, so 12 total events
     assert len(events) == 12
