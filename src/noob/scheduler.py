@@ -147,13 +147,12 @@ class Scheduler(BaseModel):
         return is_ready
 
     def __getitem__(self, epoch: int) -> TopoSorter:
-        with self._epoch_condition:
-            if epoch == -1:
-                return self._epochs[max(self._epochs.keys())]
+        if epoch == -1:
+            return self._epochs[max(self._epochs.keys())]
 
-            if epoch not in self._epochs:
-                self.add_epoch(epoch)
-            return self._epochs[epoch]
+        if epoch not in self._epochs:
+            self.add_epoch(epoch)
+        return self._epochs[epoch]
 
     def sources_finished(self, epoch: int | None = None) -> bool:
         """
