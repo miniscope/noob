@@ -121,7 +121,7 @@ class Scheduler(BaseModel):
                 )
                 for epoch, graph in graphs
                 for node_id in graph.get_ready()
-                if self.nodes[node_id].enabled
+                if node_id in _VIRTUAL_NODES or self.nodes[node_id].enabled
             ]
 
         return ready_nodes
