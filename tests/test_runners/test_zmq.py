@@ -84,7 +84,9 @@ def test_statefulness():
         runner.command.add_callback("inbox", _event_cb)
         # skip first epoch
         runner.command.process(1, input={"multiply": 3})
-        sleep(0.01)
+        start = time()
+        while len(events) < 1 and time() - start < 1:
+            sleep(0.01)
         # we should have only received an event from the stateless count source
         assert len(events) == 1
         assert events[0]["node_id"] == "c"
@@ -95,11 +97,15 @@ def test_statefulness():
         assert events[0]["epoch"] == 0
         # just for good measure, skip another
         runner.command.process(2, input={"multiply": 7})
-        sleep(0.01)
+        start = time()
+        while len(events) < 2 and time() - start < 1:
+            sleep(0.01)
         assert len(events) == 2
         # then when we send epoch 0, we should get all of them
         runner.command.process(0, input={"multiply": 11})
-        sleep(0.1)
+        start = time()
+        while len(events) < 12 and time() - start < 1:
+            sleep(0.01)
 
     # should have gotten 3 events from 4 nodes, so 12 total events
     assert len(events) == 12

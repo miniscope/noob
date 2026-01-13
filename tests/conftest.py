@@ -9,6 +9,12 @@ from .fixtures import *
 from .fixtures.paths import CONFIG_DIR, PIPELINE_DIR, SPECIAL_DIR
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--debug-logs", action="store_true", default=False, help="Enable debug-level logging"
+    )
+
+
 @pytest.fixture(scope="session", autouse=True)
 def patch_config_source(monkeypatch_session: MonkeyPatch) -> None:
     """Patch config sources so we don't accidentally use any user pipelines during testing."""
@@ -29,9 +35,10 @@ def patch_config_source(monkeypatch_session: MonkeyPatch) -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def patch_env_config(monkeypatch_session: MonkeyPatch) -> None:
+def patch_env_config(monkeypatch_session: MonkeyPatch, request: pytest.FixtureRequest) -> None:
     """Patch env settings, e.g. setting log levels and etc."""
-    monkeypatch_session.setenv("NOOB_LOGS__LEVEL", "DEBUG")
+    if request.config.getoption("--debug-logs"):
+        monkeypatch_session.setenv("NOOB_LOGS__LEVEL", "DEBUG")
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

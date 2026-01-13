@@ -436,7 +436,9 @@ class NodeRunner(EventloopMixin):
 
         self.init_node()
         self.start_sockets()
-        self.status = NodeStatus.waiting if self.depends else NodeStatus.ready
+        self.status = (
+            NodeStatus.waiting if [d for d in self.depends if d[0] != "input"] else NodeStatus.ready
+        )
         self.identify()
         self.logger.debug("Initialization finished")
 
@@ -579,11 +581,11 @@ class NodeRunner(EventloopMixin):
                 self.update_status(NodeStatus.ready)
             # status and announce messages can be received out of order,
             # so if we observe the command node being out of sync, we update it.
-            if (
+            elif (
                 self._node.id in msg.value["nodes"]
-                and msg.value["nodes"][self._node.id]["status"] != self.status
+                and msg.value["nodes"][self._node.id]["status"] != self.status.value
             ):
-                self.identify()
+                self.update_status(self.status)
 
     def on_event(self, msg: EventMsg) -> None:
         events = msg.value
