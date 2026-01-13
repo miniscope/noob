@@ -6,6 +6,7 @@ from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
+    Self,
     TypeVar,
     Union,
     cast,
@@ -14,7 +15,14 @@ from typing import (
     overload,
 )
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ModelWrapValidatorHandler,
+    PrivateAttr,
+    model_validator,
+)
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
@@ -151,6 +159,29 @@ class Node(BaseModel):
     and enabled during a tube's operation without recreating the tube. 
     When a node is disabled, other nodes that depend on it will not be disabled, 
     but they may never be called since their dependencies will never be satisfied."""
+    stateful: bool = True
+    """
+    Whether this node is stateful (True), or stateless (False).
+    Stateful nodes are assumed to care about the order in which they receive events - 
+    i.e. for a given set of inputs, the values returned by ``process`` are different
+    when called in a different order.
+    
+    This attribute has no effect in synchronous runners,
+    but in concurrent runners where multiple epochs of events can be processed simultaneously,
+    setting a node as stateless can improve performance
+    as the node processes events as soon as it receives them rather than waiting
+    for the next epoch in the sequence to arrive.
+    
+    Defined as an instance, 
+    rather than a class attribute to allow it being overridden by a node specification.
+    Subclasses should override the default value to be considered stateless by default.
+    
+    By default, unless specified otherwise:
+    
+    * Class nodes are considered stateful
+    * Generator nodes are considered stateful
+    * Function nodes are considered stateless
+    """
 
     _signals: list[Signal] | None = None
     _slots: dict[str, Slot] | None = None
@@ -428,6 +459,11 @@ class WrapClassNode(Node):
 class WrapFuncNode(Node):
     fn: Callable
     params: dict = Field(default_factory=dict)
+    stateful: bool = False
+    """
+    Function nodes are considered stateless by default,
+    except if they are generators, which are typically stateful. 
+    """
 
     def model_post_init(self, __context: Any) -> None:
         """
@@ -442,6 +478,21 @@ class WrapFuncNode(Node):
             raise NotImplementedError("async generators not supported")
         else:
             self.__dict__["process"] = functools.partial(self.fn, **self.params)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def set_default_statefulness(cls, data: Any, handler: ModelWrapValidatorHandler[Self]) -> Self:
+        """
+        If no `stateful` argument is provided explicitly,
+        set stateful default False for functions and True for generators
+        """
+        statefulness_set = isinstance(data, dict) and "stateful" in data
+        value = handler(data)
+        if statefulness_set:
+            return value
+
+        value.stateful = bool(inspect.isgeneratorfunction(value.fn))
+        return value
 
     def _collect_signals(self) -> list[Signal]:
         return Signal.from_callable(self.fn)
