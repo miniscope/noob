@@ -1,25 +1,20 @@
-import sqlite3
-
-import numpy as np
-import xarray as xr
+from itertools import count
 
 
-def xarray_asset() -> xr.DataArray:
-    return xr.DataArray(
-        np.ones((3, 4, 5), dtype=float),
-        dims=["x", "y", "z"],
-        coords={"x": np.arange(0, 3, 1), "y": np.arange(0, 4, 1), "z": np.arange(0, 5, 1)},
-    )
+def counter(start: int) -> int:
+    return count(start)
 
 
-def db_connection() -> sqlite3.Connection:
-    """
-    in-memory database connection
-    """
-    conn = sqlite3.connect(":memory:")
+class Counter:
+    def __init__(self, start: int = 0) -> None:
+        self.start = start
+        self._current = start
+        self.counter = count(start)
 
-    cursor = conn.cursor()
-    cursor.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
-    cursor.execute("INSERT INTO users(name)" "VALUES (?)", ["Hannah Montana"])
-    conn.commit()
-    return conn
+    def __next__(self) -> int:
+        self._current = next(self.counter)
+        return self._current
+
+    @property
+    def current(self) -> int:
+        return self._current

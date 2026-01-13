@@ -143,11 +143,6 @@ class Now:
         return f"{prefix}{self.now.isoformat()}"
 
 
-def array_add_to_left(left: xr.DataArray, right: xr.DataArray) -> xr.DataArray:
-    left += right
-    return left
-
-
 class CountSourceDecor:
     def __init__(self, start: int = 0) -> None:
         self.gen = count(start=start)
@@ -161,10 +156,6 @@ def input_party(
     one: int, two: float, three: str, four: bool, five: list, six: dict, seven: set
 ) -> A[bool, Name("works")]:
     return True
-
-
-def read_db(conn: sqlite3.Connection) -> A[tuple[int, str], Name("payload")]:
-    return conn.cursor().execute("SELECT * FROM users").fetchone()
 
 
 def long_add(value: float) -> float:
@@ -202,3 +193,7 @@ class StatefulMultiply:
         value = left * right * self.current
         self.current += 1
         return value
+
+
+def get_next(generator: Generator) -> A[int, Name("next")]:
+    return next(generator)

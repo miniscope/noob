@@ -48,7 +48,7 @@ class AssetSpecification(BaseModel):
     """The scope of the asset. See :class:`.AssetScope`"""
     params: dict | None = None
     """Initialization parameters"""
-    depends: list[AbsoluteIdentifier] | None = None
+    depends: AbsoluteIdentifier | None = None
     """
     Roundtrip dependency. Should point to the last node in a given 
     epoch that manipulates the asset.

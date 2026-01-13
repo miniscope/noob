@@ -1,0 +1,19 @@
+noob_id: testing-func-asset
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
+
+assets:
+  counter:
+    type: noob.testing.counter
+    params:
+      start: 1
+    scope: process
+
+nodes:
+  increment:
+    type: noob.testing.get_next
+    depends:
+      - generator: assets.counter
+  return:
+    type: return
+    depends: assets.counter
