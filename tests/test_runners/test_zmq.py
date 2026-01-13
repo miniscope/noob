@@ -86,6 +86,11 @@ async def test_statefulness():
         runner.command.add_callback("inbox", _event_cb)
         # skip first epoch
         runner.command.process(1, input={"multiply": 3})
+
+        # the fine-grain event assertions have been commented out here
+        # pending a migration of zmqrunner to async
+        # waiting seems to screw up the
+
         # start = time()
         # while len(events) < 1 and time() - start < 1:
         #     await sleep(0.1)
