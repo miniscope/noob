@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any, cast
 
+from noob.asset import AssetScope
 from noob.input import InputScope
 from noob.node import Node, Return
 from noob.runner.base import TubeRunner
@@ -90,6 +91,8 @@ class AsyncRunner(TubeRunner):
         if not self._running.is_set():
             await self.init()
 
+        self.tube.state.init_assets(AssetScope.process)
+
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
         self.store.clear()
 
@@ -113,6 +116,7 @@ class AsyncRunner(TubeRunner):
                     # graph autogenerates "assets" node if something depends on it
                     scheduler.done(epoch, node_id)
                     continue
+                self.tube.state.init_assets(AssetScope.node)
                 node = self.tube.nodes[node_id]
                 if not node.enabled:
                     # nodes can be in the graph while disabled if something else depends on them

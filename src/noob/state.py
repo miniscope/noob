@@ -1,29 +1,8 @@
-from typing import Self
-
 from pydantic import BaseModel, Field
 
-from noob.asset import Asset, AssetSpecification
+from noob.asset import Asset, AssetScope, AssetSpecification
 from noob.node.base import Edge
 from noob.types import PythonIdentifier
-
-
-class StateSpecification(BaseModel):
-    """
-    Configuration for the assets within a :class:`.State`.
-
-    Representation of the yaml-form of a :class:`.State`.
-    Converted to the runtime-form with :meth:`.State.from_specification`.
-
-    Not much, if any validation is performed here on the whole :class:`.State` except
-    that the assets have the correct fields, ignoring validity of
-    e.g. type mismatches.
-    Those require importing and introspecting the specified assets classes,
-    which should only happen when we try and instantiate the :class:`.State` -
-    this class is just a carrier for the yaml spec.
-    """
-
-    assets: dict[str, AssetSpecification] = Field(default_factory=dict)
-    """The assets that this :class:`.State` configures"""
 
 
 class State(BaseModel):
@@ -39,21 +18,20 @@ class State(BaseModel):
     assets: dict[PythonIdentifier, Asset] = Field(default_factory=dict)
 
     @classmethod
-    def from_specification(cls, spec: StateSpecification) -> Self:
+    def from_specification(cls, specs: dict[str, AssetSpecification]) -> "State":
         """
         Instantiate a :class:`.State` model from its configuration
 
         Args:
-            spec (StateSpecification): the :class:`.State` config to instantiate
+            spec (dict[str, AssetSpecification]): the :class:`.State` config to instantiate
         """
-        assets = cls._init_assets(spec)
+        assets = {spec.id: Asset.from_specification(spec) for spec in specs.values()}
+        return State(assets=assets)
 
-        return cls(assets=assets)
-
-    @classmethod
-    def _init_assets(cls, specs: StateSpecification) -> dict[PythonIdentifier, Asset]:
-        assets = {spec.id: Asset.from_specification(spec) for spec in specs.assets.values()}
-        return assets
+    def init_assets(self, scope: AssetScope) -> None:
+        for asset in self.assets.values():
+            if asset.scope == scope:
+                asset.init()
 
     def get(self, signal: str) -> Asset | None:
         """

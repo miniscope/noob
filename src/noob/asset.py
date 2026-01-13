@@ -13,9 +13,9 @@ PWrap = ParamSpec("PWrap")
 
 
 class AssetScope(StrEnum):
-    runner = "runner"
+    tube = "tube"
     """
-    Asset persists through the entire lifespan of the runner. 
+    Asset persists through the entire lifespan of the tube. 
     Can be modified and passed through different epochs.
     """
     process = "process"

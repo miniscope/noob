@@ -11,12 +11,12 @@ from pydantic import (
     model_validator,
 )
 
-from noob.asset import AssetSpecification
+from noob.asset import AssetScope, AssetSpecification
 from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope, InputSpecification
 from noob.node import Edge, Node, NodeSpecification, Return
 from noob.scheduler import Scheduler
-from noob.state import State, StateSpecification
+from noob.state import State
 from noob.types import ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
@@ -216,9 +216,11 @@ class Tube(BaseModel):
         # adding the input validates presence of required inputs
         input_collection.add_input(InputScope.tube, input)
 
+        state = cls._init_state(spec)
+        state.init_assets(AssetScope.tube)
+
         nodes = cls._init_nodes(spec, input_collection)
         edges = cls._init_edges(spec.nodes, nodes)
-        state = cls._init_state(spec.assets)
         scheduler = cls._init_scheduler(spec.nodes, edges)
 
         return cls.model_validate(
@@ -233,11 +235,6 @@ class Tube(BaseModel):
             },
             context={"skip_input_presence": True},
         )
-
-    @classmethod
-    def _init_state(cls, spec: dict[str, AssetSpecification]) -> State:
-        state_spec = StateSpecification(assets=spec)
-        return State.from_specification(state_spec)
 
     @classmethod
     def _init_nodes(
@@ -262,6 +259,10 @@ class Tube(BaseModel):
     def _init_scheduler(cls, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> Scheduler:
         node_specs = {id_: node for id_, node in nodes.items()}
         return Scheduler.from_specification(node_specs, edges)
+
+    @classmethod
+    def _init_state(cls, spec: TubeSpecification) -> State:
+        return State.from_specification(specs=spec.assets)
 
     @classmethod
     def _init_inputs(cls, spec: TubeSpecification) -> InputCollection:

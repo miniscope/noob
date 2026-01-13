@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from threading import Event as ThreadEvent
 from typing import Any
 
+from noob.asset import AssetScope
 from noob.input import InputScope
 from noob.node import Return
 from noob.runner.base import TubeRunner, call_async_from_sync
@@ -65,6 +66,8 @@ class SynchronousRunner(TubeRunner):
         if not self._running.is_set():
             self.init()
 
+        self.tube.state.init_assets(AssetScope.process)
+
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
         self.store.clear()
 
@@ -83,6 +86,7 @@ class SynchronousRunner(TubeRunner):
                     # but in the sync runner we always have assets and inputs handy
                     scheduler.done(epoch, node_id)
                     continue
+                self.tube.state.init_assets(AssetScope.node)
                 node = self.tube.nodes[node_id]
                 if not node.enabled:
                     # nodes can be in the graph while disabled if something else depends on them
