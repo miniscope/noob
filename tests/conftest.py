@@ -29,7 +29,7 @@ def patch_config_source(monkeypatch_session: MonkeyPatch) -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def patch_env_config(monkeypatch_session: MonkeyPatch, request: pytest.FixtureRequest) -> None:
+def patch_env_config(monkeypatch_session: MonkeyPatch) -> None:
     """Patch env settings, e.g. setting log levels and etc."""
 
     monkeypatch_session.setenv("NOOB_LOGS__LEVEL", "DEBUG")
