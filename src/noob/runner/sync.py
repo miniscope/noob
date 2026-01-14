@@ -37,17 +37,15 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             self.inject_context(node.init)()
 
-        for asset in self.tube.state.assets.values():
-            self.inject_context(asset.init)()
+        self.inject_context(self.tube.state.init_assets)(AssetScope.runner)
 
     def deinit(self) -> None:
         """Stop all nodes processing"""
         # TODO: lock to ensure we've been started
         for node in self.tube.enabled_nodes.values():
-            node.deinit()
+            self.inject_context(node.deinit)()
 
-        for asset in self.tube.state.assets.values():
-            asset.deinit()
+        self.inject_context(self.tube.state.deinit_assets)(AssetScope.runner)
 
         self._running.clear()
 
@@ -86,7 +84,6 @@ class SynchronousRunner(TubeRunner):
                     # but in the sync runner we always have assets and inputs handy
                     scheduler.done(epoch, node_id)
                     continue
-                self.tube.state.init_assets(AssetScope.node)
                 node = self.tube.nodes[node_id]
                 if not node.enabled:
                     # nodes can be in the graph while disabled if something else depends on them
@@ -110,6 +107,8 @@ class SynchronousRunner(TubeRunner):
                 all_events = scheduler.update(events)
                 self._call_callbacks(all_events)
                 self._logger.debug("Node %s emitted %s in epoch %s", node_id, value, epoch)
+                self.tube.state.deinit_assets(AssetScope.node)
+        self.tube.state.deinit_assets(AssetScope.process)
 
         return self.collect_return()
 

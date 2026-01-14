@@ -1,3 +1,5 @@
+from typing import Self
+
 from pydantic import BaseModel, Field
 
 from noob.asset import Asset, AssetScope, AssetSpecification
@@ -29,9 +31,22 @@ class State(BaseModel):
         return cls(assets=assets)
 
     def init_assets(self, scope: AssetScope) -> None:
+        """
+        run :method:`.Asset.init` for assets that correspond to the given scope.
+        Usually means the :class:`.Asset`'s :attr:`.Asset.obj` attribute gets populated.
+        """
         for asset in self.assets.values():
             if asset.scope == scope:
                 asset.init()
+
+    def deinit_assets(self, scope: AssetScope) -> None:
+        """
+        run :method:`.Asset.deinit` for assets that correspond to the given scope.
+        Usually means the :class:`.Asset`'s :attr:`.Asset.obj` attribute is cleared to `None`.
+        """
+        for asset in self.assets.values():
+            if asset.scope == scope:
+                asset.deinit()
 
     def get(self, signal: str) -> Asset | None:
         """

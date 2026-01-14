@@ -7,7 +7,7 @@ assets:
     type: noob.testing.Counter
     params:
       start: 1
-    scope: tube
+    scope: runner
 
 nodes:
   increment:

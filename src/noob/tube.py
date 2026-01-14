@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from noob.asset import AssetScope, AssetSpecification
+from noob.asset import AssetSpecification
 from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope, InputSpecification
 from noob.node import Edge, Node, NodeSpecification, Return
@@ -217,7 +217,6 @@ class Tube(BaseModel):
         input_collection.add_input(InputScope.tube, input)
 
         state = cls._init_state(spec)
-        state.init_assets(AssetScope.tube)
 
         nodes = cls._init_nodes(spec, input_collection)
         edges = cls._init_edges(spec.nodes, nodes)

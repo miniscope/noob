@@ -1,7 +1,7 @@
 from itertools import count
 
 
-def counter(start: int) -> count[int]:
+def counter(start: int) -> count:
     return count(start)
 
 

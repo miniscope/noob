@@ -5,7 +5,7 @@ from typing import Any, Generic, ParamSpec, Self, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from noob.types import AbsoluteIdentifier, PythonIdentifier
+from noob.types import AbsoluteIdentifier, DependencyIdentifier, PythonIdentifier
 from noob.utils import resolve_python_identifier
 
 TOutput = TypeVar("TOutput")
@@ -13,9 +13,9 @@ PWrap = ParamSpec("PWrap")
 
 
 class AssetScope(StrEnum):
-    tube = "tube"
+    runner = "runner"
     """
-    Asset persists through the entire lifespan of the tube. 
+    Asset persists through the entire lifespan of the runner. 
     Can be modified and passed through different epochs.
     """
     process = "process"
@@ -53,7 +53,7 @@ class AssetSpecification(BaseModel):
     Roundtrip dependency. Should point to the last node in a given 
     epoch that manipulates the asset.
     
-    May only be used with scope == "tube"
+    May only be used with scope == "runner"
     
     Typically this is used with assets that are mutated by multiple nodes in a tube.
     In that case, nodes should use dependencies to structure the order of mutation:
@@ -67,11 +67,11 @@ class AssetSpecification(BaseModel):
     @model_validator(mode="after")
     def validate_depends(self) -> Self:
         """
-        depends can only be used with scope == "tube"
+        depends can only be used with scope == "runner"
         """
-        if self.depends is not None and self.scope != AssetScope.tube:
+        if self.depends is not None and self.scope != AssetScope.runner:
             raise ValueError(
-                f"'depends' must be used with scope 'tube'. Provided scope: {self.scope.value}"
+                f"'depends' must be used with scope 'runner'. Provided scope: {self.scope.value}"
             )
 
         return self

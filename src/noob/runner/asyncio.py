@@ -50,17 +50,15 @@ class AsyncRunner(TubeRunner):
             for node in self.tube.enabled_nodes.values():
                 self.inject_context(node.init)()
 
-            for asset in self.tube.state.assets.values():
-                self.inject_context(asset.init)()
+            self.inject_context(self.tube.state.init_assets)(AssetScope.runner)
 
     async def deinit(self) -> None:
         """Stop all nodes processing"""
         async with self._init_lock:
             for node in self.tube.enabled_nodes.values():
-                node.deinit()
+                self.inject_context(node.deinit)()
 
-            for asset in self.tube.state.assets.values():
-                asset.deinit()
+            self.inject_context(self.tube.state.deinit_assets)(AssetScope.runner)
 
         self._running.clear()
 
@@ -116,7 +114,6 @@ class AsyncRunner(TubeRunner):
                     # graph autogenerates "assets" node if something depends on it
                     scheduler.done(epoch, node_id)
                     continue
-                self.tube.state.init_assets(AssetScope.node)
                 node = self.tube.nodes[node_id]
                 if not node.enabled:
                     # nodes can be in the graph while disabled if something else depends on them
@@ -137,6 +134,8 @@ class AsyncRunner(TubeRunner):
                 future.add_done_callback(partial(self._node_complete, node=node, epoch=epoch))
                 self._pending_futures.add(future)
                 self._logger.debug("Scheduled node %s in epoch %s in eventloop", node_id, epoch)
+                self.tube.state.deinit_assets(AssetScope.node)
+        self.tube.state.deinit_assets(AssetScope.process)
 
         return self.collect_return()
 
