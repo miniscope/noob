@@ -1,9 +1,9 @@
 import inspect
 from collections.abc import Callable
 from enum import StrEnum
-from typing import Any, Generic, ParamSpec, TypeVar
+from typing import Any, Generic, ParamSpec, Self, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from noob.types import AbsoluteIdentifier, PythonIdentifier
 from noob.utils import resolve_python_identifier
@@ -53,7 +53,7 @@ class AssetSpecification(BaseModel):
     Roundtrip dependency. Should point to the last node in a given 
     epoch that manipulates the asset.
     
-    May only be used with scope == "runner"
+    May only be used with scope == "tube"
     
     Typically this is used with assets that are mutated by multiple nodes in a tube.
     In that case, nodes should use dependencies to structure the order of mutation:
@@ -63,6 +63,18 @@ class AssetSpecification(BaseModel):
     The node signal that this asset specification depends on will be the version of the asset
     stored and used in the next processing epoch.
     """
+
+    @model_validator(mode="after")
+    def validate_depends(self) -> Self:
+        """
+        depends can only be used with scope == "tube"
+        """
+        if self.depends is not None and self.scope != AssetScope.tube:
+            raise ValueError(
+                f"'depends' must be used with scope 'tube'. Provided scope: {self.scope.value}"
+            )
+
+        return self
 
 
 class Asset(BaseModel):
