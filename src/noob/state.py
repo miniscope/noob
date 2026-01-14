@@ -18,7 +18,7 @@ class State(BaseModel):
     assets: dict[PythonIdentifier, Asset] = Field(default_factory=dict)
 
     @classmethod
-    def from_specification(cls, specs: dict[str, AssetSpecification]) -> "State":
+    def from_specification(cls, specs: dict[str, AssetSpecification]) -> Self:
         """
         Instantiate a :class:`.State` model from its configuration
 
