@@ -7,28 +7,33 @@ def test_runner_scoped():
     """
     'runner' scoped assets are persistent across process calls
     """
-    tube = Tube.from_specification("testing-class-asset")
+    tube = Tube.from_specification("testing-runner-asset")
     runner = SynchronousRunner(tube=tube)
 
     n = 5
     output = runner.run(n=n)
-    assert all(o is output[0] for o in output)
-    assert output[0].current == n
+    counters = []
+    nexts = []
+    for d in output:
+        counters.append(d["counter"])
+        nexts.append(d["next"])
+    assert nexts == list(range(1, n + 1))
+    assert all(c is counters[0] for c in counters)
 
 
 def test_process_scoped():
     """
     'process' scoped assets are recreated every process call.
-    however, a given asset is shared by nodes within a single process call.
+    However, a given asset is shared by nodes within a single process call.
     """
-    tube = Tube.from_specification("testing-func-asset")
+    tube = Tube.from_specification("testing-process-asset")
     runner = SynchronousRunner(tube=tube)
 
     runner.init()
     for _ in range(5):
         output = runner.process()
-        curr_val = output.__reduce__()[1][0]
-        assert curr_val == 2
+        assert output["next"] == 1  # renewed each process call
+        assert next(output["counter"]) == 2  # but shared among nodes
 
 
 @pytest.mark.xfail(raises=NotImplementedError)

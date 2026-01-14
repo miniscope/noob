@@ -193,6 +193,5 @@ class StatefulMultiply:
         return value
 
 
-def get_next(generator: Generator) -> A[Generator[int], Name("next")]:
-    _ = next(generator)
-    return generator
+def get_next(generator: Generator) -> tuple[A[int, Name("next")]]:
+    return next(generator)

@@ -1,4 +1,4 @@
-noob_id: testing-class-asset
+noob_id: testing-runner-asset
 noob_model: noob.tube.TubeSpecification
 noob_version: 0.1.1.dev86+gcf9e11b.d20250725
 
@@ -16,4 +16,6 @@ nodes:
       - generator: assets.counter
   return:
     type: return
-    depends: increment.next
+    depends:
+      - next: increment.next
+      - counter: assets.counter
