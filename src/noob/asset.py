@@ -88,9 +88,12 @@ class Asset(BaseModel):
     """The scope of the asset. See :class:`.AssetScope`"""
     params: dict[str, Any] = Field(default_factory=dict)
     """Initialization parameters"""
-
+    depends: DependencyIdentifier | None
+    """The signal that this asset gets updated by. See :attr:`.AssetSpecification.depends`"""
     obj: Any | None = None
     """Instantiated asset instance"""
+    depends_satisfied_epoch: int | None = None
+    """The latest epoch whose node that the asset depends on has finished execution"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -126,16 +129,21 @@ class Asset(BaseModel):
 
         params = spec.params if spec.params is not None else {}
         scope = spec.scope
+        depends = spec.depends if spec.depends is not None else None
 
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Asset):
-                return obj(id=spec.id, spec=spec, **params)
+                return obj(id=spec.id, spec=spec, scope=scope, depends=depends, **params)
             else:
-                return WrapClassAsset(id=spec.id, cls=obj, spec=spec, params=params, scope=scope)
+                return WrapClassAsset(
+                    id=spec.id, cls=obj, spec=spec, params=params, scope=scope, depends=depends
+                )
         else:
-            return WrapFuncAsset(id=spec.id, fn=obj, spec=spec, params=params, scope=scope)
+            return WrapFuncAsset(
+                id=spec.id, fn=obj, spec=spec, params=params, scope=scope, depends=depends
+            )
 
     def update(self, obj: Any) -> None:
         self.obj = obj

@@ -1,0 +1,37 @@
+noob_id: testing-depends-asset
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
+
+assets:
+  counter:
+    type: noob.testing.counter
+    params:
+      start: 0
+    scope: runner
+    depends: rewind.skrittt
+
+
+nodes:
+  jump:
+    type: noob.testing.jump
+    params:
+      n: 2
+    depends:
+      - generator: assets.counter  # make sure it runs after previous epoch's rewind
+  rewind:
+    type: noob.testing.rewind
+    params:
+      n: 1
+    depends:
+      - generator: jump.skirttt  # make sure all asset uses after this node is copied?
+  return:
+    type: return
+    depends:
+      - from_asset: assets.counter
+      - from_node: rewind.skrittt
+#  for_fun:
+#    type: noob.testing.rewind
+#    params:
+#      n: 100
+#    depends:
+#      - generator: rewind.skrittt

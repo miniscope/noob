@@ -193,5 +193,18 @@ class StatefulMultiply:
         return value
 
 
-def get_next(generator: Generator) -> tuple[A[int, Name("next")]]:
-    return next(generator)
+def fast_forward(generator: count, n: int = 1) -> tuple[A[int, Name("next")]]:
+    for i in range(n):
+        val = next(generator)
+    return val
+
+
+def jump(generator: count, n: int = 1) -> A[int, Name("skirttt")]:
+    for i in range(n):
+        _ = next(generator)
+    return generator
+
+
+def rewind(generator: count, n: int = 1) -> tuple[A[int, Name("skrittt")]]:
+    """Purposely designed to diverge inplace change and output"""
+    return count(next(generator) - n)

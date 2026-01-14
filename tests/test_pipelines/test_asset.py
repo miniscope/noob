@@ -42,3 +42,26 @@ def test_node_scoped():
     new object created each time, ensure object ids are all different
     """
     raise NotImplementedError()
+
+
+def test_asset_depends():
+    """
+    a tube-scoped asset can have a depends key,
+    which functions to support inter-epoch dependency
+    i.e. asset should not be used in an epoch
+    if the last asset-modifying node of the previous epoch has not finished processing.
+    """
+    tube = Tube.from_specification("testing-depends-asset")
+    runner = SynchronousRunner(tube=tube)
+
+    n = 5
+    runner.init()
+
+    prev_asset = None
+
+    for epoch in range(n):
+        out = runner.process()
+        assert out["from_asset"] == out["from_node"]
+        if prev_asset is not None:
+            assert prev_asset is runner.store.events[epoch]["jump"]["skirttt"][0]["value"]
+        prev_asset = out["from_asset"]

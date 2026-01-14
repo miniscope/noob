@@ -104,6 +104,7 @@ class SynchronousRunner(TubeRunner):
                 events = self.store.add_value(node.signals, value, node_id, epoch)
                 if events is None:
                     continue
+                self.tube.state.update(events)
                 all_events = scheduler.update(events)
                 self._call_callbacks(all_events)
                 self._logger.debug("Node %s emitted %s in epoch %s", node_id, value, epoch)

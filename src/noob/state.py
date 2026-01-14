@@ -3,8 +3,9 @@ from typing import Self
 from pydantic import BaseModel, Field
 
 from noob.asset import Asset, AssetScope, AssetSpecification
+from noob.event import Event
 from noob.node.base import Edge
-from noob.types import PythonIdentifier
+from noob.types import PythonIdentifier, DependencyIdentifier
 
 
 class State(BaseModel):
@@ -18,6 +19,11 @@ class State(BaseModel):
     """
 
     assets: dict[PythonIdentifier, Asset] = Field(default_factory=dict)
+    dependencies: dict[DependencyIdentifier, PythonIdentifier] = Field(default_factory=dict)
+    """
+    Map from node signals that assets depend on to the asset ids. 
+    See :attr:`.AssetSpecification.depends`
+    """
 
     @classmethod
     def from_specification(cls, specs: dict[str, AssetSpecification]) -> Self:
@@ -28,7 +34,8 @@ class State(BaseModel):
             spec (dict[str, AssetSpecification]): the :class:`.State` config to instantiate
         """
         assets = {spec.id: Asset.from_specification(spec) for spec in specs.values()}
-        return cls(assets=assets)
+        dependencies = {spec.depends: spec.id for spec in specs.values()}
+        return cls(assets=assets, dependencies=dependencies)
 
     def init_assets(self, scope: AssetScope) -> None:
         """
@@ -47,19 +54,6 @@ class State(BaseModel):
         for asset in self.assets.values():
             if asset.scope == scope:
                 asset.deinit()
-
-    def get(self, signal: str) -> Asset | None:
-        """
-        Get the event with the matching node_id and signal name
-
-        Returns the most recent matching event, as for now we assume that
-        each combination of `node_id` and `signal` is emitted only once per processing cycle,
-        and we assume processing cycles are independent (and thus our events are cleared)
-
-        ``None`` in the case that the event has not been emitted
-        """
-        asset = [val for key, val in self.assets.items() if key == signal]
-        return None if len(asset) == 0 else asset[-1]
 
     def collect(self, edges: list[Edge]) -> dict | None:
         """
@@ -85,11 +79,18 @@ class State(BaseModel):
                     "Must set signal name when depending on an asset "
                     "(assets have no generic 'value' signal)"
                 )
-                asset = self.get(edge.source_signal)
-                obj = None if asset is None else asset.obj
-                args[edge.target_slot] = obj
+                args[edge.target_slot] = self.assets[edge.source_signal].obj
 
         return None if not args or all(val is None for val in args.values()) else args
+
+    def update(self, events: list[Event]) -> None:
+        """Update asset if asset depends on a node signal"""
+        if self.dependencies:
+            for event in events:
+                signal = ".".join((event["node_id"], event["signal"]))
+                asset_id = self.dependencies.get(signal)
+                if asset_id is not None:
+                    self.assets[asset_id].obj = event["value"]
 
     def clear(self) -> None:
         """
