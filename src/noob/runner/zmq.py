@@ -402,7 +402,7 @@ class NodeRunner(EventloopMixin):
         finally:
             runner.deinit()
 
-    def await_inputs(self) -> Generator[tuple[list[Any], dict[str, Any], int]]:
+    def await_inputs(self) -> Generator[tuple[tuple[Any], dict[str, Any], int]]:
         self._node = cast(Node, self._node)
         while not self._process_quitting.is_set():
             # if we are not freerunning, keep track of how many times we are supposed to run,

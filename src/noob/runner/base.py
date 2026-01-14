@@ -63,7 +63,6 @@ class TubeRunner(ABC):
             self._runner_id = f"{hasher.hexdigest()}.{self.tube.tube_id}"
         return self._runner_id
 
-    @abstractmethod
     def process(self, **kwargs: Any) -> ReturnNodeType:
         """
         Process one step of data from each of the sources,
@@ -73,7 +72,45 @@ class TubeRunner(ABC):
         except when using the special :class:`.Return` node
 
         Process-scoped ``input`` s can be passed as kwargs.
+
+        The Base process method is implemented as a series of lifecycle methods and hooks
+        corresponding to different stages of a process call.
+        Subclasses may override each of these methods to customize runner behavior.
+        Subclasses may also override the :meth:`.TubeRunner.process` method itself,
+        but must ensure that the phases of the base process method are executed.
+
+        The methods invoked, in order (see docstrings for each for further explanation)
+
+        * :meth:`._validate_input`
+        * :meth:`._before_process`
+        * :meth:`._filter_ready`
+        * :meth:`._get_node`
+        * :meth:`._collect_input`
+        * :meth:`._before_call_node`
+        * :meth:`._call_node`
+        * :meth:`._after_call_node`
+        * :meth:`._handle_events`
+        * :meth:`._after_process`
+        * :meth:`.collect_return`
+
         """
+        input = self._validate_input(**kwargs)
+        self._before_process()
+
+        while self.tube.scheduler.is_active():
+            ready = self.tube.scheduler.get_ready()
+            ready = self._filter_ready(ready, self.tube.scheduler)
+            for node_info in ready:
+                node_id, epoch = node_info["value"], node_info["epoch"]
+                node = self._get_node(node_id)
+                args, kwargs = self._collect_input(node, epoch, input)
+                node, args, kwargs = self._before_call_node(node, *args, **kwargs)
+                value = self._call_node(node, *args, **kwargs)
+                node, value = self._after_call_node(node, value)
+                self._handle_events(node, value, epoch)
+
+        self._after_process()
+        return self.collect_return()
 
     @abstractmethod
     def init(self) -> None | Coroutine:
@@ -203,7 +240,7 @@ class TubeRunner(ABC):
 
     def _collect_input(
         self, node: Node, epoch: int, input: dict | None = None
-    ) -> tuple[list[Any], dict[PythonIdentifier, Any]]:
+    ) -> tuple[tuple, dict[PythonIdentifier, Any]]:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
 
@@ -213,7 +250,7 @@ class TubeRunner(ABC):
             None: if no input is available
         """
         if not node.spec or not node.spec.depends:
-            return [], {}
+            return tuple(), {}
         if input is None:
             input = {}
 
@@ -234,6 +271,14 @@ class TubeRunner(ABC):
 
         return args, kwargs
 
+    def _before_call_node(self, node: Node, *args: Any, **kwargs: Any) -> tuple[Node, tuple, dict]:
+        """
+        Hook to modify behavior before calling the node.
+
+        Default is no-op
+        """
+        return node, args, kwargs
+
     def _call_node(self, node: Node, *args: Any, **kwargs: Any) -> Any:
         """
         Call a node's process method with provided args and kwargs,
@@ -249,16 +294,39 @@ class TubeRunner(ABC):
         else:
             return node.process(*args, **kwargs)
 
-    def _store_events(
+    def _after_call_node(self, node: Node, value: Any) -> tuple[Node, Any]:
+        """
+        Hook to modify behavior after calling the node
+        """
+        return node, value
+
+    def _handle_events(
         self, node: Node, value: Any, epoch: int
     ) -> MutableSequence[Event] | MutableSequence[Event | MetaEvent]:
         """
-        Store events in the :class:`.EventStore` and update the scheduler,
-        Accepting raw node return values and returning finished Events
-        """
+        After calling a node, handle its return value:
 
+        This method must
+
+        * Convert raw returned values to events
+        * Store events to make them available to other nodes, as needed
+        * Update the scheduler
+        * Call any callbacks with the resultant events
+
+        The base implementation
+
+        * calls :meth:`.EventStore.add_value` to create events
+        * calls :meth:`.Scheduler.update` to update the scheduler
+        * calls :meth:`._call_callbacks` to emit events to callbacks
+
+        However other implementations may perform the responsibilities asynchronously
+        e.g. via futures, see :class:`.AsyncIORunner` for an example.
+        """
         events = self.store.add_value(node.signals, value, node.id, epoch)
-        return self.tube.scheduler.update(events)
+        events_and_metaevents = self.tube.scheduler.update(events)
+        self._call_callbacks(events_and_metaevents)
+        self._logger.debug("Node %s emitted %s in epoch %s", node.id, value, epoch)
+        return events_and_metaevents
 
     @abstractmethod
     def collect_return(self, epoch: int | None = None) -> ReturnNodeType:

@@ -58,28 +58,12 @@ class SynchronousRunner(TubeRunner):
     def process(self, **kwargs: Any) -> ReturnNodeType:
         """
         Iterate through nodes in topological order,
-        calling their process method and passing events as they are emitted.
+        synchronously calling their process method and passing events as they are emitted.
 
         Process-scoped ``input`` s can be passed as kwargs.
         """
-        input = self._validate_input(**kwargs)
-        self._before_process()
-
-        while self.tube.scheduler.is_active():
-            ready = self.tube.scheduler.get_ready()
-            ready = self._filter_ready(ready, self.tube.scheduler)
-            for node_info in ready:
-                node_id, epoch = node_info["value"], node_info["epoch"]
-                node = self._get_node(node_id)
-                args, kwargs = self._collect_input(node, epoch, input)
-                value = self._call_node(node, *args, **kwargs)
-                events = self._store_events(node, value, epoch)
-                self._call_callbacks(events)
-                self._logger.debug("Node %s emitted %s in epoch %s", node_id, value, epoch)
-
-        self._after_process()
-
-        return self.collect_return()
+        # mostly overriding to set the docstring
+        return super().process(**kwargs)
 
     def _before_process(self) -> None:
         """
