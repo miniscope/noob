@@ -26,7 +26,7 @@ class State(BaseModel):
             spec (dict[str, AssetSpecification]): the :class:`.State` config to instantiate
         """
         assets = {spec.id: Asset.from_specification(spec) for spec in specs.values()}
-        return State(assets=assets)
+        return cls(assets=assets)
 
     def init_assets(self, scope: AssetScope) -> None:
         for asset in self.assets.values():
