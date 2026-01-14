@@ -32,8 +32,8 @@ class State(BaseModel):
 
     def init_assets(self, scope: AssetScope) -> None:
         """
-        run :method:`.Asset.init` for assets that correspond to the given scope.
-        Usually means the :class:`.Asset`'s :attr:`.Asset.obj` attribute gets populated.
+        run :meth:`.Asset.init` for assets that correspond to the given scope.
+        Usually means that :attr:`.Asset.obj` attribute gets populated.
         """
         for asset in self.assets.values():
             if asset.scope == scope:
@@ -41,8 +41,8 @@ class State(BaseModel):
 
     def deinit_assets(self, scope: AssetScope) -> None:
         """
-        run :method:`.Asset.deinit` for assets that correspond to the given scope.
-        Usually means the :class:`.Asset`'s :attr:`.Asset.obj` attribute is cleared to `None`.
+        run :meth:`.Asset.deinit` for assets that correspond to the given scope.
+        Usually means that :attr:`.Asset.obj` attribute is cleared to `None`.
         """
         for asset in self.assets.values():
             if asset.scope == scope:

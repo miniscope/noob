@@ -5,9 +5,7 @@ from noob import SynchronousRunner, Tube
 
 def test_runner_scoped():
     """
-    say we have an asset that just provides an integer, and the node just increments it.
-    we should be able to call Runner.process multiple times, and the asset should
-    increment without resetting.
+    'runner' scoped assets are persistent across process calls
     """
     tube = Tube.from_specification("testing-class-asset")
     runner = SynchronousRunner(tube=tube)
@@ -20,9 +18,8 @@ def test_runner_scoped():
 
 def test_process_scoped():
     """
-    same setup as above, except we should get back the same integer each time
-    (it is reset between process calls, but also test that it is mutable within a
-    process call - e.g. if we had two nodes that increment the value, it should return 2)
+    'process' scoped assets are recreated every process call.
+    however, a given asset is shared by nodes within a single process call.
     """
     tube = Tube.from_specification("testing-func-asset")
     runner = SynchronousRunner(tube=tube)
