@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from noob.asset import Asset, AssetScope, AssetSpecification
 from noob.event import Event
 from noob.node.base import Edge
-from noob.types import PythonIdentifier, DependencyIdentifier
+from noob.types import DependencyIdentifier, PythonIdentifier
 
 
 class State(BaseModel):
