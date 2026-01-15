@@ -92,7 +92,7 @@ class Asset(BaseModel):
     """The signal that this asset gets updated by. See :attr:`.AssetSpecification.depends`"""
     obj: Any | None = None
     """Instantiated asset instance"""
-    depends_satisfied_epoch: int | None = None
+    depends_satisfied_epoch: int = -1
     """The latest epoch whose node that the asset depends on has finished execution"""
 
     model_config = ConfigDict(extra="forbid")
@@ -145,8 +145,10 @@ class Asset(BaseModel):
                 id=spec.id, fn=obj, spec=spec, params=params, scope=scope, depends=depends
             )
 
-    def update(self, obj: Any) -> None:
-        self.obj = obj
+    def update(self, value: Any, epoch: int) -> None:
+        self.obj = value
+        if self.depends:
+            self.depends_satisfied_epoch = epoch
 
 
 T = TypeVar("T")

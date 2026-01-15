@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Self
 
 from pydantic import BaseModel, Field
@@ -34,7 +35,9 @@ class State(BaseModel):
             spec (dict[str, AssetSpecification]): the :class:`.State` config to instantiate
         """
         assets = {spec.id: Asset.from_specification(spec) for spec in specs.values()}
-        dependencies = {spec.depends: spec.id for spec in specs.values()}
+        dependencies = {
+            spec.depends: spec.id for spec in specs.values() if spec.depends is not None
+        }
         return cls(assets=assets, dependencies=dependencies)
 
     def init_assets(self, scope: AssetScope) -> None:
@@ -55,7 +58,7 @@ class State(BaseModel):
             if asset.scope == scope:
                 asset.deinit()
 
-    def collect(self, edges: list[Edge]) -> dict | None:
+    def collect(self, edges: list[Edge], epoch: int) -> dict | None:
         """
         Gather events into a form that can be consumed by a :meth:`.Node.process` method,
         given the collection of inbound edges (usually from :meth:`.Tube.in_edges` ).
@@ -79,7 +82,24 @@ class State(BaseModel):
                     "Must set signal name when depending on an asset "
                     "(assets have no generic 'value' signal)"
                 )
-                args[edge.target_slot] = self.assets[edge.source_signal].obj
+                asset = self.assets[edge.source_signal]
+                if not asset.depends:
+                    args[edge.target_slot] = asset.obj
+                else:
+                    if epoch == asset.depends_satisfied_epoch + 1:
+                        # asset dependency is not satisfied yet
+                        args[edge.target_slot] = asset.obj
+                    elif epoch == asset.depends_satisfied_epoch:
+                        # asset dependency has been satisfied,
+                        # so we don't want to mutate asset anymore
+                        # ideally i'd like to convert whatever this is
+                        # to a copy-on-write object, but it doesn't seem possible.
+                        # https://stackoverflow.com/questions/12359366/python-copy-on-write-behavior
+                        args[edge.target_slot] = deepcopy(asset.obj)
+                    else:
+                        # wrong order of epoch.
+                        # wait until the correct epoch call comes in.
+                        return None
 
         return None if not args or all(val is None for val in args.values()) else args
 
@@ -90,7 +110,7 @@ class State(BaseModel):
                 signal = ".".join((event["node_id"], event["signal"]))
                 asset_id = self.dependencies.get(signal)
                 if asset_id is not None:
-                    self.assets[asset_id].obj = event["value"]
+                    self.assets[asset_id].update(value=event["value"], epoch=event["epoch"])
 
     def clear(self) -> None:
         """

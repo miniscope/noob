@@ -179,7 +179,7 @@ class TubeRunner(ABC):
         inputs: dict[PythonIdentifier, Any] = {}
 
         self.tube.state.init_assets(AssetScope.node)
-        state_inputs = self.tube.state.collect(edges)
+        state_inputs = self.tube.state.collect(edges, epoch)
         inputs |= state_inputs if state_inputs else inputs
 
         event_inputs = self.store.collect(edges, epoch)

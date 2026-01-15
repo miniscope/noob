@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import pytest
 
 from noob import SynchronousRunner, Tube
@@ -61,7 +63,25 @@ def test_asset_depends():
 
     for epoch in range(n):
         out = runner.process()
-        assert out["from_asset"] == out["from_node"]
+        assert next(deepcopy(out["from_asset"])) == next(deepcopy(out["from_node"]))
         if prev_asset is not None:
             assert prev_asset is runner.store.events[epoch]["jump"]["skirttt"][0]["value"]
-        prev_asset = out["from_asset"]
+        prev_asset = runner.tube.state.assets["counter"].obj
+
+
+@pytest.mark.xfail(raises=NotImplementedError)
+def test_asset_depends_ooo():
+    """
+    when a wrong order epoch begins,
+    the asset should not be injected to the node,
+    hanging the process call.
+    """
+    raise NotImplementedError()
+
+
+@pytest.mark.xfail(raises=NotImplementedError)
+def test_asset_copy_post_depends():
+    """
+    make sure the asset is copied when injected to nodes
+    after the asset's dependency has been satisfied
+    """
