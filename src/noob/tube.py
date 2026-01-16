@@ -216,11 +216,11 @@ class Tube(BaseModel):
         # adding the input validates presence of required inputs
         input_collection.add_input(InputScope.tube, input)
 
-        state = cls._init_state(spec)
-
         nodes = cls._init_nodes(spec, input_collection)
         edges = cls._init_edges(spec.nodes, nodes)
         scheduler = cls._init_scheduler(spec.nodes, edges)
+
+        state = cls._init_state(spec, edges)
 
         return cls.model_validate(
             {
@@ -260,8 +260,8 @@ class Tube(BaseModel):
         return Scheduler.from_specification(node_specs, edges)
 
     @classmethod
-    def _init_state(cls, spec: TubeSpecification) -> State:
-        return State.from_specification(specs=spec.assets)
+    def _init_state(cls, spec: TubeSpecification, edges: list[Edge]) -> State:
+        return State.from_specification(specs=spec.assets, edges=edges)
 
     @classmethod
     def _init_inputs(cls, spec: TubeSpecification) -> InputCollection:

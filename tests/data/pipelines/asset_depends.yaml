@@ -6,32 +6,36 @@ assets:
   counter:
     type: noob.testing.counter
     params:
-      start: 0
+      start: 1
     scope: runner
-    depends: rewind.skrittt
-
+    depends: go_to_asset.skirttt
 
 nodes:
-  jump:
-    type: noob.testing.jump
-    params:
-      n: 2
-    depends:
-      - generator: assets.counter  # make sure it runs after previous epoch's rewind
-  rewind:
-    type: noob.testing.rewind
+  increment:
+    type: noob.testing.fast_forward
     params:
       n: 1
     depends:
-      - generator: jump.skirttt  # make sure all asset uses after this node is copied?
-  return:
-    type: return
+      - generator: assets.counter
+  more_increment:
+    type: noob.testing.fast_forward
     depends:
-      - from_asset: assets.counter
-      - from_node: rewind.skrittt
-#  for_fun:
-#    type: noob.testing.rewind
-#    params:
-#      n: 100
-#    depends:
-#      - generator: rewind.skrittt
+      - generator: assets.counter
+      - n: increment.next
+  multiply:
+    type: noob.testing.multiply
+    params:
+      left: 0
+    depends:
+      - right: more_increment.next
+  go_to_asset:
+    type: noob.testing.jump
+    depends:
+      - n: multiply.value
+      - generator: assets.counter
+  post_depends:
+    type: noob.testing.rewind
+    params:
+      n: -100
+    depends:
+      - generator: go_to_asset.skirttt

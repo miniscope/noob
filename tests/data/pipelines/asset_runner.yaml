@@ -4,18 +4,32 @@ noob_version: 0.1.1.dev86+gcf9e11b.d20250725
 
 assets:
   counter:
-    type: noob.testing.Counter
+    type: noob.testing.counter
     params:
       start: 1
     scope: runner
+    depends: go_to_asset.skirttt
 
 nodes:
   increment:
     type: noob.testing.fast_forward
+    params:
+      n: 1
     depends:
       - generator: assets.counter
-  return:
-    type: return
+  more_increment:
+    type: noob.testing.fast_forward
     depends:
-      - next: increment.next
-      - counter: assets.counter
+      - generator: assets.counter
+      - n: increment.next
+  multiply:
+    type: noob.testing.multiply
+    params:
+      left: 0
+    depends:
+      - right: more_increment.next
+  go_to_asset:
+    type: noob.testing.jump
+    depends:
+      - n: multiply.value
+      - generator: assets.counter

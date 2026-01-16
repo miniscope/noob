@@ -1,5 +1,3 @@
-from copy import deepcopy
-
 import pytest
 
 from noob import SynchronousRunner, Tube
@@ -12,15 +10,12 @@ def test_runner_scoped():
     tube = Tube.from_specification("testing-runner-asset")
     runner = SynchronousRunner(tube=tube)
 
-    n = 5
-    output = runner.run(n=n)
-    counters = []
-    nexts = []
-    for d in output:
-        counters.append(d["counter"])
-        nexts.append(d["next"])
-    assert nexts == list(range(1, n + 1))
-    assert all(c is counters[0] for c in counters)
+    runner.init()
+    for i in range(5):
+        runner.process()
+        store = runner.store.events[i]
+        assert store["increment"]["next"][0]["value"] == 2 ** (i + 1) - 1
+        assert store["more_increment"]["next"][0]["value"] == 2 * (2 ** (i + 1) - 1)
 
 
 def test_process_scoped():
@@ -32,41 +27,26 @@ def test_process_scoped():
     runner = SynchronousRunner(tube=tube)
 
     runner.init()
-    for _ in range(5):
-        output = runner.process()
-        assert output["next"] == 1  # renewed each process call
-        assert next(output["counter"]) == 2  # but shared among nodes
+    for i in range(5):
+        runner.process()
+        store = runner.store.events[i]
+        assert store["increment"]["next"][0]["value"] == 3  # renewed each process call
+        assert store["more_increment"]["next"][0]["value"] == 6  # but shared among nodes
 
 
-@pytest.mark.xfail(raises=NotImplementedError)
 def test_node_scoped():
     """
-    new object created each time, ensure object ids are all different
+    new object created each time asset is called by a node.
     """
-    raise NotImplementedError()
-
-
-def test_asset_depends():
-    """
-    a tube-scoped asset can have a depends key,
-    which functions to support inter-epoch dependency
-    i.e. asset should not be used in an epoch
-    if the last asset-modifying node of the previous epoch has not finished processing.
-    """
-    tube = Tube.from_specification("testing-depends-asset")
+    tube = Tube.from_specification("testing-node-asset")
     runner = SynchronousRunner(tube=tube)
 
-    n = 5
     runner.init()
-
-    prev_asset = None
-
-    for epoch in range(n):
-        out = runner.process()
-        assert next(deepcopy(out["from_asset"])) == next(deepcopy(out["from_node"]))
-        if prev_asset is not None:
-            assert prev_asset is runner.store.events[epoch]["jump"]["skirttt"][0]["value"]
-        prev_asset = runner.tube.state.assets["counter"].obj
+    for i in range(5):
+        runner.process()
+        store = runner.store.events[i]
+        assert store["increment"]["next"][0]["value"] == 3
+        assert store["more_increment"]["next"][0]["value"] == 3
 
 
 @pytest.mark.xfail(raises=NotImplementedError)
@@ -79,9 +59,29 @@ def test_asset_depends_ooo():
     raise NotImplementedError()
 
 
-@pytest.mark.xfail(raises=NotImplementedError)
 def test_asset_copy_post_depends():
     """
     make sure the asset is copied when injected to nodes
-    after the asset's dependency has been satisfied
+    that are of later generations than the asset's dependency
+    within the same epoch.
+
+    The spec is identical to :func:`.test_runner_scoped`,
+    except an additional node after the `go_to_asset` node,
+    which takes the asset output and modifies it.
+    The asset mutation within this last node
+    should have no effect on the pre-asset-depends nodes
+    (`increment` and `more_increment`) of the following epoch.
     """
+    tube = Tube.from_specification("testing-depends-asset")
+    runner = SynchronousRunner(tube=tube)
+
+    runner.init()
+
+    assert set(runner.tube.state.need_copy.keys()) == {"go_to_asset"}
+    for i in range(5):
+        runner.process()
+        store = runner.store.events[i]
+        # identical asset as `depends` returned from the previous epoch
+        assert store["increment"]["next"][0]["value"] == 2 ** (i + 1) - 1
+        # same asset within process
+        assert store["more_increment"]["next"][0]["value"] == 2 * (2 ** (i + 1) - 1)

@@ -1,4 +1,4 @@
-noob_id: testing-process-asset
+noob_id: testing-node-asset
 noob_model: noob.tube.TubeSpecification
 noob_version: 0.1.1.dev86+gcf9e11b.d20250725
 
@@ -7,7 +7,7 @@ assets:
     type: noob.testing.counter
     params:
       start: 1
-    scope: process
+    scope: node
 
 nodes:
   increment:

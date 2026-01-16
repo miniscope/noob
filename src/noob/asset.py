@@ -1,5 +1,6 @@
 import inspect
 from collections.abc import Callable
+from copy import deepcopy
 from enum import StrEnum
 from typing import Any, Generic, ParamSpec, Self, TypeVar
 
@@ -92,8 +93,8 @@ class Asset(BaseModel):
     """The signal that this asset gets updated by. See :attr:`.AssetSpecification.depends`"""
     obj: Any | None = None
     """Instantiated asset instance"""
-    depends_satisfied_epoch: int = -1
-    """The latest epoch whose node that the asset depends on has finished execution"""
+    stored_at: int = -1
+    """The latest epoch the asset was stored at. Only used when depends is not `None`"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -146,9 +147,8 @@ class Asset(BaseModel):
             )
 
     def update(self, value: Any, epoch: int) -> None:
-        self.obj = value
-        if self.depends:
-            self.depends_satisfied_epoch = epoch
+        self.obj = deepcopy(value)
+        self.stored_at = epoch
 
 
 T = TypeVar("T")
