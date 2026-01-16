@@ -168,7 +168,7 @@ def read_db(conn: sqlite3.Connection) -> A[tuple[int, str], Name("payload")]:
 
 
 def long_add(value: float) -> float:
-    sleep(0.5)
+    sleep(0.25)
     return value + 1
 
 

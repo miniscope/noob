@@ -6,6 +6,7 @@ import pytest
 
 from noob import SynchronousRunner, Tube
 from noob.event import Event, MetaEventType
+from noob.exceptions import EpochCompletedError
 from noob.toposort import TopoSorter
 
 
@@ -178,8 +179,9 @@ def test_clear_ended_epochs():
             assert len(scheduler._epochs) == 2
         else:
             assert scheduler[1]
-            with pytest.raises(KeyError):
+            with pytest.raises(EpochCompletedError):
                 _ = scheduler[0]
+            assert len(scheduler._epochs) == 1
 
 
 @pytest.mark.xfail(raises=Empty)

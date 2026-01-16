@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from noob.event import Event
 from noob.store import EventStore
 
@@ -22,3 +24,11 @@ def test_store_get_by_epoch():
     event = store.get(node_id="a", signal="b", epoch=-1)
     assert event
     assert event["epoch"] == 4
+
+
+@pytest.mark.xfail()
+def test_store_iter():
+    """
+    Store can iterate over all events in its nested dictionary
+    """
+    raise NotImplementedError()

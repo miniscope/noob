@@ -3,6 +3,7 @@ Tube runners for running tubes
 """
 
 from collections import defaultdict
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import count
@@ -229,3 +230,10 @@ class EventStore:
                 kwargs[k] = v
         args = [item[1] for item in sorted(args, key=lambda x: x[0])]
         return args, kwargs
+
+    def iter(self) -> Generator[Event, None, None]:
+        """Iterate through all events"""
+        for nodes in self.events.values():
+            for signals in nodes.values():
+                for events in signals.values():
+                    yield from events
