@@ -1,6 +1,5 @@
 import sqlite3
 
-import numpy as np
 # import xarray as xr
 
 
