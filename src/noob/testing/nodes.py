@@ -205,6 +205,6 @@ def jump(generator: count, n: int = 1) -> A[count, Name("skirttt")]:
     return generator
 
 
-def rewind(generator: count, n: int = 1) -> tuple[A[count, Name("skrittt")]]:
+def rewind(generator: count, n: int = 1) -> A[count, Name("skrittt")]:
     """Purposely designed to diverge inplace change and output"""
     return count(next(generator) - n)

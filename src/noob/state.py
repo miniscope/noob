@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from noob.asset import Asset, AssetScope, AssetSpecification
 from noob.event import Event
 from noob.node.base import Edge
-from noob.types import PythonIdentifier, DependencyIdentifier
+from noob.types import DependencyIdentifier, PythonIdentifier
 
 
 class State(BaseModel):
@@ -25,7 +25,9 @@ class State(BaseModel):
     Map from node signals that assets depend on to the asset ids. 
     See :attr:`.AssetSpecification.depends`
     """
-    scope_to_assets: dict[AssetScope, list[Asset]] = Field(default_factory=defaultdict(list))
+    scope_to_assets: dict[AssetScope, list[Asset]] = Field(
+        default_factory=lambda: defaultdict(list)  # type: ignore[arg-type]
+    )
     """
     Map from :class:`.AssetScope` to :class:`.Asset` to circumvent
     querying scope for each asset in :meth:`.State.init_assets` and :meth:`.State.deinit_assets`
@@ -50,7 +52,7 @@ class State(BaseModel):
         }
         node_dependencies = {".".join((e.source_node, e.source_signal)) for e in edges}
         need_copy = {}
-        for signal, asset in asset_dependencies.items():
+        for signal in asset_dependencies:
             need_copy[signal.split(".")[0]] = {signal.split(".")[1]: signal in node_dependencies}
         scope_to_assets = defaultdict(list)
         for asset in assets.values():
