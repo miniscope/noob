@@ -191,3 +191,97 @@ async def test_statelessness():
     assert runner.store.events[2]["a"]["value"][0]["value"] == 7 * 2
     assert runner.store.events[2]["b"]["value"][0]["value"] == 7
     assert runner.store.events[2]["d"]["value"][0]["value"] == 7 * 3 * 3
+
+
+@pytest.mark.asyncio
+async def test_run_freeruns():
+    """
+    When `run` is called, the zmq runner should "freerun" -
+    allow nodes to execute as quickly as they can, whenever their deps are satisfied.
+    """
+    tube = Tube.from_specification("testing-long-add")
+    runner = ZMQRunner(tube)
+
+    # events = []
+    #
+    # def _event_cb(event: Message) -> None:
+    #     nonlocal events
+    #     events.append(event)
+
+    with runner:
+        runner.run()
+        assert runner.running
+        await sleep(0.5)
+        runner.stop()
+
+    # main thing we're testing here is whether we freerun -
+    # i.e. that nodes don't wait for an epoch to complete before running, if they're ready.
+    # so we should have way more events from the source node than from the long_add nodes,
+    # which sleep and take a long time on purpose.
+    # since there are way more long_add nodes than the single count node,
+    # if we ran epoch by epoch, we would expect there to be more non-count events.
+    count_events = []
+    non_count_events = []
+    for event in runner.store.iter():
+        if event["node_id"] == "count":
+            count_events.append(event)
+        else:
+            non_count_events.append(event)
+
+    assert len(count_events) > 0
+    assert len(non_count_events) > 0
+    assert len(count_events) > len(non_count_events)
+    # we should theoretically get only 2 epochs from the long add nodes,
+    # but allow up to 5 in the case of network latency, this is not that important
+    assert len(set(e["epoch"] for e in non_count_events)) < 5
+    # it should be in the hundreds, but all we care about is that it's more than 1 greater
+    # 10 is a good number.
+    assert len(set(e["epoch"] for e in count_events)) > 10
+
+
+@pytest.mark.xfail()
+def test_start_stop():
+    """
+    The runner can be started and stopped without deinitializing
+    """
+    raise NotImplementedError()
+
+
+@pytest.mark.xfail()
+def test_iter_gather():
+    """
+    itering over gather should heuristically request more iterations as we go
+    """
+    raise NotImplementedError()
+
+
+@pytest.mark.xfail()
+def test_noderunner_stores_clear():
+    """
+    Stores in the noderunners should clear after they use the events from an epoch
+    """
+    raise NotImplementedError()
+
+
+@pytest.mark.xfail()
+def test_zmqrunner_stores_clear_process():
+    """
+    ZMQRunner stores clear after returning values from process
+    """
+    raise NotImplementedError()
+
+
+@pytest.mark.xfail()
+def test_zmqrunner_stores_clear_iter():
+    """
+    ZMQRunner stores clear after returning values while iterating
+    """
+    raise NotImplementedError()
+
+
+@pytest.mark.xfail()
+def test_zmqrunner_stores_clear_freerun():
+    """
+    ZMQRunner doesn't store events while freerunning.
+    """
+    raise NotImplementedError()

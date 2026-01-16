@@ -22,6 +22,7 @@
 
 """
 
+import math
 import multiprocessing as mp
 import os
 import signal
@@ -34,7 +35,7 @@ from itertools import count
 from multiprocessing.synchronize import Event as EventType
 from time import time
 from types import FrameType
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 from noob.network.loop import EventloopMixin
 
@@ -49,12 +50,14 @@ except ImportError as e:
 from zmq.eventloop.zmqstream import ZMQStream
 
 from noob.config import config
-from noob.event import Event
+from noob.event import Event, MetaSignal
+from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope
 from noob.logging import init_logger
 from noob.network.message import (
     AnnounceMsg,
     AnnounceValue,
+    DeinitMsg,
     ErrorMsg,
     ErrorValue,
     EventMsg,
@@ -138,11 +141,18 @@ class CommandNode(EventloopMixin):
         self._init_sockets()
         self.logger.debug("Command runner started")
 
+    def deinit(self) -> None:
+        """Close the eventloop, stop processing messages, reset state"""
+        self.logger.debug("Deinitializing")
+        msg = DeinitMsg(node_id="command")
+        self._outbox.send_multipart([b"deinit", msg.to_bytes()])
+        self.stop_loop()
+        self.logger.debug("Deinitialized")
+
     def stop(self) -> None:
         self.logger.debug("Stopping command runner")
         msg = StopMsg(node_id="command")
         self._outbox.send_multipart([b"stop", msg.to_bytes()])
-        self.stop_loop()
         self.logger.debug("Command runner stopped")
 
     def _init_sockets(self) -> None:
@@ -182,11 +192,11 @@ class CommandNode(EventloopMixin):
         )
         self._outbox.send_multipart([b"announce", msg.to_bytes()])
 
-    def start(self) -> None:
+    def start(self, n: int | None = None) -> None:
         """
         Start running in free-run mode
         """
-        self._outbox.send_multipart([b"start", StartMsg(node_id="command").to_bytes()])
+        self._outbox.send_multipart([b"start", StartMsg(node_id="command", value=n).to_bytes()])
         self.logger.debug("Sent start message")
 
     def process(self, epoch: int, input: dict | None = None) -> None:
@@ -375,6 +385,7 @@ class NodeRunner(EventloopMixin):
         try:
 
             def _handler(sig: int, frame: FrameType | None = None) -> None:
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
                 raise KeyboardInterrupt()
 
             signal.signal(signal.SIGTERM, _handler)
@@ -574,6 +585,9 @@ class NodeRunner(EventloopMixin):
         elif message.type_ == MessageType.stop:
             message = cast(StopMsg, message)
             self.on_stop(message)
+        elif message.type_ == MessageType.deinit:
+            message = cast(DeinitMsg, message)
+            self.on_deinit(message)
         else:
             # log but don't throw - other nodes shouldn't be able to crash us
             self.logger.error(f"{message.type_} not implemented!")
@@ -619,7 +633,10 @@ class NodeRunner(EventloopMixin):
         """
         Start running in free mode
         """
-        self._freerun.set()
+        if msg.value is None:
+            self._freerun.set()
+        else:
+            self._to_process += msg.value
         self._process_one.set()
 
     def on_process(self, msg: ProcessMsg) -> None:
@@ -654,7 +671,19 @@ class NodeRunner(EventloopMixin):
         self._process_one.set()
 
     def on_stop(self, msg: StopMsg) -> None:
-        """Stop processing!"""
+        """Stop processing (but stay responsive)"""
+        self._process_one.clear()
+        self._to_process = 0
+        self._freerun.clear()
+        self.update_status(NodeStatus.stopped)
+        self.logger.debug("Stopped")
+
+    def on_deinit(self, msg: DeinitMsg) -> None:
+        """
+        Deinitialize the node, close networking thread.
+
+        Cause the main loop to end, which calls deinit
+        """
         self._process_quitting.set()
         pid = mp.current_process().pid
         if pid is None:
@@ -698,7 +727,7 @@ class ZMQRunner(TubeRunner):
     _running_lock: threading.Lock = field(default_factory=threading.Lock)
     _return_node: Return | None = None
     _to_throw: ErrorValue | None = None
-    _current_epoch: int | None = None
+    _current_epoch: int = 0
 
     @property
     def running(self) -> bool:
@@ -768,8 +797,15 @@ class ZMQRunner(TubeRunner):
                     f"NodeRunner {proc.name} was still alive after timeout expired, killing it"
                 )
                 proc.kill()
-                proc.close()
+                try:
+                    proc.close()
+                except ValueError:
+                    self._logger.info(
+                        f"NodeRunner {proc.name} still not closed! making an unclean exit."
+                    )
+
             self.command.clear_callbacks()
+            self.command.deinit()
             self.tube.scheduler.clear()
             self._initialized.clear()
 
@@ -782,20 +818,25 @@ class ZMQRunner(TubeRunner):
                 "Runner is already running in free run mode! use iter to gather results"
             )
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
+        self._running.set()
+        try:
+            self._current_epoch = self.tube.scheduler.add_epoch()
+            # we want to mark 'input' as done if it's in the topo graph,
+            # but input can be present and only used as a param,
+            # so we can't check presence of inputs in the input collection
+            if "input" in self.tube.scheduler._epochs[self._current_epoch].ready_nodes:
+                self.tube.scheduler.done(self._current_epoch, "input")
+            self.command = cast(CommandNode, self.command)
+            self.command.process(self._current_epoch, input)
+            self._logger.debug("awaiting epoch %s", self._current_epoch)
+            self.tube.scheduler.await_epoch(self._current_epoch)
+            if self._to_throw:
+                self._throw_error()
+            self._logger.debug("collecting return")
 
-        self._current_epoch = self.tube.scheduler.add_epoch()
-        # we want to mark 'input' as done if it's in the topo graph,
-        # but input can be present and only used as a param, so we can't check presence of inputs
-        if "input" in self.tube.scheduler._epochs[self._current_epoch].ready_nodes:
-            self.tube.scheduler.done(self._current_epoch, "input")
-        self.command = cast(CommandNode, self.command)
-        self.command.process(self._current_epoch, input)
-        self._logger.debug("awaiting epoch %s", self._current_epoch)
-        self.tube.scheduler.await_epoch(self._current_epoch)
-        if self._to_throw:
-            self._throw_error()
-        self._logger.debug("collecting return")
-        return self.collect_return(self._current_epoch)
+            return self.collect_return(self._current_epoch)
+        finally:
+            self._running.clear()
 
     def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
         """
@@ -823,38 +864,115 @@ class ZMQRunner(TubeRunner):
                 "ZMQRunner must be explicitly initialized and deinitialized, "
                 "use the runner as a contextmanager or call `init()` and `deinit()`"
             )
-        # TODO: after #125 is merged, raise error if tube required process scoped inputs
+        try:
+            _ = self.tube.input_collection.validate_input(InputScope.process, {})
+        except InputMissingError as e:
+            raise InputMissingError(
+                "Can't use the `iter` method with tubes with process-scoped input "
+                "that was not provided when instantiating the tube! "
+                "Use `process()` directly, providing required inputs to each call."
+            ) from e
         if self.running:
             raise RuntimeError("Already Running!")
+        self.command = cast(CommandNode, self.command)
 
         epoch = self._current_epoch
+        start_epoch = epoch
+        stop_epoch = epoch + n if n is not None else epoch
         # start running without a limit - we'll check as we go.
-        self.command.start()
+        self.command.start(n)
         self._running.set()
         current_iter = 0
         try:
             while n is None or current_iter < n:
-                ret = None
+                ret = MetaSignal.NoEvent
                 loop = 0
-                while ret is None:
+                while ret is MetaSignal.NoEvent:
                     self._logger.debug("Awaiting epoch %s", epoch)
                     self.tube.scheduler.await_epoch(epoch)
-                    epoch += 1
                     ret = self.collect_return(epoch)
-                    if ret:
-                        self._logger.debug("Returning value from epoch %s", epoch)
-                    else:
-                        self._logger.debug("No return value for %s", epoch)
+                    self.store.clear(epoch)
+                    epoch += 1
+                    self._current_epoch = epoch
                     if loop > self.max_iter_loops:
                         raise RuntimeError("Reached maximum process calls per iteration")
+                    # if we have run out of epochs to run, request some more with a cheap heuristic
+                    if n is not None and epoch >= stop_epoch:
+                        # if we get one return value every 5 epochs,
+                        # and we ran 5 epochs to get 1 result,
+                        # then we need to run 20 more to get the other 4,
+                        # or, (n remaining) * (epochs per result)
+                        # so...
+                        divisor = current_iter if current_iter > 0 else 1
+                        get_more = (n - current_iter) * math.ceil(
+                            (stop_epoch - start_epoch) / divisor
+                        )
+                        stop_epoch += get_more
+                        self.command.start(get_more)
 
-                yield ret
+                # stop here in case we don't exhaust the iterator
+                if n is not None and current_iter >= n:
+                    self.command.stop()
                 current_iter += 1
+                yield ret
 
         finally:
-            # FIXME: Separate stopping and deinit so we can pause running more cheaply.
-            self._running.clear()
-            self.deinit()
+            self.stop()
+
+    @overload
+    def run(self, n: int) -> list[ReturnNodeType]: ...
+
+    @overload
+    def run(self, n: None = None) -> None: ...
+
+    def run(self, n: int | None = None) -> None | list[ReturnNodeType]:
+        """
+        Run the tube in freerun mode - every node runs as soon as its dependencies are satisfied,
+        not waiting for epochs to complete before starting the next epoch.
+
+        Blocks when ``n`` is not None -
+        This is for consistency with the synchronous/asyncio runners,
+        but may change in the future.
+
+        If ``n`` is None, does not block.
+        stop processing by calling :meth:`.stop` or deinitializing
+        (exiting the contextmanager, or calling :meth:`.deinit`)
+        """
+        if not self.initialized:
+            raise RuntimeError(
+                "ZMQRunner must be explicitly initialized and deinitialized, "
+                "use the runner as a contextmanager or call `init()` and `deinit()`"
+            )
+        if self.running:
+            raise RuntimeError("Already Running!")
+        try:
+            _ = self.tube.input_collection.validate_input(InputScope.process, {})
+        except InputMissingError as e:
+            raise InputMissingError(
+                "Can't use the `iter` method with tubes with process-scoped input "
+                "that was not provided when instantiating the tube! "
+                "Use `process()` directly, providing required inputs to each call."
+            ) from e
+        self.command = cast(CommandNode, self.command)
+
+        if n is None:
+            self.command.start()
+            self._running.set()
+            return None
+
+        else:
+            results = []
+            for res in self.iter(n):
+                results.append(res)
+            return results
+
+    def stop(self) -> None:
+        """
+        Stop running the tube.
+        """
+        self.command = cast(CommandNode, self.command)
+        self.command.stop()
+        self._running.clear()
 
     def on_event(self, msg: Message) -> None:
         self._logger.debug("EVENT received: %s", msg)
@@ -891,10 +1009,11 @@ class ZMQRunner(TubeRunner):
         else:
             events = self.store.collect(self._return_node.edges, epoch)
             if events is None:
-                return None
+                return MetaSignal.NoEvent
             args, kwargs = self.store.split_args_kwargs(events)
             self._return_node.process(*args, **kwargs)
-            return self._return_node.get(keep=False)
+            ret = self._return_node.get(keep=False)
+            return ret
 
     def _handle_error(self, msg: ErrorMsg) -> None:
         """Cancel current epoch, stash error for process method to throw"""

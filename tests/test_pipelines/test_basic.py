@@ -15,7 +15,7 @@ def test_basic_process(loaded_tube: Tube, runner: TubeRunner):
 
 
 @pytest.mark.parametrize("loaded_tube", ["testing-basic"], indirect=True)
-def test_basic(loaded_tube: Tube, runner: TubeRunner):
+def test_basic_run(loaded_tube: Tube, runner: TubeRunner):
     """The most basic tube! We can process a fixed number of events"""
     outputs = runner.run(n=5)
     assert len(outputs) == 5

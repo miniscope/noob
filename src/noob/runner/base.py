@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from logging import Logger
-from typing import TYPE_CHECKING, Any, ParamSpec, Self, TypeVar
+from typing import TYPE_CHECKING, Any, ParamSpec, Self, TypeVar, overload
 
 from noob import Tube, init_logger
 from noob.asset import AssetScope
@@ -180,7 +180,20 @@ class TubeRunner(ABC):
         finally:
             self.deinit()
 
+    @overload
+    def run(self, n: int) -> list[ReturnNodeType]: ...
+
+    @overload
+    def run(self, n: None) -> None: ...
+
     def run(self, n: int | None = None) -> None | list[ReturnNodeType]:
+        """
+        Run the tube infinitely or for a fixed number of iterations in a row.
+
+        Returns results if ``n`` is not ``None`` -
+        If ``n`` is ``None`` , we assume we are going to be running for a very long time,
+        and don't want to have an infinitely-growing collection in memory.
+        """
         try:
             _ = self.tube.input_collection.validate_input(InputScope.process, {})
         except InputMissingError as e:

@@ -66,7 +66,7 @@ class Scheduler(BaseModel):
         Add another epoch with a prepared graph to the scheduler.
         """
         with self._ready_condition:
-            if epoch:
+            if epoch is not None:
                 this_epoch = epoch
                 # ensure that the next iteration of the clock will return the next number
                 # if we create epochs out of order
@@ -316,7 +316,9 @@ class Scheduler(BaseModel):
         """
         with self._epoch_condition:
             previously_completed = (
-                len(self._epoch_log) > 0 and epoch not in self._epochs and epoch in self._epoch_log
+                len(self._epoch_log) > 0
+                and epoch not in self._epochs
+                and (epoch in self._epoch_log or epoch < min(self._epoch_log))
             )
             active_completed = epoch in self._epochs and not self._epochs[epoch].is_active()
             return previously_completed or active_completed

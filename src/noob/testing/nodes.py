@@ -157,7 +157,7 @@ def input_party(
 
 
 def long_add(value: float) -> float:
-    sleep(0.5)
+    sleep(0.25)
     return value + 1
 
 

@@ -34,6 +34,7 @@ class MessageType(StrEnum):
     identify = "identify"
     process = "process"
     init = "init"
+    deinit = "deinit"
     start = "start"
     status = "status"
     stop = "stop"
@@ -127,11 +128,19 @@ class InitMsg(Message):
     value: None = None
 
 
+class DeinitMsg(Message):
+    """Deinitializes nodes within node runners"""
+
+    type_: Literal[MessageType.deinit] = Field(MessageType.deinit, alias="type")
+    value: None = None
+
+
 class StartMsg(Message):
     """Start free-running nodes"""
 
     type_: Literal[MessageType.start] = Field(MessageType.start, alias="type")
-    value: None = None
+    value: int | None = None
+
 
 class StatusMsg(Message):
     """Node updating its current status"""
@@ -204,6 +213,7 @@ MessageUnion = A[
     | A[IdentifyMsg, Tag("identify")]
     | A[ProcessMsg, Tag("process")]
     | A[InitMsg, Tag("init")]
+    | A[DeinitMsg, Tag("deinit")]
     | A[StartMsg, Tag("start")]
     | A[StatusMsg, Tag("status")]
     | A[StopMsg, Tag("stop")]
