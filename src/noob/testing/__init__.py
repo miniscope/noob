@@ -1,6 +1,6 @@
 from noob.testing.assets import (
     db_connection,
-    xarray_asset,
+    # xarray_asset,
 )
 from noob.testing.nodes import (
     CountSource,
@@ -59,7 +59,7 @@ __all__ = [
     "StatefulMultiply",
     "UnannotatedGenerator",
     # "array_add_to_left",
-    "xarray_asset",
+    # "xarray_asset",
     "db_connection",
     "CountSourceDecor",
     "input_party",
