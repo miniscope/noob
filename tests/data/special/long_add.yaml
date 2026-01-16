@@ -29,3 +29,10 @@ nodes:
     type: noob.testing.long_add
     depends:
       - value: count.index
+
+  return:
+    type: return
+    depends:
+      - a: a.value
+      - b: b.value
+      - c: c.value
