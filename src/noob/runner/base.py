@@ -5,7 +5,7 @@ import hashlib
 import inspect
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Coroutine, Generator, MutableSequence, Sequence
+from collections.abc import Callable, Coroutine, Generator, Sequence
 from concurrent.futures import Future as ConcurrentFuture
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -98,7 +98,7 @@ class TubeRunner(ABC):
         self._before_process()
 
         while self.tube.scheduler.is_active():
-            ready = self.tube.scheduler.get_ready()
+            ready = self._get_ready()
             ready = self._filter_ready(ready, self.tube.scheduler)
             for node_info in ready:
                 node_id, epoch = node_info["value"], node_info["epoch"]
@@ -211,6 +211,9 @@ class TubeRunner(ABC):
         """
         return
 
+    def _get_ready(self, epoch: int | None = None) -> list[MetaEvent]:
+        return self.tube.scheduler.get_ready(epoch=epoch)
+
     def _filter_ready(self, nodes: list[MetaEvent], scheduler: Scheduler) -> list[MetaEvent]:
         """
         Before running, filter or add nodes to run in a sorter generation,
@@ -300,9 +303,7 @@ class TubeRunner(ABC):
         """
         return node, value
 
-    def _handle_events(
-        self, node: Node, value: Any, epoch: int
-    ) -> MutableSequence[Event] | MutableSequence[Event | MetaEvent]:
+    def _handle_events(self, node: Node, value: Any, epoch: int) -> None:
         """
         After calling a node, handle its return value:
 
@@ -326,7 +327,6 @@ class TubeRunner(ABC):
         events_and_metaevents = self.tube.scheduler.update(events)
         self._call_callbacks(events_and_metaevents)
         self._logger.debug("Node %s emitted %s in epoch %s", node.id, value, epoch)
-        return events_and_metaevents
 
     @abstractmethod
     def collect_return(self, epoch: int | None = None) -> ReturnNodeType:
