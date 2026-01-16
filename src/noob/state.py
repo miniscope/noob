@@ -1,6 +1,6 @@
+from collections import defaultdict
 from typing import Self
 
-from mypy.checkexpr import defaultdict
 from pydantic import BaseModel, Field
 
 from noob.asset import Asset, AssetScope, AssetSpecification
