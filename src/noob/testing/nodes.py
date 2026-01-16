@@ -9,7 +9,7 @@ from time import sleep
 from typing import Annotated as A
 from typing import Any
 
-import xarray as xr
+# import xarray as xr
 from faker import Faker
 
 from noob import Name, process_method
@@ -143,9 +143,9 @@ class Now:
         return f"{prefix}{self.now.isoformat()}"
 
 
-def array_add_to_left(left: xr.DataArray, right: xr.DataArray) -> xr.DataArray:
-    left += right
-    return left
+# def array_add_to_left(left: xr.DataArray, right: xr.DataArray) -> xr.DataArray:
+#     left += right
+#     return left
 
 
 class CountSourceDecor:
