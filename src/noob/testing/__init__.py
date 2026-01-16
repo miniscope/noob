@@ -1,6 +1,5 @@
 from noob.testing.assets import (
     db_connection,
-    # xarray_asset,
 )
 from noob.testing.nodes import (
     CountSource,
@@ -12,7 +11,6 @@ from noob.testing.nodes import (
     UnannotatedGenerator,
     Volume,
     VolumeProcess,
-    # array_add_to_left,
     async_error,
     concat,
     count_source,
@@ -58,8 +56,6 @@ __all__ = [
     "NumberToLetterCls",
     "StatefulMultiply",
     "UnannotatedGenerator",
-    # "array_add_to_left",
-    # "xarray_asset",
     "db_connection",
     "CountSourceDecor",
     "input_party",
