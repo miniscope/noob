@@ -45,6 +45,7 @@ except ImportError as e:
         "Attempted to import zmq runner, but zmq deps are not installed. install with `noob[zmq]`",
     ) from e
 
+
 from zmq.eventloop.zmqstream import ZMQStream
 
 from noob.config import config
@@ -402,7 +403,7 @@ class NodeRunner(EventloopMixin):
         finally:
             runner.deinit()
 
-    def await_inputs(self) -> Generator[tuple[list[Any], dict[str, Any], int]]:
+    def await_inputs(self) -> Generator[tuple[tuple[Any], dict[str, Any], int]]:
         self._node = cast(Node, self._node)
         while not self._process_quitting.is_set():
             # if we are not freerunning, keep track of how many times we are supposed to run,
@@ -636,6 +637,7 @@ class NodeRunner(EventloopMixin):
 
     def on_stop(self, msg: StopMsg) -> None:
         """Stop processing!"""
+        self._process_quitting.set()
         pid = mp.current_process().pid
         if pid is None:
             return
@@ -733,6 +735,8 @@ class ZMQRunner(TubeRunner):
                 for proc in _waiting:
                     if not proc.is_alive():
                         waiting_on.remove(proc)
+                    else:
+                        proc.terminate()
 
             for proc in waiting_on:
                 self._logger.info(

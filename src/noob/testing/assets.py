@@ -1,6 +1,8 @@
 from collections.abc import Generator
 from typing import Any
 
+from noob.asset import Asset
+
 
 class counter(Generator):
     """
@@ -23,3 +25,15 @@ class counter(Generator):
     @property
     def current(self) -> int:
         return self._current
+
+
+class Initializer(Asset):
+    """True when initialized, false when deinitialized"""
+
+    obj: bool = False
+
+    def init(self) -> None:
+        self.obj = True
+
+    def deinit(self) -> None:
+        self.obj = False

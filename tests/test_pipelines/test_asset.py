@@ -1,6 +1,7 @@
 import pytest
 
 from noob import SynchronousRunner, Tube
+from noob.asset import AssetScope
 
 pytestmark = pytest.mark.assets
 
@@ -125,3 +126,22 @@ def test_asset_nocopy_when_unused():
         assert result["a_value"] == start
         assert result["b_value"] == start + 1
         assert result["post_value"] == (start + 1) * 2
+
+
+def test_selective_node_init():
+    """
+    Only assets that a node depends on should be initialized
+    """
+    tube = Tube.from_specification("testing-asset-node-init")
+    runner = SynchronousRunner(tube=tube)
+
+    with runner:
+        yes = runner.tube.nodes["yes_depends"]
+        no = runner.tube.nodes["no_depends"]
+        assert not runner.tube.state.assets["initializer"].obj
+        with runner._asset_context(AssetScope.node, yes.edges):
+            assert runner.tube.state.assets["initializer"].obj
+        assert not runner.tube.state.assets["initializer"].obj
+
+        with runner._asset_context(AssetScope.node, no.edges):
+            assert not runner.tube.state.assets["initializer"].obj

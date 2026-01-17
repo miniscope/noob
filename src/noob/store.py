@@ -216,7 +216,7 @@ class EventStore:
         return args
 
     @staticmethod
-    def split_args_kwargs(inputs: dict) -> tuple[list, dict]:
+    def split_args_kwargs(inputs: dict) -> tuple[tuple, dict]:
         # TODO: integrate this with `collect`
         args = []
         kwargs = {}
@@ -227,5 +227,7 @@ class EventStore:
                 args.append((0, v))
             else:
                 kwargs[k] = v
-        args = [item[1] for item in sorted(args, key=lambda x: x[0])]
-        return args, kwargs
+
+        # cast to tuple since `*args` is a tuple
+        args_tuple = tuple(item[1] for item in sorted(args, key=lambda x: x[0]))
+        return args_tuple, kwargs

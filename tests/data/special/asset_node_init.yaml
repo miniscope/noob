@@ -1,0 +1,18 @@
+noob_id: testing-asset-node-init
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
+
+assets:
+  initializer:
+    type: noob.testing.Initializer
+    scope: node
+
+nodes:
+  yes_depends:
+    type: noob.testing.passthrough
+    depends:
+      - value: assets.initializer
+  no_depends:
+    type: noob.testing.passthrough
+    params:
+      value:
