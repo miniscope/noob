@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any, cast
 
+from noob.asset import AssetScope
 from noob.input import InputScope
 from noob.node import Node, Return
 from noob.runner.base import TubeRunner
@@ -49,17 +50,15 @@ class AsyncRunner(TubeRunner):
             for node in self.tube.enabled_nodes.values():
                 self.inject_context(node.init)()
 
-            for asset in self.tube.state.assets.values():
-                self.inject_context(asset.init)()
+            self.inject_context(self.tube.state.init_assets)(AssetScope.runner)
 
     async def deinit(self) -> None:
         """Stop all nodes processing"""
         async with self._init_lock:
             for node in self.tube.enabled_nodes.values():
-                node.deinit()
+                self.inject_context(node.deinit)()
 
-            for asset in self.tube.state.assets.values():
-                asset.deinit()
+            self.inject_context(self.tube.state.deinit_assets)(AssetScope.runner)
 
         self._running.clear()
 
@@ -89,6 +88,8 @@ class AsyncRunner(TubeRunner):
         self.eventloop = cast(asyncio.AbstractEventLoop, self.eventloop)
         if not self._running.is_set():
             await self.init()
+
+        self.tube.state.init_assets(AssetScope.process)
 
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
         self.store.clear()
@@ -133,6 +134,8 @@ class AsyncRunner(TubeRunner):
                 future.add_done_callback(partial(self._node_complete, node=node, epoch=epoch))
                 self._pending_futures.add(future)
                 self._logger.debug("Scheduled node %s in epoch %s in eventloop", node_id, epoch)
+                self.tube.state.deinit_assets(AssetScope.node)
+        self.tube.state.deinit_assets(AssetScope.process)
 
         return self.collect_return()
 
@@ -147,6 +150,8 @@ class AsyncRunner(TubeRunner):
         events = self.store.add_value(node.signals, value, node.id, epoch)
         if events is not None:
             all_events = self.tube.scheduler.update(events)
+            if node.id in self.tube.state.dependencies:
+                self.tube.state.update(events)
             self._call_callbacks(all_events)
         self._node_ready.set()
         self._logger.debug("Node %s emitted %s in epoch %s", node.id, value, epoch)

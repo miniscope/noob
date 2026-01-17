@@ -16,7 +16,7 @@ from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope, InputSpecification
 from noob.node import Edge, Node, NodeSpecification, Return
 from noob.scheduler import Scheduler
-from noob.state import State, StateSpecification
+from noob.state import State
 from noob.types import ConfigSource, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
@@ -218,8 +218,9 @@ class Tube(BaseModel):
 
         nodes = cls._init_nodes(spec, input_collection)
         edges = cls._init_edges(spec.nodes, nodes)
-        state = cls._init_state(spec.assets)
         scheduler = cls._init_scheduler(spec.nodes, edges)
+
+        state = cls._init_state(spec, edges)
 
         return cls.model_validate(
             {
@@ -233,11 +234,6 @@ class Tube(BaseModel):
             },
             context={"skip_input_presence": True},
         )
-
-    @classmethod
-    def _init_state(cls, spec: dict[str, AssetSpecification]) -> State:
-        state_spec = StateSpecification(assets=spec)
-        return State.from_specification(state_spec)
 
     @classmethod
     def _init_nodes(
@@ -262,6 +258,10 @@ class Tube(BaseModel):
     def _init_scheduler(cls, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> Scheduler:
         node_specs = {id_: node for id_, node in nodes.items()}
         return Scheduler.from_specification(node_specs, edges)
+
+    @classmethod
+    def _init_state(cls, spec: TubeSpecification, edges: list[Edge]) -> State:
+        return State.from_specification(specs=spec.assets, edges=edges)
 
     @classmethod
     def _init_inputs(cls, spec: TubeSpecification) -> InputCollection:
@@ -320,6 +320,43 @@ class Tube(BaseModel):
                 f"Only one return node is allowed in a tube, instead got {return_nodes}"
             )
         return value
+
+    @model_validator(mode="after")
+    def assets_exhausted_after_storage(self) -> Self:
+        """
+        Runner-scoped assets that depend on node outputs can't be directly depended on
+        in topological generations during or after when they are stored
+        in order to protect against unstructured mutation.
+        """
+        generations = None
+        for asset in self.state.assets.values():
+            if not asset.depends:
+                continue
+
+            # only compute if we actually have dependencies
+            if generations is None:
+                generations = self.scheduler.generations()
+
+            # find generation that the node that returns to us is in + successor generations
+            depended_node = asset.depends.split(".")[0]
+            successors: list[str] = []
+            for generation in generations:
+                if depended_node in generation or successors:
+                    successors.extend([node for node in generation if node != depended_node])
+
+            # assert no successor nodes depend on the asset directly.
+            for successor in successors:
+                assert not any(
+                    edge.source_node == "assets" and edge.source_signal == asset.id
+                    for edge in self.nodes[successor].edges
+                ), (
+                    "Nodes that run at the same time or after a node that an asset depends on "
+                    "to update its value cannot depend on the asset directly. "
+                    "Access it by emitting it from another node and depending on that signal. "
+                    f"Node {successor} cannot depend on assets.{asset.id}."
+                )
+
+        return self
 
 
 class TubeClassicEdition:

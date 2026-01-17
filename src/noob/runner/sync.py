@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from threading import Event as ThreadEvent
 from typing import Any
 
+from noob.asset import AssetScope
 from noob.input import InputScope
 from noob.node import Return
 from noob.runner.base import TubeRunner, call_async_from_sync
@@ -36,17 +37,15 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             self.inject_context(node.init)()
 
-        for asset in self.tube.state.assets.values():
-            self.inject_context(asset.init)()
+        self.inject_context(self.tube.state.init_assets)(AssetScope.runner)
 
     def deinit(self) -> None:
         """Stop all nodes processing"""
         # TODO: lock to ensure we've been started
         for node in self.tube.enabled_nodes.values():
-            node.deinit()
+            self.inject_context(node.deinit)()
 
-        for asset in self.tube.state.assets.values():
-            asset.deinit()
+        self.inject_context(self.tube.state.deinit_assets)(AssetScope.runner)
 
         self._running.clear()
 
@@ -64,6 +63,8 @@ class SynchronousRunner(TubeRunner):
         """
         if not self._running.is_set():
             self.init()
+
+        self.tube.state.init_assets(AssetScope.process)
 
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
         self.store.clear()
@@ -103,9 +104,13 @@ class SynchronousRunner(TubeRunner):
                 events = self.store.add_value(node.signals, value, node_id, epoch)
                 if events is None:
                     continue
+                if node_id in self.tube.state.dependencies:
+                    self.tube.state.update(events)
                 all_events = scheduler.update(events)
                 self._call_callbacks(all_events)
                 self._logger.debug("Node %s emitted %s in epoch %s", node_id, value, epoch)
+                self.tube.state.deinit_assets(AssetScope.node)
+        self.tube.state.deinit_assets(AssetScope.process)
 
         return self.collect_return()
 

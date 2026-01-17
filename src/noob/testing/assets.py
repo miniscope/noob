@@ -1,25 +1,25 @@
-import sqlite3
-
-import numpy as np
-import xarray as xr
+from collections.abc import Generator
+from typing import Any
 
 
-def xarray_asset() -> xr.DataArray:
-    return xr.DataArray(
-        np.ones((3, 4, 5), dtype=float),
-        dims=["x", "y", "z"],
-        coords={"x": np.arange(0, 3, 1), "y": np.arange(0, 4, 1), "z": np.arange(0, 5, 1)},
-    )
-
-
-def db_connection() -> sqlite3.Connection:
+class counter(Generator):
     """
-    in-memory database connection
+    custom generator because itertools is removing deepcopy in 3.14
+    https://docs.python.org/3/deprecations/pending-removal-in-3.14.html
     """
-    conn = sqlite3.connect(":memory:")
 
-    cursor = conn.cursor()
-    cursor.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
-    cursor.execute("INSERT INTO users(name)" "VALUES (?)", ["Hannah Montana"])
-    conn.commit()
-    return conn
+    def __init__(self, start: int = 0) -> None:
+        self.start = start
+        self._current = start
+
+    def send(self, _: Any) -> int:
+        current = self._current
+        self._current += 1
+        return current
+
+    def throw(self, type: Any = None, value: Any = None, traceback: Any = None) -> None:
+        raise StopIteration()
+
+    @property
+    def current(self) -> int:
+        return self._current

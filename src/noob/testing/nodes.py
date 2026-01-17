@@ -1,15 +1,13 @@
 import asyncio
 import random
-import sqlite3
 import string
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from datetime import datetime
 from itertools import count, cycle
 from time import sleep
 from typing import Annotated as A
 from typing import Any
 
-import xarray as xr
 from faker import Faker
 
 from noob import Name, process_method
@@ -143,11 +141,6 @@ class Now:
         return f"{prefix}{self.now.isoformat()}"
 
 
-def array_add_to_left(left: xr.DataArray, right: xr.DataArray) -> xr.DataArray:
-    left += right
-    return left
-
-
 class CountSourceDecor:
     def __init__(self, start: int = 0) -> None:
         self.gen = count(start=start)
@@ -161,10 +154,6 @@ def input_party(
     one: int, two: float, three: str, four: bool, five: list, six: dict, seven: set
 ) -> A[bool, Name("works")]:
     return True
-
-
-def read_db(conn: sqlite3.Connection) -> A[tuple[int, str], Name("payload")]:
-    return conn.cursor().execute("SELECT * FROM users").fetchone()
 
 
 def long_add(value: float) -> float:
@@ -202,3 +191,32 @@ class StatefulMultiply:
         value = left * right * self.current
         self.current += 1
         return value
+
+
+def fast_forward(generator: count, n: int = 1) -> tuple[A[int, Name("next")]]:
+    for _ in range(n):
+        val = next(generator)
+    return val
+
+
+def jump(generator: count, n: int = 1) -> tuple[A[count, Name("skirttt")], A[int, Name("next")]]:
+    value = 0
+    for _ in range(n):
+        value = next(generator)
+    return generator, value
+
+
+def rewind(generator: count, n: int = 1) -> A[count, Name("skrittt")]:
+    """Purposely designed to mutate the input and return a new object"""
+    return count(next(generator) - n)
+
+
+def zip_iter(*args: Iterator) -> tuple[Any, ...]:
+    return tuple(next(a) for a in args)
+
+
+def increment(
+    iterator: Iterator[int],
+) -> tuple[A[Iterator[int], Name("iterator")], A[int, Name("value")]]:
+    value = next(iterator)
+    return iterator, value

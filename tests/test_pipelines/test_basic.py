@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 
 from noob import SynchronousRunner, Tube
@@ -107,28 +106,3 @@ def test_multi_signal(loaded_tube: Tube, sync_runner_cls):
         assert isinstance(value, dict)
         assert isinstance(value["word"], str)
         assert value["count_sum"] == sum(value["counts"])
-
-
-def test_xarray_asset():
-    """
-    Test should verify that the asset has been modified in place,
-    (two xarray dataarray assets have been summed and assigned to one of them)
-    and the modified asset is same as the returned event output.
-    """
-    tube = Tube.from_specification("testing-xarray-asset")
-    runner = SynchronousRunner(tube=tube)
-
-    runner.init()
-    output = runner.process()
-
-    assert np.all(output == 2)
-
-
-def test_db_asset():
-    tube = Tube.from_specification("testing-db-asset")
-    runner = SynchronousRunner(tube=tube)
-
-    runner.init()
-    output = runner.process()
-
-    assert output == (1, "Hannah Montana")

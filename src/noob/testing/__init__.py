@@ -1,7 +1,4 @@
-from noob.testing.assets import (
-    db_connection,
-    xarray_asset,
-)
+from noob.testing.assets import counter
 from noob.testing.nodes import (
     CountSource,
     CountSourceDecor,
@@ -12,7 +9,6 @@ from noob.testing.nodes import (
     UnannotatedGenerator,
     Volume,
     VolumeProcess,
-    array_add_to_left,
     async_error,
     concat,
     count_source,
@@ -20,17 +16,21 @@ from noob.testing.nodes import (
     divide,
     error,
     exclaim,
+    fast_forward,
+    increment,
     input_party,
+    jump,
     letter_source,
     long_add,
     multi_words_source,
     multiply,
     number_to_letter,
-    read_db,
     repeat,
+    rewind,
     sporadic_word,
     word_counts,
     word_source,
+    zip_iter,
 )
 
 __all__ = [
@@ -58,10 +58,12 @@ __all__ = [
     "NumberToLetterCls",
     "StatefulMultiply",
     "UnannotatedGenerator",
-    "array_add_to_left",
-    "xarray_asset",
-    "db_connection",
+    "counter",
     "CountSourceDecor",
+    "increment",
     "input_party",
-    "read_db",
+    "fast_forward",
+    "rewind",
+    "jump",
+    "zip_iter",
 ]

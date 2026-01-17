@@ -1,29 +1,26 @@
-from typing import Self
+import sys
+from collections import defaultdict
+from typing import Self, TypeAlias
 
 from pydantic import BaseModel, Field
 
-from noob.asset import Asset, AssetSpecification
+from noob.asset import Asset, AssetScope, AssetSpecification
+from noob.event import Event
 from noob.node.base import Edge
-from noob.types import PythonIdentifier
+from noob.types import NodeID, PythonIdentifier
+
+if sys.version_info < (3, 12):
+    from typing_extensions import TypedDict
+else:
+    from typing import TypedDict
 
 
-class StateSpecification(BaseModel):
-    """
-    Configuration for the assets within a :class:`.State`.
+class _AssetDependency(TypedDict):
+    asset_id: PythonIdentifier
+    signal: PythonIdentifier
 
-    Representation of the yaml-form of a :class:`.State`.
-    Converted to the runtime-form with :meth:`.State.from_specification`.
 
-    Not much, if any validation is performed here on the whole :class:`.State` except
-    that the assets have the correct fields, ignoring validity of
-    e.g. type mismatches.
-    Those require importing and introspecting the specified assets classes,
-    which should only happen when we try and instantiate the :class:`.State` -
-    this class is just a carrier for the yaml spec.
-    """
-
-    assets: dict[str, AssetSpecification] = Field(default_factory=dict)
-    """The assets that this :class:`.State` configures"""
+_DependencyMap: TypeAlias = dict[NodeID, _AssetDependency]
 
 
 class State(BaseModel):
@@ -37,38 +34,67 @@ class State(BaseModel):
     """
 
     assets: dict[PythonIdentifier, Asset] = Field(default_factory=dict)
+    dependencies: _DependencyMap = Field(default_factory=dict)
+    """
+    Map from node signals that assets depend on to the asset and signal ids. 
+    See :attr:`.AssetSpecification.depends` . 
+    
+    Only those dependencies that require copying are included here
+    (assets which are not used after the node that is depended on emits them
+    don't need to be copied to protect against mutation within the same epoch
+    after they are stored).
+    """
+    scope_to_assets: dict[AssetScope, list[Asset]] = Field(
+        default_factory=lambda: defaultdict(list)  # type: ignore[arg-type]
+    )
+    """
+    Map from :class:`.AssetScope` to :class:`.Asset` to circumvent
+    querying scope for each asset in :meth:`.State.init_assets` and :meth:`.State.deinit_assets`
+    """
 
     @classmethod
-    def from_specification(cls, spec: StateSpecification) -> Self:
+    def from_specification(
+        cls, specs: dict[str, AssetSpecification], edges: list[Edge] | None = None
+    ) -> Self:
         """
         Instantiate a :class:`.State` model from its configuration
 
         Args:
-            spec (StateSpecification): the :class:`.State` config to instantiate
+            spec (dict[str, AssetSpecification]): the :class:`.State` config to instantiate
+            edges (list[Edge] | None): If present, edges for the whole graph,
+                used to reduce copying for assets using dependencies to store values between epochs.
+                If there are no other nodes that depend on the value that the asset depends on,
+                then we don't have to copy.
         """
-        assets = cls._init_assets(spec)
 
-        return cls(assets=assets)
+        assets = {spec.id: Asset.from_specification(spec) for spec in specs.values()}
+        dependencies = cls._get_dependencies(specs, edges)
+        scope_to_assets = defaultdict(list)
+        for asset in assets.values():
+            scope_to_assets[asset.scope].append(asset)
+        return cls(
+            assets=assets,
+            dependencies=dependencies,
+            scope_to_assets=scope_to_assets,
+        )
 
-    @classmethod
-    def _init_assets(cls, specs: StateSpecification) -> dict[PythonIdentifier, Asset]:
-        assets = {spec.id: Asset.from_specification(spec) for spec in specs.assets.values()}
-        return assets
-
-    def get(self, signal: str) -> Asset | None:
+    def init_assets(self, scope: AssetScope) -> None:
         """
-        Get the event with the matching node_id and signal name
-
-        Returns the most recent matching event, as for now we assume that
-        each combination of `node_id` and `signal` is emitted only once per processing cycle,
-        and we assume processing cycles are independent (and thus our events are cleared)
-
-        ``None`` in the case that the event has not been emitted
+        run :meth:`.Asset.init` for assets that correspond to the given scope.
+        Usually means that :attr:`.Asset.obj` attribute gets populated.
         """
-        asset = [val for key, val in self.assets.items() if key == signal]
-        return None if len(asset) == 0 else asset[-1]
+        for asset in self.scope_to_assets.get(scope, []):
+            asset.init()
 
-    def collect(self, edges: list[Edge]) -> dict | None:
+    def deinit_assets(self, scope: AssetScope) -> None:
+        """
+        run :meth:`.Asset.deinit` for assets that correspond to the given scope.
+        Usually means that :attr:`.Asset.obj` attribute is cleared to `None`.
+        """
+        for asset in self.scope_to_assets.get(scope, []):
+            asset.deinit()
+
+    def collect(self, edges: list[Edge], epoch: int) -> dict | None:
         """
         Gather events into a form that can be consumed by a :meth:`.Node.process` method,
         given the collection of inbound edges (usually from :meth:`.Tube.in_edges` ).
@@ -92,14 +118,47 @@ class State(BaseModel):
                     "Must set signal name when depending on an asset "
                     "(assets have no generic 'value' signal)"
                 )
-                asset = self.get(edge.source_signal)
-                obj = None if asset is None else asset.obj
-                args[edge.target_slot] = obj
+                asset = self.assets[edge.source_signal]
+                if (
+                    not asset.depends
+                    or asset.depends.split(".")[0] not in self.dependencies
+                    or epoch == asset.stored_at + 1
+                ):
+                    args[edge.target_slot] = asset.obj
+                else:
+                    raise ValueError(
+                        f"Asset not ready to emit for epoch {epoch}: "
+                        f"asset was last stored at epoch {asset.stored_at}."
+                    )
 
         return None if not args or all(val is None for val in args.values()) else args
+
+    def update(self, events: list[Event]) -> None:
+        """Update asset if asset depends on a node signal"""
+        for event in events:
+            if (dep := self.dependencies.get(event["node_id"])) and dep["signal"] == event[
+                "signal"
+            ]:
+                self.assets[dep["asset_id"]].update(value=event["value"], epoch=event["epoch"])
 
     def clear(self) -> None:
         """
         Clear assets.
         """
         self.assets.clear()
+
+    @classmethod
+    def _get_dependencies(
+        cls, specs: dict[str, AssetSpecification], edges: list[Edge] | None = None
+    ) -> _DependencyMap:
+        deps = {}
+        for asset in specs.values():
+            if not asset.depends:
+                continue
+            node_id, signal = asset.depends.split(".")
+            if edges and not any(
+                edge.source_node == node_id and edge.source_signal == signal for edge in edges
+            ):
+                continue
+            deps[node_id] = _AssetDependency(asset_id=asset.id, signal=signal)
+        return deps
