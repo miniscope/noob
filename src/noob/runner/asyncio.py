@@ -150,6 +150,8 @@ class AsyncRunner(TubeRunner):
         events = self.store.add_value(node.signals, value, node.id, epoch)
         if events is not None:
             all_events = self.tube.scheduler.update(events)
+            if node.id in self.tube.state.dependencies:
+                self.tube.state.update(events)
             self._call_callbacks(all_events)
         self._node_ready.set()
         self._logger.debug("Node %s emitted %s in epoch %s", node.id, value, epoch)
