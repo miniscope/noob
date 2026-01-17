@@ -207,7 +207,7 @@ def jump(generator: count, n: int = 1) -> tuple[A[count, Name("skirttt")], A[int
 
 
 def rewind(generator: count, n: int = 1) -> A[count, Name("skrittt")]:
-    """Purposely designed to diverge inplace change and output"""
+    """Purposely designed to mutate the input and return a new object"""
     return count(next(generator) - n)
 
 
