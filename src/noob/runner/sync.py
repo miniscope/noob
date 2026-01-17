@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from threading import Event as ThreadEvent
 from typing import Any
 
+from noob.asset import AssetScope
 from noob.event import MetaEvent
 from noob.node import Return
 from noob.runner.base import TubeRunner
@@ -36,17 +37,15 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             self.inject_context(node.init)()
 
-        for asset in self.tube.state.assets.values():
-            self.inject_context(asset.init)()
+        self.inject_context(self.tube.state.init_assets)(AssetScope.runner)
 
     def deinit(self) -> None:
         """Stop all nodes processing"""
         # TODO: lock to ensure we've been started
         for node in self.tube.enabled_nodes.values():
-            node.deinit()
+            self.inject_context(node.deinit)()
 
-        for asset in self.tube.state.assets.values():
-            asset.deinit()
+        self.inject_context(self.tube.state.deinit_assets)(AssetScope.runner)
 
         self._running.clear()
 

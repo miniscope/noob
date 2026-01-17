@@ -15,6 +15,7 @@ from logging import Logger
 from typing import TYPE_CHECKING, Any, ParamSpec, Self, TypeVar
 
 from noob import Tube, init_logger
+from noob.asset import AssetScope
 from noob.event import Event, MetaEvent
 from noob.exceptions import InputMissingError
 from noob.input import InputScope
@@ -261,7 +262,8 @@ class TubeRunner(ABC):
 
         inputs: dict[PythonIdentifier, Any] = {}
 
-        state_inputs = self.tube.state.collect(edges)
+        self.tube.state.init_assets(AssetScope.node)
+        state_inputs = self.tube.state.collect(edges, epoch)
         inputs |= state_inputs if state_inputs else inputs
 
         event_inputs = self.store.collect(edges, epoch)

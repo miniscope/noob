@@ -1,11 +1,12 @@
 import inspect
 from collections.abc import Callable
+from copy import deepcopy
 from enum import StrEnum
-from typing import Any, Generic, ParamSpec, TypeVar
+from typing import Any, Generic, ParamSpec, Self, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from noob.types import AbsoluteIdentifier, PythonIdentifier
+from noob.types import AbsoluteIdentifier, DependencyIdentifier, PythonIdentifier
 from noob.utils import resolve_python_identifier
 
 TOutput = TypeVar("TOutput")
@@ -48,7 +49,7 @@ class AssetSpecification(BaseModel):
     """The scope of the asset. See :class:`.AssetScope`"""
     params: dict | None = None
     """Initialization parameters"""
-    depends: list[AbsoluteIdentifier] | None = None
+    depends: DependencyIdentifier | None = None
     """
     Roundtrip dependency. Should point to the last node in a given 
     epoch that manipulates the asset.
@@ -64,6 +65,18 @@ class AssetSpecification(BaseModel):
     stored and used in the next processing epoch.
     """
 
+    @model_validator(mode="after")
+    def validate_depends(self) -> Self:
+        """
+        depends can only be used with scope == "runner"
+        """
+        if self.depends is not None and self.scope != AssetScope.runner:
+            raise ValueError(
+                f"'depends' must be used with scope 'runner'. Provided scope: {self.scope.value}"
+            )
+
+        return self
+
 
 class Asset(BaseModel):
     """An asset within a processing tube."""
@@ -76,9 +89,12 @@ class Asset(BaseModel):
     """The scope of the asset. See :class:`.AssetScope`"""
     params: dict[str, Any] = Field(default_factory=dict)
     """Initialization parameters"""
-
+    depends: DependencyIdentifier | None
+    """The signal that this asset gets updated by. See :attr:`.AssetSpecification.depends`"""
     obj: Any | None = None
     """Instantiated asset instance"""
+    stored_at: int = -1
+    """The latest epoch the asset was stored at. Only used when depends is not `None`"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -114,19 +130,25 @@ class Asset(BaseModel):
 
         params = spec.params if spec.params is not None else {}
         scope = spec.scope
+        depends = spec.depends if spec.depends is not None else None
 
         # check if function by checking if callable -
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Asset):
-                return obj(id=spec.id, spec=spec, **params)
+                return obj(id=spec.id, spec=spec, scope=scope, depends=depends, **params)
             else:
-                return WrapClassAsset(id=spec.id, cls=obj, spec=spec, params=params, scope=scope)
+                return WrapClassAsset(
+                    id=spec.id, cls=obj, spec=spec, params=params, scope=scope, depends=depends
+                )
         else:
-            return WrapFuncAsset(id=spec.id, fn=obj, spec=spec, params=params, scope=scope)
+            return WrapFuncAsset(
+                id=spec.id, fn=obj, spec=spec, params=params, scope=scope, depends=depends
+            )
 
-    def update(self, obj: Any) -> None:
-        self.obj = obj
+    def update(self, value: Any, epoch: int) -> None:
+        self.obj = deepcopy(value)
+        self.stored_at = epoch
 
 
 T = TypeVar("T")

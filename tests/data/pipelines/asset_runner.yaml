@@ -1,0 +1,34 @@
+noob_id: testing-runner-asset
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
+
+assets:
+  counter:
+    type: noob.testing.counter
+    params:
+      start: 1
+    scope: runner
+
+nodes:
+  increment:
+    type: noob.testing.fast_forward
+    params:
+      n: 1
+    depends:
+      - generator: assets.counter
+  more_increment:
+    type: noob.testing.fast_forward
+    depends:
+      - generator: assets.counter
+      - n: increment.next
+  multiply:
+    type: noob.testing.multiply
+    params:
+      left: 0
+    depends:
+      - right: more_increment.next
+  go_to_asset:
+    type: noob.testing.jump
+    depends:
+      - n: multiply.value
+      - generator: assets.counter

@@ -1,0 +1,23 @@
+noob_id: testing-node-asset
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
+
+assets:
+  counter:
+    type: noob.testing.counter
+    params:
+      start: 1
+    scope: node
+
+nodes:
+  increment:
+    type: noob.testing.fast_forward
+    params:
+      n: 3
+    depends:
+      - generator: assets.counter
+  more_increment:
+    type: noob.testing.fast_forward
+    depends:
+      - generator: assets.counter
+      - n: increment.next

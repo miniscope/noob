@@ -398,3 +398,18 @@ class Scheduler(BaseModel):
         graph = self._init_graph(nodes=self.nodes, edges=self.edges)
         cycle = graph.find_cycle()
         return bool(cycle)
+
+    def generations(self) -> list[tuple[str, ...]]:
+        """
+        Get the topological generations of the graph:
+        tuples for each set of nodes that can be run at the same time.
+
+        Order within a generation is not guaranteed to be stable.
+        """
+        sorter = self._init_graph(self.nodes, self.edges)
+        generations = []
+        while sorter.is_active():
+            ready = sorter.get_ready()
+            generations.append(ready)
+            sorter.done(*ready)
+        return generations
