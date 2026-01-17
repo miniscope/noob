@@ -1,7 +1,7 @@
 import asyncio
 import random
 import string
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from datetime import datetime
 from itertools import count, cycle
 from time import sleep
@@ -208,3 +208,7 @@ def jump(generator: count, n: int = 1) -> A[count, Name("skirttt")]:
 def rewind(generator: count, n: int = 1) -> A[count, Name("skrittt")]:
     """Purposely designed to diverge inplace change and output"""
     return count(next(generator) - n)
+
+
+def zip_iter(*args: Iterator) -> tuple[Any, ...]:
+    return tuple(next(a) for a in args)

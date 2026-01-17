@@ -2,6 +2,8 @@ import pytest
 
 from noob import SynchronousRunner, Tube
 
+pytestmark = pytest.mark.assets
+
 
 def test_runner_scoped():
     """

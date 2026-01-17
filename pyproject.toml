@@ -134,6 +134,7 @@ markers = [
     "sync_runner: uses the sync runner",
     "zmq_runner: uses the zmq runner",
     "input: tube and process inputs",
+    "assets: tubes that use assets",
 ]
 
 [tool.black]

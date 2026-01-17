@@ -321,6 +321,43 @@ class Tube(BaseModel):
             )
         return value
 
+    @model_validator(mode="after")
+    def assets_exhausted_after_storage(self) -> Self:
+        """
+        Runner-scoped assets that depend on node outputs can't be directly depended on
+        in topological generations during or after when they are stored
+        in order to protect against unstructured mutation.
+        """
+        generations = None
+        for asset in self.state.assets.values():
+            if not asset.depends:
+                continue
+
+            # only compute if we actually have dependencies
+            if generations is None:
+                generations = self.scheduler.generations()
+
+            # find generation that the node that returns to us is in + successor generations
+            depended_node = asset.depends.split(".")[0]
+            successors: list[str] = []
+            for generation in generations:
+                if depended_node in generation or successors:
+                    successors.extend([node for node in generation if node != depended_node])
+
+            # assert no successor nodes depend on the asset directly.
+            for successor in successors:
+                assert not any(
+                    edge.source_node == "assets" and edge.source_signal == asset.id
+                    for edge in self.nodes[successor].edges
+                ), (
+                    "Nodes that run at the same time or after a node that an asset depends on "
+                    "to update its value cannot depend on the asset directly. "
+                    "Access it by emitting it from another node and depending on that signal. "
+                    f"Node {successor} cannot depend on assets.{asset.id}."
+                )
+
+        return self
+
 
 class TubeClassicEdition:
     def __init__(self):

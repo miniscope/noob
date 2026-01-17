@@ -1,0 +1,35 @@
+noob_id: testing-invalid-equal-depends
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
+
+assets:
+  counter:
+    type: noob.testing.counter
+    params:
+      start: 1
+    scope: runner
+    depends: go_to_asset.skirttt
+
+nodes:
+  increment:
+    type: noob.testing.fast_forward
+    params:
+      n: 1
+    depends:
+      - generator: assets.counter
+  multiply:
+    type: noob.testing.multiply
+    params:
+      left: 0
+    depends:
+      - right: more_increment.next
+  go_to_asset:
+    type: noob.testing.jump
+    depends:
+      - n: multiply.value
+      - generator: assets.counter
+  equal_depends:
+    type: noob.testing.jump
+    depends:
+      - n: multiply.value
+      - generator: assets.counter

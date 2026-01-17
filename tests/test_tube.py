@@ -66,3 +66,15 @@ def test_cycle_check():
 
     with pytest.raises(ValidationError):
         Tube.from_specification("testing-cycle")
+
+
+@pytest.mark.assets
+@pytest.mark.parametrize("tube", ["testing-invalid-post-depends", "testing-invalid-equal-depends"])
+def test_assets_exhausted_after_storage(tube: str):
+    """
+    Nodes cannot depend on runner-scoped assets directly in topological generations
+    equal or after to the generation that stores the value of the asset
+    (via asset.depends) to protect against unstructured mutation
+    """
+    with pytest.raises(ValidationError):
+        Tube.from_specification(tube)
