@@ -93,13 +93,12 @@ def test_asset_copy_post_depends():
         # between epochs, we should only advance by **2** rather than **3**
         # because the asset it deepcopied after `b`
         start = 1 + (i * 2)
-        assert result['a_value'] == start
-        assert result['b_value'] == start + 1
-        assert result['post_value'] == start + 2
+        assert result["a_value"] == start
+        assert result["b_value"] == start + 1
+        assert result["post_value"] == start + 2
 
         # within the epoch, the generator should be unchanged and passed between nodes
-        assert id(result['a_iterator']) == id(result['b_iterator']) == id(result['post_iterator'])
-
+        assert id(result["a_iterator"]) == id(result["b_iterator"]) == id(result["post_iterator"])
 
 
 def test_asset_nocopy_when_unused():
@@ -123,6 +122,6 @@ def test_asset_nocopy_when_unused():
         # between epochs, we should advance by 2 because the asset is unmutated
         # nodes downstream from the dependency still work as normal
         start = 1 + (i * 2)
-        assert result['a_value'] == start
-        assert result['b_value'] == start + 1
-        assert result['post_value'] == (start + 1) * 2
+        assert result["a_value"] == start
+        assert result["b_value"] == start + 1
+        assert result["post_value"] == (start + 1) * 2

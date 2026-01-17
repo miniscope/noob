@@ -214,6 +214,9 @@ def rewind(generator: count, n: int = 1) -> A[count, Name("skrittt")]:
 def zip_iter(*args: Iterator) -> tuple[Any, ...]:
     return tuple(next(a) for a in args)
 
-def increment(iterator: Iterator[int]) -> tuple[A[Iterator[int], Name("iterator")], A[int, Name("value")]]:
+
+def increment(
+    iterator: Iterator[int],
+) -> tuple[A[Iterator[int], Name("iterator")], A[int, Name("value")]]:
     value = next(iterator)
     return iterator, value

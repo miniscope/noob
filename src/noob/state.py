@@ -1,5 +1,6 @@
+import sys
 from collections import defaultdict
-from typing import Self, TypeAlias, TypedDict
+from typing import Self, TypeAlias
 
 from pydantic import BaseModel, Field
 
@@ -7,6 +8,11 @@ from noob.asset import Asset, AssetScope, AssetSpecification
 from noob.event import Event
 from noob.node.base import Edge
 from noob.types import NodeID, PythonIdentifier
+
+if sys.version_info < (3, 12):
+    from typing_extensions import TypedDict
+else:
+    from typing import TypedDict
 
 
 class _AssetDependency(TypedDict):
