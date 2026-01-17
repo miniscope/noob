@@ -1,4 +1,4 @@
-noob_id: testing-depends-asset
+noob_id: testing-depends-asset-nocopy
 noob_model: noob.tube.TubeSpecification
 noob_version: 0.1.1.dev86+gcf9e11b.d20250725
 
@@ -20,15 +20,14 @@ nodes:
     depends:
       - iterator: a.iterator
   post_depends:
-    type: noob.testing.increment
+    type: noob.testing.multiply
+    params:
+      left: 2
     depends:
-      - iterator: b.iterator
+      - right: b.value
   return:
     type: return
     depends:
       - a_value: a.value
-      - a_iterator: a.iterator
       - b_value: b.value
-      - b_iterator: b.iterator
       - post_value: post_depends.value
-      - post_iterator: post_depends.iterator

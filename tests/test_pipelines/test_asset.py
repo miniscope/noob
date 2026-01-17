@@ -79,11 +79,50 @@ def test_asset_copy_post_depends():
 
     runner.init()
 
-    assert set(runner.tube.state.need_copy.keys()) == {"go_to_asset"}
+    assert set(runner.tube.state.dependencies.keys()) == {"b"}
+    last_asset_id = id(runner.tube.state.assets["counter"].obj)
     for i in range(5):
-        runner.process()
-        store = runner.store.events[i]
-        # identical asset as `depends` returned from the previous epoch
-        assert store["increment"]["next"][0]["value"] == 2 ** (i + 1) - 1
-        # same asset within process
-        assert store["more_increment"]["next"][0]["value"] == 2 * (2 ** (i + 1) - 1)
+        result = runner.process()
+
+        # we should have deepcopied the asset and made a new one
+        this_asset_id = id(runner.tube.state.assets["counter"].obj)
+        assert this_asset_id != last_asset_id
+        last_asset_id = this_asset_id
+
+        # within the epoch, all values are computed normally
+        # between epochs, we should only advance by **2** rather than **3**
+        # because the asset it deepcopied after `b`
+        start = 1 + (i * 2)
+        assert result['a_value'] == start
+        assert result['b_value'] == start + 1
+        assert result['post_value'] == start + 2
+
+        # within the epoch, the generator should be unchanged and passed between nodes
+        assert id(result['a_iterator']) == id(result['b_iterator']) == id(result['post_iterator'])
+
+
+
+def test_asset_nocopy_when_unused():
+    """
+    Don't copy assets when there is no chance for them to be mutated after they are stored
+    """
+    tube = Tube.from_specification("testing-depends-asset-nocopy")
+    runner = SynchronousRunner(tube=tube)
+
+    runner.init()
+
+    assert runner.tube.state.dependencies == {}
+    first_asset_id = id(runner.tube.state.assets["counter"].obj)
+    for i in range(5):
+        result = runner.process()
+
+        # we should **not** have deepcopied the asset
+        assert id(runner.tube.state.assets["counter"].obj) == first_asset_id
+
+        # within the epoch, all values are computed normally
+        # between epochs, we should advance by 2 because the asset is unmutated
+        # nodes downstream from the dependency still work as normal
+        start = 1 + (i * 2)
+        assert result['a_value'] == start
+        assert result['b_value'] == start + 1
+        assert result['post_value'] == (start + 1) * 2

@@ -1,12 +1,20 @@
 from collections import defaultdict
-from typing import Self
+from typing import Self, TypeAlias, TypedDict
 
 from pydantic import BaseModel, Field
 
 from noob.asset import Asset, AssetScope, AssetSpecification
 from noob.event import Event
 from noob.node.base import Edge
-from noob.types import DependencyIdentifier, PythonIdentifier
+from noob.types import NodeID, PythonIdentifier
+
+
+class _AssetDependency(TypedDict):
+    asset_id: PythonIdentifier
+    signal: PythonIdentifier
+
+
+_DependencyMap: TypeAlias = dict[NodeID, _AssetDependency]
 
 
 class State(BaseModel):
@@ -20,10 +28,15 @@ class State(BaseModel):
     """
 
     assets: dict[PythonIdentifier, Asset] = Field(default_factory=dict)
-    dependencies: dict[DependencyIdentifier, PythonIdentifier] = Field(default_factory=dict)
+    dependencies: _DependencyMap = Field(default_factory=dict)
     """
-    Map from node signals that assets depend on to the asset ids. 
-    See :attr:`.AssetSpecification.depends`
+    Map from node signals that assets depend on to the asset and signal ids. 
+    See :attr:`.AssetSpecification.depends` . 
+    
+    Only those dependencies that require copying are included here
+    (assets which are not used after the node that is depended on emits them
+    don't need to be copied to protect against mutation within the same epoch
+    after they are stored).
     """
     scope_to_assets: dict[AssetScope, list[Asset]] = Field(
         default_factory=lambda: defaultdict(list)  # type: ignore[arg-type]
@@ -32,36 +45,31 @@ class State(BaseModel):
     Map from :class:`.AssetScope` to :class:`.Asset` to circumvent
     querying scope for each asset in :meth:`.State.init_assets` and :meth:`.State.deinit_assets`
     """
-    need_copy: dict[PythonIdentifier, dict[PythonIdentifier, bool]] = Field(default_factory=dict)
-    """    
-    Assets that are used after by the downstream generation nodes
-    after their dependencies for a given epoch have been satisfied.
-    """
 
     @classmethod
-    def from_specification(cls, specs: dict[str, AssetSpecification], edges: list[Edge]) -> Self:
+    def from_specification(
+        cls, specs: dict[str, AssetSpecification], edges: list[Edge] | None = None
+    ) -> Self:
         """
         Instantiate a :class:`.State` model from its configuration
 
         Args:
             spec (dict[str, AssetSpecification]): the :class:`.State` config to instantiate
+            edges (list[Edge] | None): If present, edges for the whole graph,
+                used to reduce copying for assets using dependencies to store values between epochs.
+                If there are no other nodes that depend on the value that the asset depends on,
+                then we don't have to copy.
         """
+
         assets = {spec.id: Asset.from_specification(spec) for spec in specs.values()}
-        asset_dependencies = {
-            spec.depends: spec.id for spec in specs.values() if spec.depends is not None
-        }
-        node_dependencies = {".".join((e.source_node, e.source_signal)) for e in edges}
-        need_copy = {}
-        for signal in asset_dependencies:
-            need_copy[signal.split(".")[0]] = {signal.split(".")[1]: signal in node_dependencies}
+        dependencies = cls._get_dependencies(specs, edges)
         scope_to_assets = defaultdict(list)
         for asset in assets.values():
             scope_to_assets[asset.scope].append(asset)
         return cls(
             assets=assets,
-            dependencies=asset_dependencies,
+            dependencies=dependencies,
             scope_to_assets=scope_to_assets,
-            need_copy=need_copy,
         )
 
     def init_assets(self, scope: AssetScope) -> None:
@@ -105,7 +113,11 @@ class State(BaseModel):
                     "(assets have no generic 'value' signal)"
                 )
                 asset = self.assets[edge.source_signal]
-                if not asset.depends or epoch == asset.stored_at + 1:
+                if (
+                    not asset.depends
+                    or asset.depends.split(".")[0] not in self.dependencies
+                    or epoch == asset.stored_at + 1
+                ):
                     args[edge.target_slot] = asset.obj
                 else:
                     raise ValueError(
@@ -118,12 +130,29 @@ class State(BaseModel):
     def update(self, events: list[Event]) -> None:
         """Update asset if asset depends on a node signal"""
         for event in events:
-            asset_id = self.dependencies.get(".".join((event["node_id"], event["signal"])))
-            if asset_id is not None:
-                self.assets[asset_id].update(value=event["value"], epoch=event["epoch"])
+            if (dep := self.dependencies.get(event["node_id"])) and dep["signal"] == event[
+                "signal"
+            ]:
+                self.assets[dep["asset_id"]].update(value=event["value"], epoch=event["epoch"])
 
     def clear(self) -> None:
         """
         Clear assets.
         """
         self.assets.clear()
+
+    @classmethod
+    def _get_dependencies(
+        cls, specs: dict[str, AssetSpecification], edges: list[Edge] | None = None
+    ) -> _DependencyMap:
+        deps = {}
+        for asset in specs.values():
+            if not asset.depends:
+                continue
+            node_id, signal = asset.depends.split(".")
+            if edges and not any(
+                edge.source_node == node_id and edge.source_signal == signal for edge in edges
+            ):
+                continue
+            deps[node_id] = _AssetDependency(asset_id=asset.id, signal=signal)
+        return deps

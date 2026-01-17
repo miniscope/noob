@@ -8,7 +8,6 @@ assets:
     params:
       start: 1
     scope: runner
-    depends: go_to_asset.skirttt
 
 nodes:
   increment:

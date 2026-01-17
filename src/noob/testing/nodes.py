@@ -199,10 +199,11 @@ def fast_forward(generator: count, n: int = 1) -> tuple[A[int, Name("next")]]:
     return val
 
 
-def jump(generator: count, n: int = 1) -> A[count, Name("skirttt")]:
+def jump(generator: count, n: int = 1) -> tuple[A[count, Name("skirttt")], A[int, Name("next")]]:
+    value = 0
     for _ in range(n):
-        next(generator)
-    return generator
+        value = next(generator)
+    return generator, value
 
 
 def rewind(generator: count, n: int = 1) -> A[count, Name("skrittt")]:
@@ -212,3 +213,7 @@ def rewind(generator: count, n: int = 1) -> A[count, Name("skrittt")]:
 
 def zip_iter(*args: Iterator) -> tuple[Any, ...]:
     return tuple(next(a) for a in args)
+
+def increment(iterator: Iterator[int]) -> tuple[A[Iterator[int], Name("iterator")], A[int, Name("value")]]:
+    value = next(iterator)
+    return iterator, value
