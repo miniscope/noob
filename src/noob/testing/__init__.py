@@ -1,4 +1,4 @@
-from noob.testing.assets import counter
+from noob.testing.assets import Initializer, counter
 from noob.testing.nodes import (
     CountSource,
     CountSourceDecor,
@@ -25,6 +25,7 @@ from noob.testing.nodes import (
     multi_words_source,
     multiply,
     number_to_letter,
+    passthrough,
     repeat,
     rewind,
     sporadic_word,
@@ -45,6 +46,7 @@ __all__ = [
     "long_add",
     "multiply",
     "number_to_letter",
+    "passthrough",
     "repeat",
     "sporadic_word",
     "word_counts",
@@ -66,4 +68,5 @@ __all__ = [
     "rewind",
     "jump",
     "zip_iter",
+    "Initializer",
 ]

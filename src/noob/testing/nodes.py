@@ -220,3 +220,7 @@ def increment(
 ) -> tuple[A[Iterator[int], Name("iterator")], A[int, Name("value")]]:
     value = next(iterator)
     return iterator, value
+
+
+def passthrough(value: Any) -> Any:
+    return value

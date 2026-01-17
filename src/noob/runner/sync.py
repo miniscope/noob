@@ -37,7 +37,7 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             self.inject_context(node.init)()
 
-        self.inject_context(self.tube.state.init_assets)(AssetScope.runner)
+        self.inject_context(self.tube.state.init)(AssetScope.runner)
 
     def deinit(self) -> None:
         """Stop all nodes processing"""
@@ -45,7 +45,7 @@ class SynchronousRunner(TubeRunner):
         for node in self.tube.enabled_nodes.values():
             self.inject_context(node.deinit)()
 
-        self.inject_context(self.tube.state.deinit_assets)(AssetScope.runner)
+        self.inject_context(self.tube.state.deinit)(AssetScope.runner)
 
         self._running.clear()
 

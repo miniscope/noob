@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
+from noob.asset import AssetScope
 from noob.event import MetaEvent
 from noob.node import Node, Return
 from noob.runner.base import TubeRunner
@@ -54,13 +55,7 @@ class AsyncRunner(TubeRunner):
             ready = await self._get_ready()
             ready = self._filter_ready(ready, self.tube.scheduler)
             for node_info in ready:
-                node_id, epoch = node_info["value"], node_info["epoch"]
-                node = self._get_node(node_id)
-                args, kwargs = self._collect_input(node, epoch, input)
-                node, args, kwargs = self._before_call_node(node, *args, **kwargs)
-                value = self._call_node(node, *args, **kwargs)
-                node, value = self._after_call_node(node, value)
-                self._handle_events(node, value, epoch)
+                self._process_node(node_info=node_info, input=input)
 
         self._after_process()
         return self.collect_return()
@@ -78,7 +73,7 @@ class AsyncRunner(TubeRunner):
             for node in self.tube.enabled_nodes.values():
                 self.inject_context(node.init)()
 
-            self.inject_context(self.tube.state.init_assets)(AssetScope.runner)
+            self.inject_context(self.tube.state.init)(AssetScope.runner)
 
     async def deinit(self) -> None:
         """Stop all nodes processing"""
@@ -86,7 +81,7 @@ class AsyncRunner(TubeRunner):
             for node in self.tube.enabled_nodes.values():
                 self.inject_context(node.deinit)()
 
-            self.inject_context(self.tube.state.deinit_assets)(AssetScope.runner)
+            self.inject_context(self.tube.state.deinit)(AssetScope.runner)
 
         self._running.clear()
 
@@ -94,6 +89,18 @@ class AsyncRunner(TubeRunner):
     def running(self) -> bool:
         """Whether the tube is currently running"""
         return self._running.is_set()
+
+    def _process_node(self, node_info: MetaEvent, input: dict) -> None:
+        node_id, epoch = node_info["value"], node_info["epoch"]
+        node = self._get_node(node_id)
+
+        # FIXME: since nodes can run quasiconcurrently, need to ensure unique assets per node
+        self.tube.state.init(AssetScope.node, node.edges)
+        args, kwargs = self._collect_input(node, epoch, input)
+        node, args, kwargs = self._before_call_node(node, *args, **kwargs)
+        value = self._call_node(node, *args, **kwargs)
+        node, value = self._after_call_node(node, value)
+        self._handle_events(node, value, epoch)
 
     async def _before_process(self) -> None:  # type: ignore[override]
         if not self._running.is_set():
@@ -142,14 +149,17 @@ class AsyncRunner(TubeRunner):
         if future.exception():
             self._logger.debug("Node %s raised exception, re-raising outside of callback")
             self._exception = future.exception()
+            self.tube.state.deinit(AssetScope.node, node.edges)
             self._node_ready.set()
             return
+
         value = future.result()
         events = self.store.add_value(node.signals, value, node.id, epoch)
         if events is not None:
             all_events = self.tube.scheduler.update(events)
             if node.id in self.tube.state.dependencies:
                 self.tube.state.update(events)
+            self.tube.state.deinit(AssetScope.node, node.edges)
             self._call_callbacks(all_events)
         self._node_ready.set()
         self._logger.debug("Node %s emitted %s in epoch %s", node.id, value, epoch)

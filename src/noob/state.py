@@ -1,5 +1,7 @@
 import sys
 from collections import defaultdict
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Self, TypeAlias
 
 from pydantic import BaseModel, Field
@@ -49,7 +51,7 @@ class State(BaseModel):
     )
     """
     Map from :class:`.AssetScope` to :class:`.Asset` to circumvent
-    querying scope for each asset in :meth:`.State.init_assets` and :meth:`.State.deinit_assets`
+    querying scope for each asset in :meth:`.State.init` and :meth:`.State.deinit`
     """
 
     @classmethod
@@ -78,21 +80,48 @@ class State(BaseModel):
             scope_to_assets=scope_to_assets,
         )
 
-    def init_assets(self, scope: AssetScope) -> None:
+    def init(self, scope: AssetScope, edges: list[Edge] | None = None) -> None:
         """
         run :meth:`.Asset.init` for assets that correspond to the given scope.
         Usually means that :attr:`.Asset.obj` attribute gets populated.
-        """
-        for asset in self.scope_to_assets.get(scope, []):
-            asset.init()
 
-    def deinit_assets(self, scope: AssetScope) -> None:
+        For :attr:`.AssetScope.node` ,
+        should provide the nodes edges to determine which assets to initialize, if any.
+        If not passed, all node-scoped assets are initialized
+        """
+        to_init: set[str] | None = None
+        if scope == AssetScope.node and edges is not None:
+            to_init = set(edge.source_signal for edge in edges if edge.source_node == "assets")
+
+        for asset in self.scope_to_assets.get(scope, []):
+            if to_init is None or asset.id in to_init:
+                asset.init()
+
+    def deinit(self, scope: AssetScope, edges: list[Edge] | None = None) -> None:
         """
         run :meth:`.Asset.deinit` for assets that correspond to the given scope.
         Usually means that :attr:`.Asset.obj` attribute is cleared to `None`.
+
+        For :attr:`.AssetScope.node` ,
+        should provide the nodes edges to determine which assets to deinitialize, if any.
+        If not passed, all node-scoped assets are deinitialized
         """
+        to_deinit: set[str] | None = None
+        if scope == AssetScope.node and edges is not None:
+            to_deinit = set(edge.source_signal for edge in edges if edge.source_node == "assets")
+
         for asset in self.scope_to_assets.get(scope, []):
-            asset.deinit()
+            if to_deinit is None or asset.id in to_deinit:
+                asset.deinit()
+
+    @contextmanager
+    def init_context(self, scope: AssetScope, edges: list[Edge] | None = None) -> Iterator[None]:
+        """
+        Contextmanager for initializing and deinitializing assets by scope
+        """
+        self.init(scope, edges)
+        yield
+        self.deinit(scope, edges)
 
     def collect(self, edges: list[Edge], epoch: int) -> dict | None:
         """
