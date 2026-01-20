@@ -29,11 +29,11 @@ def test_epoch_increment():
     assert scheduler.add_epoch() == 11
 
 
-def test_tube_increments_epoch(no_input_tubes):
+def test_tube_increments_epoch(basic_tubes):
     """
     Multiple runs of a tube should increment the epoch
     """
-    tube = Tube.from_specification(no_input_tubes)
+    tube = Tube.from_specification(basic_tubes)
     runner = SynchronousRunner(tube)
 
     for i in range(5):
@@ -56,13 +56,13 @@ def test_event_store_filter():
         assert runner.store.get(node_id="b", signal="value", epoch=i)["value"] == out
 
 
-def test_epoch_completion(no_input_tubes):
+def test_epoch_completion(basic_tubes):
     """
     When all nodes within an epoch are complete, the Scheduler
     must emit an end-of-epoch event.
 
     """
-    tube = Tube.from_specification(no_input_tubes)
+    tube = Tube.from_specification(basic_tubes)
     scheduler = tube.scheduler
     scheduler.add_epoch()
 
