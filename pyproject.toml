@@ -69,9 +69,9 @@ tests = [
     "pytest-codspeed>=4.2.0",
 ]
 docs = [
-    "sphinx>=8.2.3",
+    "sphinx>=8.2.3,<9.0.0", # until myst parser catches up and stops emitting invalid references
     "furo>=2024.8.6",
-    "myst-parser>=4.0.1",
+    "myst-parser>=5.0.0",
     "autodoc-pydantic>=2.2.0",
     "sphinx-design>=0.6.1",
     "sphinxcontrib-mermaid>=1.0.0",
@@ -119,7 +119,15 @@ docs-js = """concurrently
   'npm --prefix js/ run watch:docs'
   'sphinx-autobuild docs docs/_build/html'
 """
-build-js-docs = "npm --prefix js/ run build:docs"
+docs-build.cmd = "make html"
+docs-build.working_dir = "docs"
+docs-build-js = "npm --prefix js/ run build:docs"
+docs-test.composite = [
+    "rm -rf ./docs/_build || true",
+    "docs-build-js",
+    "docs-build",
+]
+docs-test.env = {SPHINXOPTS = "-W --keep-going"}
 mypy = "mypy"
 benchmark = "pytest tests/bench.py --codspeed"
 

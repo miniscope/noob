@@ -32,11 +32,20 @@ jobs:
           python-version: "3.13"
           cache: 'pip'
 
-      - name: Install dependencies
-        run: pip install -e ".[docs]"
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: "js/package-lock.json"
+
+      - name: Install python dependencies
+        run: |
+          pip install pdm
+          pdm install --with docs
+
+      - name: Install node dependencies
+        run: npm --prefix js/ ci
 
       - name: Build docs
-        working-directory: docs
-        env:
-          SPHINXOPTS: "-W --keep-going"
-        run: make html
+        run: pdm run docs-test
