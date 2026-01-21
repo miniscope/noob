@@ -21,4 +21,4 @@ build:
       - npm --prefix js/ ci
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm install --with docs
     pre_build:
-      - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run build-js-docs
+      - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-js
