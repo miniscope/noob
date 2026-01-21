@@ -69,7 +69,7 @@ tests = [
     "pytest-codspeed>=4.2.0",
 ]
 docs = [
-    "sphinx>=8.2.3,<9.0.0", # until myst parser catches up and stops emitting invalid referencespdm run for
+    "sphinx>=8.2.3,<9.0.0", # until myst parser catches up and stops emitting invalid references
     "furo>=2024.8.6",
     "myst-parser>=5.0.0",
     "autodoc-pydantic>=2.2.0",
