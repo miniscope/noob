@@ -45,6 +45,9 @@ class TubeSpecification(ConfigYAMLMixin):
     nodes: dict[PythonIdentifier, NodeSpecification] = Field(default_factory=dict)
     """The nodes that this tube configures"""
 
+    description: str | None = None
+    """An optional description of the tube"""
+
     @field_validator("nodes", "assets", "input", mode="before")
     @classmethod
     def fill_node_ids(cls, value: dict[str, dict]) -> dict[str, dict]:

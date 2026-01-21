@@ -39,6 +39,8 @@ class InputSpecification(BaseModel):
     id: PythonIdentifier
     type_: AbsoluteIdentifier = Field(..., alias="type")
     scope: InputScope = InputScope.tube
+    description: str | None = None
+    """An optional description of the input value"""
 
 
 class InputCollection(BaseModel):

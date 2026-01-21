@@ -119,6 +119,8 @@ class NodeSpecification(BaseModel):
     explicitly set statefulness on a node, overriding its default.
     If ``None`` , use the default set on the node class.
     """
+    description: str | None = None
+    """An optional description of the node"""
 
     @field_validator("depends", mode="after")
     @classmethod

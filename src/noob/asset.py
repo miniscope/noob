@@ -64,6 +64,8 @@ class AssetSpecification(BaseModel):
     The node signal that this asset specification depends on will be the version of the asset
     stored and used in the next processing epoch.
     """
+    description: str | None = None
+    """An optional description of the asset"""
 
     @model_validator(mode="after")
     def validate_depends(self) -> Self:
