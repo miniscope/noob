@@ -6,7 +6,7 @@ import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
 from .fixtures import *
-from .fixtures.paths import CONFIG_DIR, PIPELINE_DIR, SPECIAL_DIR
+from .fixtures.paths import CONFIG_DIR, PIPELINE_DIR
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -18,7 +18,7 @@ def patch_config_source(monkeypatch_session: MonkeyPatch) -> None:
     current_sources = ConfigYAMLMixin.config_sources()
     original_method = ConfigYAMLMixin.config_sources
 
-    for pth in (CONFIG_DIR, SPECIAL_DIR, PIPELINE_DIR):
+    for pth in (CONFIG_DIR, PIPELINE_DIR):
         add_config_source(pth)
 
     def _config_sources(cls: type[ConfigYAMLMixin]) -> list[Path]:

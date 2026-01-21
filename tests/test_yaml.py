@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 
 from noob.yaml import ConfigYAMLMixin, YAMLMixin, yaml, yaml_peek
 
-from .conftest import SPECIAL_DIR
+from .fixtures import PIPELINE_DIR
 
 
 class NestedModel(BaseModel):
@@ -145,7 +145,7 @@ def test_roundtrip_from_to_yaml(tmp_path):
     """
     yaml comments and whitespace are preserved on a from/to yaml loop
     """
-    yaml_file = SPECIAL_DIR / "roundtrip.yaml"
+    yaml_file = PIPELINE_DIR / "special" / "roundtrip.yaml"
     out_fn = tmp_path / "roundtrip.yaml"
     original = yaml_file.read_text()
     instance = Roundtrip.from_id("testing-roundtrip")
