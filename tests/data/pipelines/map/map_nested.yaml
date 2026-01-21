@@ -1,0 +1,24 @@
+noob_id: testing-map-nested
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: Mapping the outputs of a map
+
+nodes:
+  a:
+    type: noob.testing.multi_words_source
+    params:
+      n: 5
+  b:
+    type: map
+    depends:
+      - value: a.multi_words
+  c:
+    type: map
+    depends:
+      - string: b.value
+  return:
+    type: return
+    depends:
+      - words: a.multi_words
+      - word: b.value
+      - letter: c.value

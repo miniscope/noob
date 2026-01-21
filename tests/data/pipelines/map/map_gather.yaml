@@ -1,0 +1,30 @@
+noob_id: testing-map-gather
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: Mapping into a gather in "map" mode collapses epoch
+
+nodes:
+  a:
+    type: noob.testing.word_source
+  b:
+    type: map
+    depends:
+      - value: a.word
+  c:
+    type: noob.testing.exclaim
+    depends:
+      - string: b.value
+  d:
+    type: gather
+    depends:
+      - c.value
+  e:
+    type: noob.testing.concat
+    depends:
+      - strings: d.value
+  return:
+    type: return
+    depends:
+      - word: a.word
+      - letter: c.value
+      - reconstructed: e.value

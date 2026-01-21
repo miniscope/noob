@@ -1,0 +1,21 @@
+noob_id: testing-map-basic
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: Simplest case for map - expand a collection and process its elements
+
+nodes:
+  a:
+    type: noob.testing.word_source
+  b:
+    type: map
+    depends:
+      - value: a.word
+  c:
+    type: noob.testing.exclaim
+    depends:
+      - string: b.value
+  return:
+    type: return
+    depends:
+      - word: a.word
+      - letter: c.value
