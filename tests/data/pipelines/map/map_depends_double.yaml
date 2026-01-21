@@ -1,0 +1,26 @@
+noob_id: testing-map-depends-double
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: Invalid to depend on multiple signals downstream from maps
+
+nodes:
+  word_a:
+    type: noob.testing.word_source
+  word_b:
+    type: noob.testing.word_source
+  map_a:
+    type: map
+    depends:
+      - value: word_a.word
+  map_b:
+    type: map
+    depends:
+      - value: word_b.word
+  concat:
+    type: noob.testing.multi_concat
+    depends:
+      - a: map_a.value
+      - b: map_b.value
+
+
+

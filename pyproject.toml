@@ -143,6 +143,7 @@ markers = [
     "zmq_runner: uses the zmq runner",
     "input: tube and process inputs",
     "assets: tubes that use assets",
+    "map: i'm the map i'm the map i'm the map",
 ]
 
 [tool.black]

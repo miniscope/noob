@@ -1,0 +1,25 @@
+noob_id: testing-map-depends
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: A node depends on the output of map and a normal signal
+
+nodes:
+  count:
+    type: noob.nodes.count_source
+  word:
+    type: noob.nodes.word_source
+  map:
+    type: map
+    depends:
+      - value: word.word
+  exclaim:
+    type: noob.nodes.exclaim
+    depends:
+      - string: map.value
+      - hype: count.index
+  return:
+    type: return
+    depends:
+      - word: word.word
+      - letters: exclaim.value
+      - count: count.index
