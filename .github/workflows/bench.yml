@@ -21,6 +21,7 @@ jobs:
           pdm install
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
+        timeout-minutes: 5
         with:
           mode: simulation
           run: pdm run benchmark
