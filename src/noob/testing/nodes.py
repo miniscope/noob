@@ -224,3 +224,23 @@ def increment(
 
 def passthrough(value: Any) -> Any:
     return value
+
+
+class InitCounter(Node):
+    """Count how many times we have been initialized and deinitalized"""
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._inits = 0
+        self._deinits = 0
+
+    def process(self) -> tuple[A[int, Name("inits")], A[int, Name("deinits")]]:
+        # sleep to just not have this flood the networking modules.
+        sleep(0.01)
+        return self._inits, self._deinits
+
+    def init(self) -> None:
+        self._inits += 1
+
+    def deinit(self) -> None:
+        self._deinits += 1

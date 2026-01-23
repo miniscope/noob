@@ -1,0 +1,7 @@
+noob_id: testing-count-init
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
+
+nodes:
+  counter:
+    type: noob.testing.InitCounter

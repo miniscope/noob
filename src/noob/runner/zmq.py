@@ -463,6 +463,8 @@ class NodeRunner(EventloopMixin):
             if inputs is None:
                 inputs = {}
             args, kwargs = self.store.split_args_kwargs(inputs)
+            # clear events for this epoch, since we have consumed what we need here.
+            self.store.clear(ready["epoch"])
             yield args, kwargs, ready["epoch"]
 
     def update_graph(self, events: list[Event]) -> None:
@@ -662,6 +664,7 @@ class NodeRunner(EventloopMixin):
         """
         Start running in free mode
         """
+        self.update_status(NodeStatus.running)
         if msg.value is None:
             self._freerun.set()
         else:
@@ -749,11 +752,17 @@ class ZMQRunner(TubeRunner):
     quit_timeout: float = 10
     """time in seconds to wait after calling deinit to wait before killing runner processes"""
     store: EventStore = field(default_factory=EventStore)
+    autoclear_store: bool = True
+    """
+    If ``True`` (default), clear the event store after events are processed and returned.
+    If ``False`` , don't clear events from the event store
+    """
 
     _initialized: EventType = field(default_factory=mp.Event)
     _running: EventType = field(default_factory=mp.Event)
     _init_lock: threading.RLock = field(default_factory=threading.RLock)
     _running_lock: threading.Lock = field(default_factory=threading.Lock)
+    _ignore_events: bool = False
     _return_node: Return | None = None
     _to_throw: ErrorValue | None = None
     _current_epoch: int = 0
@@ -928,28 +937,19 @@ class ZMQRunner(TubeRunner):
                     self._logger.debug("Awaiting epoch %s", epoch)
                     self.tube.scheduler.await_epoch(epoch)
                     ret = self.collect_return(epoch)
-                    self.store.clear(epoch)
                     epoch += 1
                     self._current_epoch = epoch
                     if loop > self.max_iter_loops:
                         raise RuntimeError("Reached maximum process calls per iteration")
                     # if we have run out of epochs to run, request some more with a cheap heuristic
                     if n is not None and epoch >= stop_epoch:
-                        # if we get one return value every 5 epochs,
-                        # and we ran 5 epochs to get 1 result,
-                        # then we need to run 20 more to get the other 4,
-                        # or, (n remaining) * (epochs per result)
-                        # so...
-                        divisor = current_iter if current_iter > 0 else 1
-                        get_more = (n - current_iter) * math.ceil(
-                            (stop_epoch - start_epoch) / divisor
+                        stop_epoch += self._request_more(
+                            n=n, current_iter=current_iter, n_epochs=stop_epoch - start_epoch
                         )
-                        stop_epoch += get_more
-                        self.command.start(get_more)
 
-                # stop here in case we don't exhaust the iterator
-                if n is not None and current_iter >= n:
-                    self.command.stop()
+                # # stop here in case we don't exhaust the iterator
+                # if n is not None and current_iter >= n:
+                #     self.command.stop()
                 current_iter += 1
                 yield ret
 
@@ -993,6 +993,8 @@ class ZMQRunner(TubeRunner):
         self.command = cast(CommandNode, self.command)
 
         if n is None:
+            if self.autoclear_store:
+                self._ignore_events = True
             self.command.start()
             self._running.set()
             return None
@@ -1008,6 +1010,7 @@ class ZMQRunner(TubeRunner):
         Stop running the tube.
         """
         self.command = cast(CommandNode, self.command)
+        self._ignore_events = False
         self.command.stop()
         self._running.clear()
 
@@ -1018,8 +1021,10 @@ class ZMQRunner(TubeRunner):
             return
 
         msg = cast(EventMsg, msg)
-        for event in msg.value:
-            self.store.add(event)
+        # store events (if we are not in freerun mode, where we don't want to store infinite events)
+        if not self._ignore_events:
+            for event in msg.value:
+                self.store.add(event)
         self.tube.scheduler.update(msg.value)
         if self._return_node is not None:
             # mark the return node done if we've received the expected events for an epoch
@@ -1050,6 +1055,8 @@ class ZMQRunner(TubeRunner):
             args, kwargs = self.store.split_args_kwargs(events)
             self._return_node.process(*args, **kwargs)
             ret = self._return_node.get(keep=False)
+            if self.autoclear_store:
+                self.store.clear(epoch)
             return ret
 
     def _handle_error(self, msg: ErrorMsg) -> None:
@@ -1085,6 +1092,39 @@ class ZMQRunner(TubeRunner):
         err.add_note(tb_message)
 
         raise err
+
+    def _request_more(self, n: int, current_iter: int, n_epochs: int) -> int:
+        """
+        During iteration with cardinality-reducing nodes,
+        if we haven't gotten the requested n return values in n epochs,
+        request more epochs based on how many return values we got for n iterations
+
+        Args:
+            n (int): number of requested return values
+            current_iter (int): current number of return values that have been collected
+            n_epochs (int): number of epochs that have run
+        """
+        self.command = cast(CommandNode, self.command)
+        n_remaining = n - current_iter
+        if n_remaining <= 0:
+            self._logger.warning(
+                "Asked to request more epochs, but already collected enough return values. "
+                "Ignoring. "
+                "Requested n: %s, collected n: %s",
+                n,
+                current_iter,
+            )
+            return 0
+
+        # if we get one return value every 5 epochs,
+        # and we ran 5 epochs to get 1 result,
+        # then we need to run 20 more to get the other 4,
+        # or, (n remaining) * (epochs per result)
+        # so...
+        divisor = current_iter if current_iter > 0 else 1
+        get_more = math.ceil(n_remaining * (n_epochs / divisor))
+        self.command.start(get_more)
+        return get_more
 
     def enable_node(self, node_id: str) -> None:
         raise NotImplementedError()

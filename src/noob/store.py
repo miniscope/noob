@@ -2,6 +2,7 @@
 Tube runners for running tubes
 """
 
+import contextlib
 from collections import defaultdict
 from collections.abc import Generator
 from dataclasses import dataclass, field
@@ -193,7 +194,8 @@ class EventStore:
         if epoch is None:
             self.events = _make_event_dict()
         else:
-            del self.events[epoch]
+            with contextlib.suppress(KeyError):
+                del self.events[epoch]
 
     @staticmethod
     def transform_events(edges: list[Edge], events: list[Event]) -> dict:

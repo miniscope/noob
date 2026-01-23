@@ -12,7 +12,6 @@ from typing import (
     cast,
     get_args,
     get_origin,
-    overload,
 )
 
 from pydantic import (
@@ -26,7 +25,6 @@ from pydantic import (
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
-from noob.types import RunnerContext
 from noob.utils import resolve_python_identifier
 
 if TYPE_CHECKING:
@@ -195,14 +193,8 @@ class Node(BaseModel):
         if inspect.isgeneratorfunction(self.process):
             self._wrap_generator(self.process)
 
-    @overload
-    def init(self) -> None: ...
-
-    @overload
-    def init(self, context: RunnerContext) -> None: ...
-
     # TODO: Support dependency injection in mypy plugin
-    def init(self) -> None:  # type: ignore[misc]
+    def init(self) -> None:
         """
         Start producing, processing, or receiving data.
 
