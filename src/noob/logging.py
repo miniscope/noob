@@ -153,7 +153,6 @@ def _file_handler(
     file_handler = RotatingFileHandler(
         str(filename), mode="a", maxBytes=log_file_size, backupCount=log_file_n
     )
-    file_handler._pid = mp.current_process().pid
     file_formatter = logging.Formatter("[%(asctime)s] %(levelname)s [%(name)s]: %(message)s")
     file_handler.setLevel(file_level)
     file_handler.setFormatter(file_formatter)
@@ -178,7 +177,7 @@ def _rich_handler(
     return rich_handler
 
 
-_console_by_pid: dict[int, Console] = {}
+_console_by_pid: dict[int | None, Console] = {}
 
 
 def _get_console() -> Console:
