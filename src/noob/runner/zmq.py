@@ -752,7 +752,7 @@ class ZMQRunner(TubeRunner):
 
     _initialized: EventType = field(default_factory=mp.Event)
     _running: EventType = field(default_factory=mp.Event)
-    _init_lock: threading.Lock = field(default_factory=threading.RLock)
+    _init_lock: threading.RLock = field(default_factory=threading.RLock)
     _running_lock: threading.Lock = field(default_factory=threading.Lock)
     _return_node: Return | None = None
     _to_throw: ErrorValue | None = None
