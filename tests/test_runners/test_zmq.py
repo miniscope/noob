@@ -412,8 +412,10 @@ def test_zmqrunner_stores_clear_iter(_zmq_runner_basic):
     ZMQRunner stores clear after returning values while iterating
     """
     runner = _zmq_runner_basic
-    for _ in runner.iter(5):
-        assert len(runner.store.events) == 0
+    for i, _ in enumerate(runner.iter(5)):
+        # we will receive more events from epochs that run ahead of our processing
+        # but we should clear the epoch as we return it from iter
+        assert i not in runner.store.events
 
 
 @pytest.mark.asyncio
