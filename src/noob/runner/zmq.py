@@ -502,6 +502,8 @@ class NodeRunner(EventloopMixin):
                 "Node was not initialized by the time we tried to "
                 "identify ourselves to the command node."
             )
+
+        self.logger.debug("Identifying")
         with self._status_lock:
             ann = IdentifyMsg(
                 node_id=self.spec.id,
@@ -520,10 +522,12 @@ class NodeRunner(EventloopMixin):
 
     def update_status(self, status: NodeStatus) -> None:
         """Update our internal status and announce it to the command node"""
+        self.logger.debug("Updating status as %s", status)
         with self._status_lock:
             self.status = status
             msg = StatusMsg(node_id=self.spec.id, value=status)
             self._dealer.send_multipart([msg.to_bytes()])
+            self.logger.debug("Updated status")
 
     def start_sockets(self) -> None:
         self.start_loop()
@@ -619,12 +623,16 @@ class NodeRunner(EventloopMixin):
         Store map, connect to the nodes we depend on
         """
         self._node = cast(Node, self._node)
+        self.logger.debug("Processing announce")
         with self._status_lock:
             depended_nodes = {edge.source_node for edge in self._node.edges}
+            if depended_nodes:
+                self.logger.debug("Should subscribe to %s", depended_nodes)
             for node_id in msg.value["nodes"]:
                 if node_id in depended_nodes and node_id not in self._nodes:
                     # TODO: a way to check if we're already connected, without storing it locally?
                     outbox = msg.value["nodes"][node_id]["outbox"]
+                    self.logger.debug("Subscribing to %s at %s", node_id, outbox)
                     self._inbox.connect(outbox)
                     self.logger.debug("Subscribed to %s at %s", node_id, outbox)
             self._nodes = msg.value["nodes"]
@@ -744,7 +752,7 @@ class ZMQRunner(TubeRunner):
 
     _initialized: EventType = field(default_factory=mp.Event)
     _running: EventType = field(default_factory=mp.Event)
-    _init_lock: threading.Lock = field(default_factory=threading.Lock)
+    _init_lock: threading.Lock = field(default_factory=threading.RLock)
     _running_lock: threading.Lock = field(default_factory=threading.Lock)
     _return_node: Return | None = None
     _to_throw: ErrorValue | None = None
@@ -789,9 +797,17 @@ class ZMQRunner(TubeRunner):
                 )
                 self.node_procs[node_id].start()
             self._logger.debug("Started node processes, awaiting ready")
-            self.command.await_ready(
-                [k for k, v in self.tube.nodes.items() if not isinstance(v, Return)]
-            )
+            try:
+                self.command.await_ready(
+                    [k for k, v in self.tube.nodes.items() if not isinstance(v, Return)]
+                )
+            except TimeoutError as e:
+                self._logger.debug("Timeouterror, deinitializing before throwing")
+                self._initialized.set()
+                self.deinit()
+                self._logger.exception(e)
+                raise
+
             self._logger.debug("Nodes ready")
             self._initialized.set()
 
