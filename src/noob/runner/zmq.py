@@ -66,6 +66,7 @@ from noob.network.message import (
     Message,
     MessageType,
     NodeStatus,
+    PingMsg,
     ProcessMsg,
     StartMsg,
     StatusMsg,
@@ -192,6 +193,11 @@ class CommandNode(EventloopMixin):
         )
         self._outbox.send_multipart([b"announce", msg.to_bytes()])
 
+    def ping(self) -> None:
+        """Send a ping message asking everyone to identify themselves"""
+        msg = PingMsg(node_id="command")
+        self._outbox.send_multipart([b"ping", msg.to_bytes()])
+
     def start(self, n: int | None = None) -> None:
         """
         Start running in free-run mode
@@ -222,27 +228,40 @@ class CommandNode(EventloopMixin):
     def clear_callbacks(self) -> None:
         self._callbacks = defaultdict(list)
 
-    def await_ready(self, node_ids: list[NodeID]) -> None:
+    def await_ready(self, node_ids: list[NodeID], timeout: float = 5) -> None:
         """
         Wait until all the node_ids have announced themselves
         """
+
+        def _ready_nodes() -> set[str]:
+            return {node_id for node_id, state in self._nodes.items() if state["status"] == "ready"}
+
+        def _is_ready() -> bool:
+            ready_nodes = _ready_nodes()
+            waiting_for = set(node_ids)
+            self.logger.debug(
+                "Checking if ready, ready nodes are: %s, waiting for %s",
+                ready_nodes,
+                waiting_for,
+            )
+            return waiting_for.issubset(ready_nodes)
+
         with self._ready_condition:
-            if set(node_ids) == set(self._nodes):
-                return
+            # ping periodically for identifications in case we have slow subscribers
+            start_time = time()
+            ready = False
+            while time() < start_time + timeout and not ready:
+                ready = self._ready_condition.wait_for(_is_ready, timeout=1)
+                if not ready:
+                    self.ping()
 
-            def _is_ready() -> bool:
-                ready_nodes = {
-                    node_id for node_id, state in self._nodes.items() if state["status"] == "ready"
-                }
-                waiting_for = set(node_ids)
-                self.logger.debug(
-                    "Checking if ready, ready nodes are: %s, waiting for %s",
-                    ready_nodes,
-                    waiting_for,
-                )
-                return waiting_for == ready_nodes
-
-            self._ready_condition.wait_for(_is_ready)
+        # if still not ready, timeout
+        if not ready:
+            raise TimeoutError(
+                f"Nodes were not ready after the timeout. "
+                f"Waiting for: {set(node_ids)}, "
+                f"ready: {_ready_nodes()}"
+            )
 
     def on_router(self, msg: list[bytes]) -> None:
         try:
@@ -588,6 +607,8 @@ class NodeRunner(EventloopMixin):
         elif message.type_ == MessageType.deinit:
             message = cast(DeinitMsg, message)
             self.on_deinit(message)
+        elif message.type_ == MessageType.ping:
+            self.identify()
         else:
             # log but don't throw - other nodes shouldn't be able to crash us
             self.logger.error(f"{message.type_} not implemented!")

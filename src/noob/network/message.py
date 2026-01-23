@@ -35,6 +35,7 @@ class MessageType(StrEnum):
     process = "process"
     init = "init"
     deinit = "deinit"
+    ping = "ping"
     start = "start"
     status = "status"
     stop = "stop"
@@ -111,6 +112,13 @@ class IdentifyMsg(Message):
 
     type_: Literal[MessageType.identify] = Field(MessageType.identify, alias="type")
     value: IdentifyValue
+
+
+class PingMsg(Message):
+    """Request other nodes to identify themselves and report their status"""
+
+    type_: Literal[MessageType.ping] = Field(MessageType.ping, alias="type")
+    value: None = None
 
 
 class ProcessMsg(Message):
