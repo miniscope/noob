@@ -222,6 +222,7 @@ MessageUnion = A[
     | A[ProcessMsg, Tag("process")]
     | A[InitMsg, Tag("init")]
     | A[DeinitMsg, Tag("deinit")]
+    | A[PingMsg, Tag("ping")]
     | A[StartMsg, Tag("start")]
     | A[StatusMsg, Tag("status")]
     | A[StopMsg, Tag("stop")]
