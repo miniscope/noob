@@ -553,25 +553,33 @@ def call_async_from_sync(
 
     result_future: asyncio.Future[_TReturn] = asyncio.Future()
     work_ready = threading.Condition()
+    finished = False
 
     # Closures because this code should never escape the containment tomb of this crime against god
     async def _wrap(call_result: asyncio.Future[_TReturn], fn: Coroutine) -> None:
+        nonlocal finished
         try:
             result = await fn
             call_result.set_result(result)
         except Exception as e:
             call_result.set_exception(e)
+        finally:
+            finished = True
 
     def _done(_: ConcurrentFuture) -> None:
+        nonlocal finished
+
+        finished = True
         with work_ready:
             work_ready.notify_all()
 
     future_inner = executor.submit(asyncio.run, _wrap(result_future, coro))
     future_inner.add_done_callback(_done)
 
-    with work_ready:
-        work_ready.wait()
     try:
+        while not finished and not future_inner.done():
+            with work_ready:
+                work_ready.wait(timeout=1)
         res = result_future.result()
         return res
     finally:
