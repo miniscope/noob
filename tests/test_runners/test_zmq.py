@@ -274,6 +274,12 @@ async def test_start_stop():
     router_events = [
         e for e in router_events if e.type_ == "status" and e.value in ("stopped", "running")
     ]
+    # we can get duplicate status messages if the command node has to ping to wake up the sockets
+    # so filter just to the transitions
+    router_events = [
+        e for i, e in enumerate(router_events) if i == 0 or router_events[i - 1].value != e.value
+    ]
+
     # sometimes we get the last stop event,
     # sometimes we dont - we don't wait for it
     assert 4 >= len(router_events) >= 3, str(router_events)
