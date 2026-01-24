@@ -271,9 +271,12 @@ async def test_start_stop():
         runner.run()
         await sleep(0.2)
 
+    router_events = [
+        e for e in router_events if e.type_ == "status" and e.value in ("stopped", "running")
+    ]
     # sometimes we get the last stop event,
     # sometimes we dont - we don't wait for it
-    assert 4 >= len(router_events) >= 3
+    assert 4 >= len(router_events) >= 3, router_events
     assert router_events[1].value == "stopped"
     first_events = [e for e in events if e["timestamp"] < router_events[1].timestamp]
     stopped_events = [
