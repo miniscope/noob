@@ -228,7 +228,7 @@ class CommandNode(EventloopMixin):
     def clear_callbacks(self) -> None:
         self._callbacks = defaultdict(list)
 
-    def await_ready(self, node_ids: list[NodeID], timeout: float = 5) -> None:
+    def await_ready(self, node_ids: list[NodeID], timeout: float = 10) -> None:
         """
         Wait until all the node_ids have announced themselves
         """

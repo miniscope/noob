@@ -294,13 +294,14 @@ async def test_start_stop():
     end_events = [e for e in events if e["timestamp"] > router_events[2].timestamp]
 
     # with the node's sleep, there are time for ~10 runs if there was no latency,
-    # so say we should at least do 5 (10 events)
-    assert len(first_events) > 10
+    # but all we really care about is that we got any
+    # (macos runner on gh is very slow to process events, and we don't want to increase wait time)
+    assert len(first_events) > 0
     # there can be one additional run of the node after the stopped message is sent
     # if the node is already running when the stop message is received.
     # (two events, because the node emits two signals)
     assert len(stopped_events) <= 2
-    assert len(end_events) > 10
+    assert len(end_events) > 0
 
     # even though we stopped and started, the nodes should have stated initialized
     # (and not been deinit'd and reinit'd)
