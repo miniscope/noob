@@ -947,9 +947,6 @@ class ZMQRunner(TubeRunner):
                             n=n, current_iter=current_iter, n_epochs=stop_epoch - start_epoch
                         )
 
-                # # stop here in case we don't exhaust the iterator
-                # if n is not None and current_iter >= n:
-                #     self.command.stop()
                 current_iter += 1
                 yield ret
 

@@ -29,6 +29,13 @@ def init_logger(
     Log to a set of rotating files in the ``log_dir`` according to ``name`` ,
     as well as using the :class:`~rich.RichHandler` for pretty-formatted stdout logs.
 
+    If this method is called from a process that isn't the root process,
+    it will create new rich and file handlers in the root noob logger to avoid
+    deadlocks from threading locks that are copied on forked processes.
+    Since the handlers will be different across processes,
+    to avoid file access conflicts, logging files will have the process's ``pid``
+    appended (e.g. ``noob_12345.log`` )
+
     Args:
         name (str): Name of this logger. Ideally names are hierarchical
             and indicate what they are logging for, eg. ``noob.api.auth``
