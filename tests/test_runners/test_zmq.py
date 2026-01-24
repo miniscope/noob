@@ -276,7 +276,7 @@ async def test_start_stop():
     ]
     # sometimes we get the last stop event,
     # sometimes we dont - we don't wait for it
-    assert 4 >= len(router_events) >= 3, router_events
+    assert 4 >= len(router_events) >= 3, str(router_events)
     assert router_events[1].value == "stopped"
     first_events = [e for e in events if e["timestamp"] < router_events[1].timestamp]
     stopped_events = [
