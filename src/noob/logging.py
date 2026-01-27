@@ -4,6 +4,7 @@ Logging factory and handlers
 
 import logging
 import multiprocessing as mp
+import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Literal
@@ -193,5 +194,5 @@ def _get_console() -> Console:
     current_pid = mp.current_process().pid
     console = _console_by_pid.get(current_pid)
     if console is None:
-        _console_by_pid[current_pid] = console = Console()
+        _console_by_pid[current_pid] = console = Console(file=sys.stdout)
     return console

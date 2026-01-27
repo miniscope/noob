@@ -22,6 +22,7 @@
 
 """
 
+import asyncio
 import math
 import multiprocessing as mp
 import os
@@ -29,7 +30,7 @@ import signal
 import threading
 import traceback
 from collections import defaultdict
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, AsyncGenerator
 from dataclasses import dataclass, field
 from itertools import count
 from multiprocessing.synchronize import Event as EventType
@@ -46,7 +47,7 @@ except ImportError as e:
         "Attempted to import zmq runner, but zmq deps are not installed. install with `noob[zmq]`",
     ) from e
 
-
+from zmq.asyncio import Context, Poller, Socket
 from zmq.eventloop.zmqstream import ZMQStream
 
 from noob.config import config
@@ -73,8 +74,8 @@ from noob.network.message import (
     StopMsg,
 )
 from noob.node import Node, NodeSpecification, Return, Signal
-from noob.runner.base import TubeRunner, call_async_from_sync
-from noob.scheduler import Scheduler
+from noob.runner.base import TubeRunner
+from noob.scheduler import AsyncScheduler
 from noob.store import EventStore
 from noob.types import NodeID, ReturnNodeType
 from noob.utils import iscoroutinefunction_partial
@@ -311,7 +312,7 @@ class CommandNode(EventloopMixin):
             self._ready_condition.notify_all()
 
 
-class NodeRunner(EventloopMixin):
+class NodeRunner:
     """
     Runner for a single node
 
@@ -329,7 +330,7 @@ class NodeRunner(EventloopMixin):
         input_collection: InputCollection,
         protocol: str = "ipc",
     ):
-        super().__init__()
+        self.context = Context.instance()
         self.spec = spec
         self.runner_id = runner_id
         self.input_collection = input_collection
@@ -337,22 +338,23 @@ class NodeRunner(EventloopMixin):
         self.command_router = command_router
         self.protocol = protocol
         self.store = EventStore()
-        self.scheduler: Scheduler = None  # type: ignore[assignment]
+        self.scheduler: AsyncScheduler = None  # type: ignore[assignment]
         self.logger = init_logger(f"runner.node.{runner_id}.{self.spec.id}")
 
-        self._dealer: ZMQStream = None  # type: ignore[assignment]
-        self._outbox: zmq.Socket = None  # type: ignore[assignment]
-        self._inbox: ZMQStream = None  # type: ignore[assignment]
+        self._dealer: Socket = None  # type: ignore[assignment]
+        self._outbox: Socket = None  # type: ignore[assignment]
+        self._inbox: Socket = None  # type: ignore[assignment]
+        self._inbox_poller: Poller = Poller()
         self._node: Node | None = None
         self._depends: tuple[tuple[str, str], ...] | None = None
         self._has_input: bool | None = None
         self._nodes: dict[str, IdentifyValue] = {}
         self._counter = count()
-        self._process_quitting = mp.Event()
-        self._freerun = mp.Event()
-        self._process_one = mp.Event()
+        self._process_quitting = asyncio.Event()
+        self._freerun = asyncio.Event()
+        self._process_one = asyncio.Event()
         self._status: NodeStatus = NodeStatus.stopped
-        self._status_lock = mp.RLock()
+        self._status_lock = asyncio.Lock()
         self._to_process = 0
 
     @property
@@ -386,13 +388,11 @@ class NodeRunner(EventloopMixin):
 
     @property
     def status(self) -> NodeStatus:
-        with self._status_lock:
-            return self._status
+        return self._status
 
     @status.setter
     def status(self, status: NodeStatus) -> None:
-        with self._status_lock:
-            self._status = status
+        self._status = status
 
     @classmethod
     def run(cls, spec: NodeSpecification, **kwargs: Any) -> None:
@@ -401,6 +401,10 @@ class NodeRunner(EventloopMixin):
         init the class and start it!
         """
         runner = NodeRunner(spec=spec, **kwargs)
+        asyncio.run(runner._run())
+
+    async def _run(self) -> None:
+
         try:
 
             def _handler(sig: int, frame: FrameType | None = None) -> None:
@@ -408,40 +412,46 @@ class NodeRunner(EventloopMixin):
                 raise KeyboardInterrupt()
 
             signal.signal(signal.SIGTERM, _handler)
-            runner.init()
-            runner._node = cast(Node, runner._node)
-            runner._process_quitting.clear()
-            runner._freerun.clear()
-            runner._process_one.clear()
-
-            is_async = iscoroutinefunction_partial(runner._node.process)
-
-            for args, kwargs, epoch in runner.await_inputs():
-                runner.logger.debug(
-                    "Running with args: %s, kwargs: %s, epoch: %s", args, kwargs, epoch
-                )
-                if is_async:
-                    # mypy fails here because it can't propagate the type guard above
-                    value = call_async_from_sync(runner._node.process, *args, **kwargs)  # type: ignore[arg-type]
-                else:
-                    value = runner._node.process(*args, **kwargs)
-                events = runner.store.add_value(runner._node.signals, value, runner._node.id, epoch)
-                runner.scheduler.add_epoch()
-
-                # node runners should not report epoch endings
-                events = [e for e in events if e["node_id"] != "meta"]
-                if events:
-                    runner.update_graph(events)
-                    runner.publish_events(events)
-
+            await self.init()
+            self._node = cast(Node, self._node)
+            self._process_quitting.clear()
+            self._freerun.clear()
+            self._process_one.clear()
+            await asyncio.gather(self._poll_inbox(), self._loop())
         except KeyboardInterrupt:
-            runner.logger.debug("Got keyboard interrupt, quitting")
+            self.logger.debug("Got keyboard interrupt, quitting")
         except Exception as e:
-            runner.error(e)
+            await self.error(e)
         finally:
-            runner.deinit()
+            await self.deinit()
 
-    def await_inputs(self) -> Generator[tuple[tuple[Any], dict[str, Any], int]]:
+    async def _loop(self) -> None:
+        is_async = iscoroutinefunction_partial(self._node.process)
+
+        async for args, kwargs, epoch in self.await_inputs():
+            self.logger.debug("Running with args: %s, kwargs: %s, epoch: %s", args, kwargs, epoch)
+            if is_async:
+                # mypy fails here because it can't propagate the type guard above
+                value = await self._node.process(*args, **kwargs)  # type: ignore[arg-type]
+            else:
+                value = self._node.process(*args, **kwargs)
+            events = self.store.add_value(self._node.signals, value, self._node.id, epoch)
+            await self.scheduler.add_epoch()
+
+            # nodes should not report epoch endings since they don't know about the full tube
+            events = [e for e in events if e["node_id"] != "meta"]
+            if events:
+                await self.update_graph(events)
+                await self.publish_events(events)
+
+    async def _poll_inbox(self) -> None:
+        while not self._process_quitting.is_set():
+            events = await self._inbox_poller.poll()
+            if self._inbox in dict(events):
+                msg = await self._inbox.recv_multipart()
+                await self.on_inbox(msg)
+
+    async def await_inputs(self) -> AsyncGenerator[tuple[tuple[Any], dict[str, Any], int]]:
         self._node = cast(Node, self._node)
         while not self._process_quitting.is_set():
             # if we are not freerunning, keep track of how many times we are supposed to run,
@@ -449,7 +459,7 @@ class NodeRunner(EventloopMixin):
             if not self._freerun.is_set():
                 if self._to_process <= 0:
                     self._to_process = 0
-                    self._process_one.wait()
+                    await self._process_one.wait()
                 self._to_process -= 1
                 if self._to_process <= 0:
                     self._to_process = 0
@@ -457,7 +467,7 @@ class NodeRunner(EventloopMixin):
 
             epoch = next(self._counter) if self._node.stateful else None
 
-            ready = self.scheduler.await_node(self.spec.id, epoch=epoch)
+            ready = await self.scheduler.await_node(self.spec.id, epoch=epoch)
             edges = self._node.edges
             inputs = self.store.collect(edges, ready["epoch"])
             if inputs is None:
@@ -467,35 +477,35 @@ class NodeRunner(EventloopMixin):
             self.store.clear(ready["epoch"])
             yield args, kwargs, ready["epoch"]
 
-    def update_graph(self, events: list[Event]) -> None:
-        self.scheduler.update(events)
+    async def update_graph(self, events: list[Event]) -> None:
+        await self.scheduler.update(events)
 
-    def publish_events(self, events: list[Event]) -> None:
+    async def publish_events(self, events: list[Event]) -> None:
         msg = EventMsg(node_id=self.spec.id, value=events)
-        self._outbox.send_multipart([b"event", msg.to_bytes()])
+        await self._outbox.send_multipart([b"event", msg.to_bytes()])
 
-    def init(self) -> None:
+    async def init(self) -> None:
         self.logger.debug("Initializing")
 
-        self.init_node()
-        self.start_sockets()
+        await self.init_node()
+        self._init_sockets()
         self.status = (
             NodeStatus.waiting
             if self.depends and [d for d in self.depends if d[0] != "input"]
             else NodeStatus.ready
         )
-        self.identify()
+        await self.identify()
         self.logger.debug("Initialization finished")
 
-    def deinit(self) -> None:
+    async def deinit(self) -> None:
         self.logger.debug("Deinitializing")
         if self._node is not None:
             self._node.deinit()
-        self.update_status(NodeStatus.closed)
-        self.stop_loop()
+        await self.update_status(NodeStatus.closed)
+
         self.logger.debug("Deinitialization finished")
 
-    def identify(self) -> None:
+    async def identify(self) -> None:
         """
         Send the command node an announce to say we're alive
         """
@@ -506,7 +516,7 @@ class NodeRunner(EventloopMixin):
             )
 
         self.logger.debug("Identifying")
-        with self._status_lock:
+        async with self._status_lock:
             ann = IdentifyMsg(
                 node_id=self.spec.id,
                 value=IdentifyValue(
@@ -519,43 +529,37 @@ class NodeRunner(EventloopMixin):
                     ),
                 ),
             )
-            self._dealer.send_multipart([ann.to_bytes()])
+            await self._dealer.send_multipart([ann.to_bytes()])
         self.logger.debug("Sent identification message: %s", ann)
 
-    def update_status(self, status: NodeStatus) -> None:
+    async def update_status(self, status: NodeStatus) -> None:
         """Update our internal status and announce it to the command node"""
         self.logger.debug("Updating status as %s", status)
-        with self._status_lock:
+        async with self._status_lock:
             self.status = status
             msg = StatusMsg(node_id=self.spec.id, value=status)
-            self._dealer.send_multipart([msg.to_bytes()])
+            await self._dealer.send_multipart([msg.to_bytes()])
             self.logger.debug("Updated status")
 
-    def start_sockets(self) -> None:
-        self.start_loop()
-        self._init_sockets()
-
-    def init_node(self) -> None:
+    async def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
         self._node.init()
-        self.scheduler = Scheduler(nodes={self.spec.id: self.spec}, edges=self._node.edges)
-        self.scheduler.add_epoch()
+        self.scheduler = AsyncScheduler(nodes={self.spec.id: self.spec}, edges=self._node.edges)
+        await self.scheduler.add_epoch()
 
     def _init_sockets(self) -> None:
         self._dealer = self._init_dealer()
         self._outbox = self._init_outbox()
         self._inbox = self._init_inbox()
 
-    def _init_dealer(self) -> ZMQStream:
+    def _init_dealer(self) -> Socket:
         dealer = self.context.socket(zmq.DEALER)
         dealer.setsockopt_string(zmq.IDENTITY, self.spec.id)
         dealer.connect(self.command_router)
-        dealer = ZMQStream(dealer, self.loop)
-        dealer.on_recv(self.on_dealer)
         self.logger.debug("Connected to command node at %s", self.command_router)
         return dealer
 
-    def _init_outbox(self) -> zmq.Socket:
+    def _init_outbox(self) -> Socket:
         pub = self.context.socket(zmq.PUB)
         pub.setsockopt_string(zmq.IDENTITY, self.spec.id)
         if self.protocol == "ipc":
@@ -567,7 +571,7 @@ class NodeRunner(EventloopMixin):
 
         return pub
 
-    def _init_inbox(self) -> ZMQStream:
+    def _init_inbox(self) -> Socket:
         """
         Init the subscriber, but don't attempt to subscribe to anything but the command yet!
         we do that when we get node Announces
@@ -576,15 +580,11 @@ class NodeRunner(EventloopMixin):
         sub.setsockopt_string(zmq.IDENTITY, self.spec.id)
         sub.setsockopt_string(zmq.SUBSCRIBE, "")
         sub.connect(self.command_outbox)
-        sub = ZMQStream(sub, self.loop)
-        sub.on_recv(self.on_inbox)
+        self._inbox_poller.register(sub, zmq.POLLIN)
         self.logger.debug("Subscribed to command outbox %s", self.command_outbox)
         return sub
 
-    def on_dealer(self, msg: list[bytes]) -> None:
-        self.logger.debug("DEALER received %s", msg)
-
-    def on_inbox(self, msg: list[bytes]) -> None:
+    async def on_inbox(self, msg: list[bytes]) -> None:
         try:
             message = Message.from_bytes(msg)
 
@@ -597,58 +597,58 @@ class NodeRunner(EventloopMixin):
         # just have a decorator to register a handler for a given message type
         if message.type_ == MessageType.announce:
             message = cast(AnnounceMsg, message)
-            self.on_announce(message)
+            await self.on_announce(message)
         elif message.type_ == MessageType.event:
             message = cast(EventMsg, message)
-            self.on_event(message)
+            await self.on_event(message)
         elif message.type_ == MessageType.process:
             message = cast(ProcessMsg, message)
-            self.on_process(message)
+            await self.on_process(message)
         elif message.type_ == MessageType.start:
             message = cast(StartMsg, message)
-            self.on_start(message)
+            await self.on_start(message)
         elif message.type_ == MessageType.stop:
             message = cast(StopMsg, message)
-            self.on_stop(message)
+            await self.on_stop(message)
         elif message.type_ == MessageType.deinit:
             message = cast(DeinitMsg, message)
-            self.on_deinit(message)
+            await self.on_deinit(message)
         elif message.type_ == MessageType.ping:
-            self.identify()
+            await self.identify()
         else:
             # log but don't throw - other nodes shouldn't be able to crash us
             self.logger.error(f"{message.type_} not implemented!")
             self.logger.debug("%s", message)
 
-    def on_announce(self, msg: AnnounceMsg) -> None:
+    async def on_announce(self, msg: AnnounceMsg) -> None:
         """
         Store map, connect to the nodes we depend on
         """
         self._node = cast(Node, self._node)
         self.logger.debug("Processing announce")
-        with self._status_lock:
-            depended_nodes = {edge.source_node for edge in self._node.edges}
-            if depended_nodes:
-                self.logger.debug("Should subscribe to %s", depended_nodes)
-            for node_id in msg.value["nodes"]:
-                if node_id in depended_nodes and node_id not in self._nodes:
-                    # TODO: a way to check if we're already connected, without storing it locally?
-                    outbox = msg.value["nodes"][node_id]["outbox"]
-                    self.logger.debug("Subscribing to %s at %s", node_id, outbox)
-                    self._inbox.connect(outbox)
-                    self.logger.debug("Subscribed to %s at %s", node_id, outbox)
-            self._nodes = msg.value["nodes"]
-            if set(self._nodes) >= depended_nodes - {"input"} and self.status == NodeStatus.waiting:
-                self.update_status(NodeStatus.ready)
-            # status and announce messages can be received out of order,
-            # so if we observe the command node being out of sync, we update it.
-            elif (
-                self._node.id in msg.value["nodes"]
-                and msg.value["nodes"][self._node.id]["status"] != self.status.value
-            ):
-                self.update_status(self.status)
 
-    def on_event(self, msg: EventMsg) -> None:
+        depended_nodes = {edge.source_node for edge in self._node.edges}
+        if depended_nodes:
+            self.logger.debug("Should subscribe to %s", depended_nodes)
+        for node_id in msg.value["nodes"]:
+            if node_id in depended_nodes and node_id not in self._nodes:
+                # TODO: a way to check if we're already connected, without storing it locally?
+                outbox = msg.value["nodes"][node_id]["outbox"]
+                self.logger.debug("Subscribing to %s at %s", node_id, outbox)
+                self._inbox.connect(outbox)
+                self.logger.debug("Subscribed to %s at %s", node_id, outbox)
+        self._nodes = msg.value["nodes"]
+        if set(self._nodes) >= depended_nodes - {"input"} and self.status == NodeStatus.waiting:
+            await self.update_status(NodeStatus.ready)
+        # status and announce messages can be received out of order,
+        # so if we observe the command node being out of sync, we update it.
+        elif (
+            self._node.id in msg.value["nodes"]
+            and msg.value["nodes"][self._node.id]["status"] != self.status.value
+        ):
+            await self.update_status(self.status)
+
+    async def on_event(self, msg: EventMsg) -> None:
         events = msg.value
         if not self.depends:
             self.logger.debug("No dependencies, not storing events")
@@ -658,20 +658,20 @@ class NodeRunner(EventloopMixin):
         for event in to_add:
             self.store.add(event)
 
-        self.scheduler.update(events)
+        await self.scheduler.update(events)
 
-    def on_start(self, msg: StartMsg) -> None:
+    async def on_start(self, msg: StartMsg) -> None:
         """
         Start running in free mode
         """
-        self.update_status(NodeStatus.running)
+        await self.update_status(NodeStatus.running)
         if msg.value is None:
             self._freerun.set()
         else:
             self._to_process += msg.value
         self._process_one.set()
 
-    def on_process(self, msg: ProcessMsg) -> None:
+    async def on_process(self, msg: ProcessMsg) -> None:
         """
         Process a single graph iteration
         """
@@ -697,20 +697,20 @@ class NodeRunner(EventloopMixin):
                 node_id="input",
                 epoch=msg.value["epoch"],
             )
-            scheduler_events = self.scheduler.update(events)
+            scheduler_events = await self.scheduler.update(events)
 
             self.logger.debug("Updated scheduler with process events: %s", scheduler_events)
         self._process_one.set()
 
-    def on_stop(self, msg: StopMsg) -> None:
+    async def on_stop(self, msg: StopMsg) -> None:
         """Stop processing (but stay responsive)"""
         self._process_one.clear()
         self._to_process = 0
         self._freerun.clear()
-        self.update_status(NodeStatus.stopped)
+        await self.update_status(NodeStatus.stopped)
         self.logger.debug("Stopped")
 
-    def on_deinit(self, msg: DeinitMsg) -> None:
+    async def on_deinit(self, msg: DeinitMsg) -> None:
         """
         Deinitialize the node, close networking thread.
 
@@ -722,8 +722,9 @@ class NodeRunner(EventloopMixin):
             return
         self.logger.debug("Emitting sigterm to self %s", msg)
         os.kill(pid, signal.SIGTERM)
+        raise asyncio.CancelledError()
 
-    def error(self, err: Exception) -> None:
+    async def error(self, err: Exception) -> None:
         """
         Capture the error and traceback context from an exception using
         :class:`traceback.TracebackException` and send to command node to re-raise
@@ -738,7 +739,7 @@ class NodeRunner(EventloopMixin):
                 traceback=tbexception,
             ),
         )
-        self._dealer.send_multipart([msg.to_bytes()])
+        await self._dealer.send_multipart([msg.to_bytes()])
 
 
 @dataclass
@@ -936,6 +937,7 @@ class ZMQRunner(TubeRunner):
                 while ret is MetaSignal.NoEvent:
                     self._logger.debug("Awaiting epoch %s", epoch)
                     self.tube.scheduler.await_epoch(epoch)
+                    self._logger.debug("epoch %s completed", epoch)
                     ret = self.collect_return(epoch)
                     epoch += 1
                     self._current_epoch = epoch
