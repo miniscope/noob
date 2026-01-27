@@ -33,6 +33,9 @@ class MessageType(StrEnum):
     announce = "announce"
     identify = "identify"
     process = "process"
+    init = "init"
+    deinit = "deinit"
+    ping = "ping"
     start = "start"
     status = "status"
     stop = "stop"
@@ -111,6 +114,13 @@ class IdentifyMsg(Message):
     value: IdentifyValue
 
 
+class PingMsg(Message):
+    """Request other nodes to identify themselves and report their status"""
+
+    type_: Literal[MessageType.ping] = Field(MessageType.ping, alias="type")
+    value: None = None
+
+
 class ProcessMsg(Message):
     """Process a single iteration of the graph"""
 
@@ -119,11 +129,25 @@ class ProcessMsg(Message):
     """Any process-scoped input passed to the `process` call"""
 
 
+class InitMsg(Message):
+    """Initialize nodes within node runners"""
+
+    type_: Literal[MessageType.init] = Field(MessageType.init, alias="type")
+    value: None = None
+
+
+class DeinitMsg(Message):
+    """Deinitializes nodes within node runners"""
+
+    type_: Literal[MessageType.deinit] = Field(MessageType.deinit, alias="type")
+    value: None = None
+
+
 class StartMsg(Message):
-    """Start free running nodes"""
+    """Start free-running nodes"""
 
     type_: Literal[MessageType.start] = Field(MessageType.start, alias="type")
-    value: None = None
+    value: int | None = None
 
 
 class StatusMsg(Message):
@@ -196,6 +220,9 @@ MessageUnion = A[
     A[AnnounceMsg, Tag("announce")]
     | A[IdentifyMsg, Tag("identify")]
     | A[ProcessMsg, Tag("process")]
+    | A[InitMsg, Tag("init")]
+    | A[DeinitMsg, Tag("deinit")]
+    | A[PingMsg, Tag("ping")]
     | A[StartMsg, Tag("start")]
     | A[StatusMsg, Tag("status")]
     | A[StopMsg, Tag("stop")]

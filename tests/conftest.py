@@ -28,13 +28,6 @@ def patch_config_source(monkeypatch_session: MonkeyPatch) -> None:
     monkeypatch_session.setattr(ConfigYAMLMixin, "config_sources", classmethod(_config_sources))
 
 
-@pytest.fixture(scope="session", autouse=True)
-def patch_env_config(monkeypatch_session: MonkeyPatch) -> None:
-    """Patch env settings, e.g. setting log levels and etc."""
-
-    monkeypatch_session.setenv("NOOB_LOGS__LEVEL", "DEBUG")
-
-
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     # While zmq runner uses IPC, can't run on windows
     if platform.system() == "Windows":

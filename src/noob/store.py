@@ -2,7 +2,9 @@
 Tube runners for running tubes
 """
 
+import contextlib
 from collections import defaultdict
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import count
@@ -192,7 +194,8 @@ class EventStore:
         if epoch is None:
             self.events = _make_event_dict()
         else:
-            del self.events[epoch]
+            with contextlib.suppress(KeyError):
+                del self.events[epoch]
 
     @staticmethod
     def transform_events(edges: list[Edge], events: list[Event]) -> dict:
@@ -231,3 +234,10 @@ class EventStore:
         # cast to tuple since `*args` is a tuple
         args_tuple = tuple(item[1] for item in sorted(args, key=lambda x: x[0]))
         return args_tuple, kwargs
+
+    def iter(self) -> Generator[Event, None, None]:
+        """Iterate through all events"""
+        for nodes in self.events.values():
+            for signals in nodes.values():
+                for events in signals.values():
+                    yield from events

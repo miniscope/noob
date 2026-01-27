@@ -15,7 +15,7 @@ def test_basic_process(loaded_tube: Tube, runner: TubeRunner):
 
 
 @pytest.mark.parametrize("loaded_tube", ["testing-basic"], indirect=True)
-def test_basic(loaded_tube: Tube, runner: TubeRunner):
+def test_basic_run(loaded_tube: Tube, runner: TubeRunner):
     """The most basic tube! We can process a fixed number of events"""
     outputs = runner.run(n=5)
     assert len(outputs) == 5
@@ -102,7 +102,8 @@ def test_multi_signal(loaded_tube: Tube, sync_runner_cls):
     tube = Tube.from_specification("testing-multi-signal")
     runner = sync_runner_cls(tube)
 
-    for value in runner.iter(n=5):
-        assert isinstance(value, dict)
-        assert isinstance(value["word"], str)
-        assert value["count_sum"] == sum(value["counts"])
+    with runner:
+        for value in runner.iter(n=5):
+            assert isinstance(value, dict)
+            assert isinstance(value["word"], str)
+            assert value["count_sum"] == sum(value["counts"])

@@ -2,6 +2,7 @@ from noob.testing.assets import Initializer, counter
 from noob.testing.nodes import (
     CountSource,
     CountSourceDecor,
+    InitCounter,
     Multiply,
     Now,
     NumberToLetterCls,
@@ -56,6 +57,7 @@ __all__ = [
     "Multiply",
     "VolumeProcess",
     "Volume",
+    "InitCounter",
     "Now",
     "NumberToLetterCls",
     "StatefulMultiply",

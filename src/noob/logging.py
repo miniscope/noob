@@ -8,7 +8,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Literal
 
-from rich import get_console
+from rich.console import Console
 from rich.logging import RichHandler
 
 from noob.config import LOG_LEVELS, config
@@ -28,6 +28,13 @@ def init_logger(
 
     Log to a set of rotating files in the ``log_dir`` according to ``name`` ,
     as well as using the :class:`~rich.RichHandler` for pretty-formatted stdout logs.
+
+    If this method is called from a process that isn't the root process,
+    it will create new rich and file handlers in the root noob logger to avoid
+    deadlocks from threading locks that are copied on forked processes.
+    Since the handlers will be different across processes,
+    to avoid file access conflicts, logging files will have the process's ``pid``
+    appended (e.g. ``noob_12345.log`` )
 
     Args:
         name (str): Name of this logger. Ideally names are hierarchical
@@ -85,30 +92,6 @@ def init_logger(
     logger = logging.getLogger(name)
     logger.setLevel(min_level)
 
-    # if run from a forked process, need to add different handlers to not collide
-    if mp.parent_process() is not None:
-        handler_name = f"{name}_{mp.current_process().pid}"
-        if log_dir is not False and not any([h.name == handler_name for h in logger.handlers]):
-            logger.addHandler(
-                _file_handler(
-                    name=f"{name}_{mp.current_process().pid}",
-                    file_level=file_level,
-                    log_dir=log_dir,
-                    log_file_n=log_file_n,
-                    log_file_size=log_file_size,
-                )
-            )
-
-        if not any(
-            [
-                handler_name in h.keywords
-                for h in logger.handlers
-                if isinstance(h, RichHandler) and h.keywords is not None
-            ]
-        ):
-            logger.addHandler(_rich_handler(level, keywords=[handler_name], width=width))
-        logger.propagate = False
-
     return logger
 
 
@@ -121,6 +104,18 @@ def _init_root(
     width: int | None = None,
 ) -> None:
     root_logger = logging.getLogger("noob")
+
+    # ensure each root logger has fresh handlers in subprocesses
+    if mp.parent_process() is not None:
+        current_pid = mp.current_process().pid
+        file_name = f"noob_{current_pid}"
+        rich_name = f"{file_name}_rich"
+    else:
+        file_name = "noob"
+        rich_name = "noob_rich"
+
+    root_logger.handlers = [h for h in root_logger.handlers if h.name in (rich_name, file_name)]
+
     file_handlers = [
         handler for handler in root_logger.handlers if isinstance(handler, RotatingFileHandler)
     ]
@@ -131,7 +126,7 @@ def _init_root(
     if log_dir is not False and not file_handlers:
         root_logger.addHandler(
             _file_handler(
-                "noob",
+                file_name,
                 file_level,
                 log_dir,
                 log_file_n,
@@ -143,7 +138,7 @@ def _init_root(
             file_handler.setLevel(file_level)
 
     if not stream_handlers:
-        root_logger.addHandler(_rich_handler(stdout_level, width=width))
+        root_logger.addHandler(_rich_handler(stdout_level, name=rich_name, width=width))
     else:
         for stream_handler in stream_handlers:
             stream_handler.setLevel(stdout_level)
@@ -171,12 +166,15 @@ def _file_handler(
     return file_handler
 
 
-def _rich_handler(level: LOG_LEVELS, width: int | None = None, **kwargs: Any) -> RichHandler:
-    console = get_console()
+def _rich_handler(
+    level: LOG_LEVELS, name: str, width: int | None = None, **kwargs: Any
+) -> RichHandler:
+    console = _get_console()
     if width:
         console.width = width
 
-    rich_handler = RichHandler(rich_tracebacks=True, markup=True, **kwargs)
+    rich_handler = RichHandler(console=console, rich_tracebacks=True, markup=True, **kwargs)
+    rich_handler.name = name
     rich_formatter = logging.Formatter(
         r"[bold green]\[%(name)s][/bold green] %(message)s",
         datefmt="[%y-%m-%dT%H:%M:%S]",
@@ -184,3 +182,16 @@ def _rich_handler(level: LOG_LEVELS, width: int | None = None, **kwargs: Any) ->
     rich_handler.setFormatter(rich_formatter)
     rich_handler.setLevel(level)
     return rich_handler
+
+
+_console_by_pid: dict[int | None, Console] = {}
+
+
+def _get_console() -> Console:
+    """get a console that was spawned in this process"""
+    global _console_by_pid
+    current_pid = mp.current_process().pid
+    console = _console_by_pid.get(current_pid)
+    if console is None:
+        _console_by_pid[current_pid] = console = Console()
+    return console

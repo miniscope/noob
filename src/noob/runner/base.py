@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from logging import Logger
-from typing import TYPE_CHECKING, Any, ParamSpec, Self, TypeVar
+from typing import TYPE_CHECKING, Any, ParamSpec, Self, TypeVar, overload
 
 from noob import Tube, init_logger
 from noob.asset import AssetScope
@@ -180,7 +180,20 @@ class TubeRunner(ABC):
         finally:
             self.deinit()
 
+    @overload
+    def run(self, n: int) -> list[ReturnNodeType]: ...
+
+    @overload
+    def run(self, n: None) -> None: ...
+
     def run(self, n: int | None = None) -> None | list[ReturnNodeType]:
+        """
+        Run the tube infinitely or for a fixed number of iterations in a row.
+
+        Returns results if ``n`` is not ``None`` -
+        If ``n`` is ``None`` , we assume we are going to be running for a very long time,
+        and don't want to have an infinitely-growing collection in memory.
+        """
         try:
             _ = self.tube.input_collection.validate_input(InputScope.process, {})
         except InputMissingError as e:
@@ -540,25 +553,33 @@ def call_async_from_sync(
 
     result_future: asyncio.Future[_TReturn] = asyncio.Future()
     work_ready = threading.Condition()
+    finished = False
 
     # Closures because this code should never escape the containment tomb of this crime against god
     async def _wrap(call_result: asyncio.Future[_TReturn], fn: Coroutine) -> None:
+        nonlocal finished
         try:
             result = await fn
             call_result.set_result(result)
         except Exception as e:
             call_result.set_exception(e)
+        finally:
+            finished = True
 
     def _done(_: ConcurrentFuture) -> None:
+        nonlocal finished
+
+        finished = True
         with work_ready:
             work_ready.notify_all()
 
     future_inner = executor.submit(asyncio.run, _wrap(result_future, coro))
     future_inner.add_done_callback(_done)
 
-    with work_ready:
-        work_ready.wait()
     try:
+        while not finished and not future_inner.done():
+            with work_ready:
+                work_ready.wait(timeout=1)
         res = result_future.result()
         return res
     finally:

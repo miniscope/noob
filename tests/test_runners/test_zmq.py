@@ -1,4 +1,5 @@
 from asyncio import sleep
+from datetime import UTC, datetime
 from time import time
 from typing import cast
 
@@ -6,8 +7,10 @@ import pytest
 
 from noob import Tube
 from noob.event import Event
+from noob.input import InputCollection
 from noob.network.message import EventMsg, IdentifyMsg, IdentifyValue, Message, NodeStatus
-from noob.runner.zmq import ZMQRunner
+from noob.node.spec import NodeSpecification
+from noob.runner.zmq import NodeRunner, ZMQRunner
 
 pytestmark = pytest.mark.zmq_runner
 
@@ -81,7 +84,7 @@ async def test_statefulness():
         event = cast(EventMsg, event)
         events.extend(event.value)
 
-    runner = ZMQRunner(tube=tube)
+    runner = ZMQRunner(tube=tube, autoclear_store=False)
     with runner:
         runner.command.add_callback("inbox", _event_cb)
         # skip first epoch
@@ -144,7 +147,7 @@ async def test_statelessness():
         event = cast(EventMsg, event)
         events.extend(event.value)
 
-    runner = ZMQRunner(tube=tube)
+    runner = ZMQRunner(tube=tube, autoclear_store=False)
     for i in range(3):
         runner.tube.scheduler.add_epoch(i)
         runner.tube.scheduler.done(i, "input")
@@ -191,3 +194,246 @@ async def test_statelessness():
     assert runner.store.events[2]["a"]["value"][0]["value"] == 7 * 2
     assert runner.store.events[2]["b"]["value"][0]["value"] == 7
     assert runner.store.events[2]["d"]["value"][0]["value"] == 7 * 3 * 3
+
+
+@pytest.mark.asyncio
+async def test_run_freeruns():
+    """
+    When `run` is called, the zmq runner should "freerun" -
+    allow nodes to execute as quickly as they can, whenever their deps are satisfied.
+    """
+    tube = Tube.from_specification("testing-long-add")
+    runner = ZMQRunner(tube, autoclear_store=False)
+
+    # events = []
+    #
+    # def _event_cb(event: Message) -> None:
+    #     nonlocal events
+    #     events.append(event)
+
+    with runner:
+        runner.run()
+        assert runner.running
+        await sleep(0.5)
+        runner.stop()
+
+    # main thing we're testing here is whether we freerun -
+    # i.e. that nodes don't wait for an epoch to complete before running, if they're ready.
+    # so we should have way more events from the source node than from the long_add nodes,
+    # which sleep and take a long time on purpose.
+    # since there are way more long_add nodes than the single count node,
+    # if we ran epoch by epoch, we would expect there to be more non-count events.
+    count_events = []
+    non_count_events = []
+    for event in runner.store.iter():
+        if event["node_id"] == "count":
+            count_events.append(event)
+        else:
+            non_count_events.append(event)
+
+    assert len(count_events) > 0
+    assert len(non_count_events) > 0
+    assert len(count_events) > len(non_count_events)
+    # we should theoretically get only 2 epochs from the long add nodes,
+    # but allow up to 5 in the case of network latency, this is not that important
+    assert len(set(e["epoch"] for e in non_count_events)) < 5
+    # it should be in the hundreds, but all we care about is that it's more than 1 greater
+    # 10 is a good number.
+    assert len(set(e["epoch"] for e in count_events)) > 10
+
+
+@pytest.mark.asyncio
+async def test_start_stop():
+    """
+    The runner can be started and stopped without deinitializing
+    """
+    tube = Tube.from_specification("testing-count-init")
+    events: list[Event] = []
+    router_events: list[Message] = []
+
+    def _event_cb(event: Message) -> None:
+        nonlocal events
+        event = cast(EventMsg, event)
+        events.extend(event.value)
+
+    def _router_cb(msg: Message) -> None:
+        nonlocal router_events
+        router_events.append(msg)
+
+    runner = ZMQRunner(tube=tube)
+    with runner:
+        runner.command.add_callback("inbox", _event_cb)
+        runner.command.add_callback("router", _router_cb)
+        runner.run()
+        await sleep(0.1)
+        runner.stop()
+        await sleep(0.1)
+        runner.run()
+        await sleep(0.2)
+
+    router_events = [
+        e for e in router_events if e.type_ == "status" and e.value in ("stopped", "running")
+    ]
+    # we can get duplicate status messages if the command node has to ping to wake up the sockets
+    # so filter just to the transitions
+    router_events = [
+        e for i, e in enumerate(router_events) if i == 0 or router_events[i - 1].value != e.value
+    ]
+
+    # sometimes we get the last stop event,
+    # sometimes we dont - we don't wait for it
+    assert 4 >= len(router_events) >= 3, str(router_events)
+    assert router_events[1].value == "stopped"
+    first_events = [e for e in events if e["timestamp"] < router_events[1].timestamp]
+    stopped_events = [
+        e
+        for e in events
+        if e["timestamp"] > router_events[1].timestamp
+        and e["timestamp"] < router_events[2].timestamp
+    ]
+    end_events = [e for e in events if e["timestamp"] > router_events[2].timestamp]
+
+    # with the node's sleep, there are time for ~10 runs if there was no latency,
+    # but all we really care about is that we got any
+    # (macos runner on gh is very slow to process events, and we don't want to increase wait time)
+    assert len(first_events) > 0
+    # there can be one additional run of the node after the stopped message is sent
+    # if the node is already running when the stop message is received.
+    # (two events, because the node emits two signals)
+    assert len(stopped_events) <= 2
+    assert len(end_events) > 0
+
+    # even though we stopped and started, the nodes should have stated initialized
+    # (and not been deinit'd and reinit'd)
+    inits = [e for e in events if e["signal"] == "inits"]
+    deinits = [e for e in events if e["signal"] == "deinits"]
+    assert len(inits) > 0
+    assert len(deinits) > 0
+    assert all(e["value"] == 1 for e in inits)
+    assert all(e["value"] == 0 for e in deinits)
+
+
+def test_iter_gather(mocker):
+    """
+    itering over gather should heuristically request more iterations as we go
+    """
+    tube = Tube.from_specification("testing-gather-n")
+    runner = ZMQRunner(tube=tube)
+    # the gather_n pipeline only returns every 5 epochs.
+    # so we are going to request 11 return values, which should require 55 epochs
+    # after we run 11 epochs, (after returning two results)
+    # we should notice that we haven't returned the correct amount yet
+    # and request more.
+    spy = mocker.spy(runner, "_request_more")
+    stop_spy = mocker.spy(runner, "stop")
+    results = []
+    with runner:
+        for result in runner.iter(11):
+            results.append(result)
+
+        # after exhausting the iterator, but before deinit, we should have called stop
+        stop_spy.assert_called_once()
+
+    # for cases like this with deterministic n_gather, only should need to call once.
+    assert spy.call_count == 1
+    spy.assert_called_once_with(n=11, current_iter=2, n_epochs=11)
+    # we don't get an *exact* number of iters to run,
+    # e.g. here we have chosen 11 since it isn't a multiple of 5,
+    # and all we see is "we've run 11 times and gotten 2 results,"
+    # so if 11 epochs yields 2 results, and we want 9 more,
+    # then a reasonable amount of additional times to run might be
+    # ceil((11/2)*9) = 50
+    assert spy.spy_return == 50
+
+
+def test_noderunner_stores_clear():
+    """
+    Stores in the noderunners should clear after they use the events from an epoch
+    """
+    spec = NodeSpecification(
+        id="test_node",
+        type="noob.testing.multiply",
+        depends=[{"left": "other.left"}, {"right": "other.right"}],
+    )
+    runner = NodeRunner(
+        spec=spec,
+        runner_id="testing",
+        command_outbox="/notreal/unused",
+        command_router="/notreal/unused",
+        input_collection=InputCollection(),
+    )
+    runner.init_node()
+
+    # fake a few events
+    events = []
+    for i in range(3):
+
+        msg = EventMsg(
+            node_id="other",
+            value=[
+                Event(
+                    id=i * 2,
+                    timestamp=datetime.now(UTC),
+                    signal="left",
+                    value=i * 2,
+                    node_id="other",
+                    epoch=i,
+                ),
+                Event(
+                    id=(i * 2) + 1,
+                    timestamp=datetime.now(UTC),
+                    signal="right",
+                    value=(i * 2) + 1,
+                    node_id="other",
+                    epoch=i,
+                ),
+            ],
+        )
+        runner.on_event(msg)
+        events.append(msg)
+
+    runner._freerun.set()
+    assert len(runner.store.events) == 3
+    args, kwargs, epoch = next(runner.await_inputs())
+    assert len(runner.store.events) == 2
+    assert epoch not in runner.store.events
+
+
+@pytest.fixture
+def _zmq_runner_basic() -> ZMQRunner:
+    tube = Tube.from_specification("testing-basic")
+    runner = ZMQRunner(tube=tube)
+    runner.init()
+    yield runner
+    runner.deinit()
+
+
+def test_zmqrunner_stores_clear_process(_zmq_runner_basic):
+    """
+    ZMQRunner stores clear after returning values from process
+    """
+    runner = _zmq_runner_basic
+    runner.process()
+    assert len(runner.store.events) == 0
+
+
+def test_zmqrunner_stores_clear_iter(_zmq_runner_basic):
+    """
+    ZMQRunner stores clear after returning values while iterating
+    """
+    runner = _zmq_runner_basic
+    for i, _ in enumerate(runner.iter(5)):
+        # we will receive more events from epochs that run ahead of our processing
+        # but we should clear the epoch as we return it from iter
+        assert i not in runner.store.events
+
+
+@pytest.mark.asyncio
+async def test_zmqrunner_stores_clear_freerun(_zmq_runner_basic):
+    """
+    ZMQRunner doesn't store events while freerunning.
+    """
+    runner = _zmq_runner_basic
+    runner.run()
+    await sleep(0.1)
+    assert len(runner.store.events) == 0
