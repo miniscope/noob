@@ -172,6 +172,15 @@ class ErrorMsg(Message):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    def to_exception(self) -> Exception:
+        err = self.value["err_type"](*self.value["err_args"])
+        tb_message = "\nError re-raised from node runner process\n\n"
+        tb_message += "Original traceback:\n"
+        tb_message += "-" * 20 + "\n"
+        tb_message += self.value["traceback"]
+        err.add_note(tb_message)
+        return err
+
 
 def _to_json(val: Event, handler: SerializerFunctionWrapHandler) -> Any:
     if val["signal"] == META_SIGNAL and val["value"] is MetaSignal.NoEvent:

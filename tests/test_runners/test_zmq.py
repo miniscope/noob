@@ -345,8 +345,8 @@ def test_iter_gather(mocker):
     # ceil((11/2)*9) = 50
     assert spy.spy_return == 50
 
-
-def test_noderunner_stores_clear():
+@pytest.mark.asyncio
+async def test_noderunner_stores_clear():
     """
     Stores in the noderunners should clear after they use the events from an epoch
     """
@@ -362,7 +362,7 @@ def test_noderunner_stores_clear():
         command_router="/notreal/unused",
         input_collection=InputCollection(),
     )
-    runner.init_node()
+    await runner.init_node()
 
     # fake a few events
     events = []
@@ -389,13 +389,16 @@ def test_noderunner_stores_clear():
                 ),
             ],
         )
-        runner.on_event(msg)
+        await runner.on_event(msg)
         events.append(msg)
 
     runner._freerun.set()
     assert len(runner.store.events) == 3
-    args, kwargs, epoch = next(runner.await_inputs())
+    epoch = -1
+    async for args, kwargs, epoch in runner.await_inputs():
+        break
     assert len(runner.store.events) == 2
+    assert epoch != -1
     assert epoch not in runner.store.events
 
 

@@ -34,7 +34,7 @@ class Scheduler(BaseModel):
 
     _clock: count = PrivateAttr(default_factory=count)
     _epochs: dict[int, TopoSorter] = PrivateAttr(default_factory=dict)
-    _epoch_condition: Condition = PrivateAttr(default_factory=Condition)
+    # _epoch_condition: Condition = PrivateAttr(default_factory=Condition)
     _epoch_log: deque = PrivateAttr(default_factory=lambda: deque(maxlen=100))
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -140,7 +140,6 @@ class Scheduler(BaseModel):
 
         graphs = self._epochs.items() if epoch is None else [(epoch, self[epoch])]
         is_ready = any(node_id == node for epoch, graph in graphs for node_id in graph.ready_nodes)
-        self.logger.debug("Node %s ready status in epoch %s: %s", node, epoch, is_ready)
         return is_ready
 
     def __getitem__(self, epoch: int) -> TopoSorter:
@@ -199,26 +198,25 @@ class Scheduler(BaseModel):
         Mark a node in a given epoch as done.
 
         """
-        with self._epoch_condition:
-            if epoch in self._epoch_log:
-                self.logger.debug(
-                    "Marking node %s as done in epoch %s, "
-                    "but epoch was already completed. ignoring",
-                    node_id,
-                    epoch,
-                )
-                return None
+        if epoch in self._epoch_log:
+            self.logger.debug(
+                "Marking node %s as done in epoch %s, "
+                "but epoch was already completed. ignoring",
+                node_id,
+                epoch,
+            )
+            return None
 
-            try:
-                self[epoch].done(node_id)
-            except NotOutYetError:
-                # in parallel mode, we don't `get_ready` the preceding ready nodes
-                # so we have to manually mark them as "out"
-                self[epoch].mark_out(node_id)
-                self[epoch].done(node_id)
+        try:
+            self[epoch].done(node_id)
+        except NotOutYetError:
+            # in parallel mode, we don't `get_ready` the preceding ready nodes
+            # so we have to manually mark them as "out"
+            self[epoch].mark_out(node_id)
+            self[epoch].done(node_id)
 
-            if not self[epoch].is_active():
-                return self.end_epoch(epoch)
+        if not self[epoch].is_active():
+            return self.end_epoch(epoch)
         return None
 
     def expire(self, epoch: int, node_id: str) -> MetaEvent | None:
@@ -226,10 +224,9 @@ class Scheduler(BaseModel):
         Mark a node as having been completed without making its dependent nodes ready.
         i.e. when the node emitted ``NoEvent``
         """
-        with self._epoch_condition:
-            self[epoch].mark_expired(node_id)
-            if not self[epoch].is_active():
-                return self.end_epoch(epoch)
+        self[epoch].mark_expired(node_id)
+        if not self[epoch].is_active():
+            return self.end_epoch(epoch)
 
         return None
 
@@ -244,30 +241,29 @@ class Scheduler(BaseModel):
         Returns:
             int: the epoch that was completed.
         """
-        with self._epoch_condition:
-            # check if we have already completed this epoch
-            if isinstance(epoch, int) and self.epoch_completed(epoch):
-                return epoch
 
-            if epoch is None:
-                self._epoch_condition.wait()
-                return self._epoch_log[-1]
-            else:
-                self._epoch_condition.wait_for(lambda: self.epoch_completed(epoch))
-                return epoch
+        # check if we have already completed this epoch
+        if isinstance(epoch, int) and self.epoch_completed(epoch):
+            return epoch
+
+        if epoch is None:
+            self._epoch_condition.wait()
+            return self._epoch_log[-1]
+        else:
+            self._epoch_condition.wait_for(lambda: self.epoch_completed(epoch))
+            return epoch
 
     def epoch_completed(self, epoch: int) -> bool:
         """
         Check if the epoch has been completed.
         """
-        with self._epoch_condition:
-            previously_completed = (
-                len(self._epoch_log) > 0
-                and epoch not in self._epochs
-                and (epoch in self._epoch_log or epoch < min(self._epoch_log))
-            )
-            active_completed = epoch in self._epochs and not self._epochs[epoch].is_active()
-            return previously_completed or active_completed
+        previously_completed = (
+            len(self._epoch_log) > 0
+            and epoch not in self._epochs
+            and (epoch in self._epoch_log or epoch < min(self._epoch_log))
+        )
+        active_completed = epoch in self._epochs and not self._epochs[epoch].is_active()
+        return previously_completed or active_completed
 
     def end_epoch(self, epoch: int | None = None) -> MetaEvent | None:
         if epoch is None or epoch == -1:
@@ -275,10 +271,8 @@ class Scheduler(BaseModel):
                 return None
             epoch = list(self._epochs)[-1]
 
-        with self._epoch_condition:
-            self._epoch_condition.notify_all()
-            self._epoch_log.append(epoch)
-            del self._epochs[epoch]
+        self._epoch_log.append(epoch)
+        del self._epochs[epoch]
 
         return MetaEvent(
             id=uuid4().int,
@@ -362,78 +356,62 @@ class Scheduler(BaseModel):
             sorter.done(*ready)
         return generations
 
-
-class AsyncScheduler(Scheduler):
-    _ready_condition: asyncio.Condition = PrivateAttr(default_factory=asyncio.Condition)
-
-    async def add_epoch(self, epoch: int | None = None) -> int:
-        async with self._ready_condition:
-            this_epoch = super().add_epoch(epoch)
-            self._ready_condition.notify_all()
-        return this_epoch
-
-    def __getitem__(self, epoch: int) -> TopoSorter:
-        if epoch == -1:
-            return self._epochs[max(self._epochs.keys())]
-
-        if epoch not in self._epochs:
-            asyncio.run_coroutine_threadsafe(
-                self.add_epoch(epoch), asyncio.get_running_loop()
-            ).result()
-        return self._epochs[epoch]
-
-    async def update(
-        self, events: MutableSequence[Event | MetaEvent] | MutableSequence[Event]
-    ) -> MutableSequence[Event] | MutableSequence[Event | MetaEvent]:
-        async with self._ready_condition:
-            ret_events = super().update(events)
-            self._ready_condition.notify_all()
-        return ret_events
-
-    # async def done(self, epoch: int, node_id: str) -> MetaEvent | None:
-    #     async with self._ready_condition:
-    #         ret = super().done(epoch, node_id)
-    #         self._ready_condition.notify_all()
-    #     return ret
-
-    async def await_node(self, node_id: NodeID, epoch: int | None = None) -> MetaEvent:
-        """
-        Block until a node is ready
-
-        Args:
-            node_id:
-            epoch (int, None): if `int` , wait until the node is ready in the given epoch,
-                otherwise wait until the node is ready in any epoch
-
-        Returns:
-
-        """
-        async with self._ready_condition:
-            await self._ready_condition.wait_for(lambda: self.node_is_ready(node_id, epoch))
-
-            # be FIFO-like and get the earliest epoch the node is ready in
-            if epoch is None:
-                for ep in self._epochs:
-                    if self.node_is_ready(node_id, ep):
-                        epoch = ep
-                        break
-
-            if epoch is None:
-                raise RuntimeError(
-                    "Could not find ready epoch even though node ready condition passed, "
-                    "something is wrong with the way node status checking is "
-                    "locked between threads."
-                )
-
-            # mark just one event as "out."
-            # threadsafe because we are holding the lock that protects graph mutation
-            self._epochs[epoch].mark_out(node_id)
-
-        return MetaEvent(
-            id=uuid4().int,
-            timestamp=datetime.now(),
-            node_id="meta",
-            signal=MetaEventType.NodeReady,
-            epoch=epoch,
-            value=node_id,
-        )
+#
+# class AsyncScheduler(Scheduler):
+#
+#     async def update(
+#         self, events: MutableSequence[Event | MetaEvent] | MutableSequence[Event]
+#     ) -> MutableSequence[Event] | MutableSequence[Event | MetaEvent]:
+#         async with self._ready_condition:
+#             self.logger.debug("Inside update lock")
+#             ret_events = super().update(events)
+#             self._ready_condition.notify_all()
+#         return ret_events
+#
+#     # async def done(self, epoch: int, node_id: str) -> MetaEvent | None:
+#     #     async with self._ready_condition:
+#     #         ret = super().done(epoch, node_id)
+#     #         self._ready_condition.notify_all()
+#     #     return ret
+#
+#     async def await_node(self, node_id: NodeID, epoch: int | None = None) -> MetaEvent:
+#         """
+#         Block until a node is ready
+#
+#         Args:
+#             node_id:
+#             epoch (int, None): if `int` , wait until the node is ready in the given epoch,
+#                 otherwise wait until the node is ready in any epoch
+#
+#         Returns:
+#
+#         """
+#         async with self._ready_condition:
+#             await self._ready_condition.wait_for(lambda: self.node_is_ready(node_id, epoch))
+#
+#             # be FIFO-like and get the earliest epoch the node is ready in
+#             if epoch is None:
+#                 for ep in self._epochs:
+#                     if self.node_is_ready(node_id, ep):
+#                         epoch = ep
+#                         break
+#
+#             if epoch is None:
+#                 raise RuntimeError(
+#                     "Could not find ready epoch even though node ready condition passed, "
+#                     "something is wrong with the way node status checking is "
+#                     "locked between threads."
+#                 )
+#
+#             # mark just one event as "out."
+#             # threadsafe because we are holding the lock that protects graph mutation
+#             self._epochs[epoch].mark_out(node_id)
+#
+#         return MetaEvent(
+#             id=uuid4().int,
+#             timestamp=datetime.now(),
+#             node_id="meta",
+#             signal=MetaEventType.NodeReady,
+#             epoch=epoch,
+#             value=node_id,
+#         )

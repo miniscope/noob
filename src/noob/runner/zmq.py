@@ -23,12 +23,15 @@
 """
 
 import asyncio
+import concurrent.futures
 import math
 import multiprocessing as mp
 import os
+from datetime import datetime
 import signal
 import threading
 import traceback
+from functools import partial
 from collections import defaultdict
 from collections.abc import Callable, Generator, AsyncGenerator
 from dataclasses import dataclass, field
@@ -37,6 +40,7 @@ from multiprocessing.synchronize import Event as EventType
 from time import time
 from types import FrameType
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from uuid import uuid4
 
 from noob.network.loop import EventloopMixin
 
@@ -51,7 +55,7 @@ from zmq.asyncio import Context, Poller, Socket
 from zmq.eventloop.zmqstream import ZMQStream
 
 from noob.config import config
-from noob.event import Event, MetaSignal
+from noob.event import Event, MetaSignal, MetaEvent, MetaEventType
 from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope
 from noob.logging import init_logger
@@ -75,7 +79,7 @@ from noob.network.message import (
 )
 from noob.node import Node, NodeSpecification, Return, Signal
 from noob.runner.base import TubeRunner
-from noob.scheduler import AsyncScheduler
+from noob.scheduler import Scheduler
 from noob.store import EventStore
 from noob.types import NodeID, ReturnNodeType
 from noob.utils import iscoroutinefunction_partial
@@ -338,7 +342,7 @@ class NodeRunner:
         self.command_router = command_router
         self.protocol = protocol
         self.store = EventStore()
-        self.scheduler: AsyncScheduler = None  # type: ignore[assignment]
+        self.scheduler: Scheduler = None  # type: ignore[assignment]
         self.logger = init_logger(f"runner.node.{runner_id}.{self.spec.id}")
 
         self._dealer: Socket = None  # type: ignore[assignment]
@@ -355,6 +359,7 @@ class NodeRunner:
         self._process_one = asyncio.Event()
         self._status: NodeStatus = NodeStatus.stopped
         self._status_lock = asyncio.Lock()
+        self._ready_condition = asyncio.Condition()
         self._to_process = 0
 
     @property
@@ -400,8 +405,13 @@ class NodeRunner:
         Target for multiprocessing.run,
         init the class and start it!
         """
-        runner = NodeRunner(spec=spec, **kwargs)
-        asyncio.run(runner._run())
+        # ensure that events and conditions are bound to the eventloop created in the process
+        async def _run_inner() -> None:
+            nonlocal spec, kwargs
+            runner = NodeRunner(spec=spec, **kwargs)
+            await runner._run()
+
+        asyncio.run(_run_inner())
 
     async def _run(self) -> None:
 
@@ -427,22 +437,26 @@ class NodeRunner:
 
     async def _loop(self) -> None:
         is_async = iscoroutinefunction_partial(self._node.process)
+        loop = asyncio.get_running_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            async for args, kwargs, epoch in self.await_inputs():
+                self.logger.debug("Running with args: %s, kwargs: %s, epoch: %s", args, kwargs, epoch)
+                if is_async:
+                    # mypy fails here because it can't propagate the type guard above
+                    value = await self._node.process(*args, **kwargs)  # type: ignore[arg-type]
+                else:
+                    part = partial(self._node.process, *args, **kwargs)
+                    value = await loop.run_in_executor(executor, part)
+                events = self.store.add_value(self._node.signals, value, self._node.id, epoch)
+                async with self._ready_condition:
+                    self.scheduler.add_epoch()
+                    self._ready_condition.notify_all()
 
-        async for args, kwargs, epoch in self.await_inputs():
-            self.logger.debug("Running with args: %s, kwargs: %s, epoch: %s", args, kwargs, epoch)
-            if is_async:
-                # mypy fails here because it can't propagate the type guard above
-                value = await self._node.process(*args, **kwargs)  # type: ignore[arg-type]
-            else:
-                value = self._node.process(*args, **kwargs)
-            events = self.store.add_value(self._node.signals, value, self._node.id, epoch)
-            await self.scheduler.add_epoch()
-
-            # nodes should not report epoch endings since they don't know about the full tube
-            events = [e for e in events if e["node_id"] != "meta"]
-            if events:
-                await self.update_graph(events)
-                await self.publish_events(events)
+                # nodes should not report epoch endings since they don't know about the full tube
+                events = [e for e in events if e["node_id"] != "meta"]
+                if events:
+                    await self.update_graph(events)
+                    await self.publish_events(events)
 
     async def _poll_inbox(self) -> None:
         while not self._process_quitting.is_set():
@@ -467,7 +481,7 @@ class NodeRunner:
 
             epoch = next(self._counter) if self._node.stateful else None
 
-            ready = await self.scheduler.await_node(self.spec.id, epoch=epoch)
+            ready = await self.await_node(epoch=epoch)
             edges = self._node.edges
             inputs = self.store.collect(edges, ready["epoch"])
             if inputs is None:
@@ -478,7 +492,9 @@ class NodeRunner:
             yield args, kwargs, ready["epoch"]
 
     async def update_graph(self, events: list[Event]) -> None:
-        await self.scheduler.update(events)
+        async with self._ready_condition:
+            self.scheduler.update(events)
+            self._ready_condition.notify_all()
 
     async def publish_events(self, events: list[Event]) -> None:
         msg = EventMsg(node_id=self.spec.id, value=events)
@@ -544,8 +560,10 @@ class NodeRunner:
     async def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
         self._node.init()
-        self.scheduler = AsyncScheduler(nodes={self.spec.id: self.spec}, edges=self._node.edges)
-        await self.scheduler.add_epoch()
+        self.scheduler = Scheduler(nodes={self.spec.id: self.spec}, edges=self._node.edges)
+        async with self._ready_condition:
+            self.scheduler.add_epoch()
+            self._ready_condition.notify_all()
 
     def _init_sockets(self) -> None:
         self._dealer = self._init_dealer()
@@ -657,8 +675,11 @@ class NodeRunner:
         to_add = [e for e in events if (e["node_id"], e["signal"]) in self.depends]
         for event in to_add:
             self.store.add(event)
-
-        await self.scheduler.update(events)
+        self.logger.debug("scheduler updating")
+        async with self._ready_condition:
+            self.scheduler.update(events)
+            self._ready_condition.notify_all()
+        self.logger.debug('scheduler updated')
 
     async def on_start(self, msg: StartMsg) -> None:
         """
@@ -697,7 +718,7 @@ class NodeRunner:
                 node_id="input",
                 epoch=msg.value["epoch"],
             )
-            scheduler_events = await self.scheduler.update(events)
+            scheduler_events = self.scheduler.update(events)
 
             self.logger.debug("Updated scheduler with process events: %s", scheduler_events)
         self._process_one.set()
@@ -741,6 +762,48 @@ class NodeRunner:
         )
         await self._dealer.send_multipart([msg.to_bytes()])
 
+    async def await_node(self, epoch: int | None = None) -> MetaEvent:
+        """
+        Block until a node is ready
+
+        Args:
+            node_id:
+            epoch (int, None): if `int` , wait until the node is ready in the given epoch,
+                otherwise wait until the node is ready in any epoch
+
+        Returns:
+
+        """
+        async with self._ready_condition:
+            await self._ready_condition.wait_for(lambda: self.scheduler.node_is_ready(self.spec.id, epoch))
+
+            # be FIFO-like and get the earliest epoch the node is ready in
+            if epoch is None:
+                for ep in self.scheduler._epochs:
+                    if self.scheduler.node_is_ready(self.spec.id, ep):
+                        epoch = ep
+                        break
+
+            if epoch is None:
+                raise RuntimeError(
+                    "Could not find ready epoch even though node ready condition passed, "
+                    "something is wrong with the way node status checking is "
+                    "locked between threads."
+                )
+
+            # mark just one event as "out."
+            # threadsafe because we are holding the lock that protects graph mutation
+            self.scheduler[epoch].mark_out(self.spec.id)
+
+        return MetaEvent(
+            id=uuid4().int,
+            timestamp=datetime.now(),
+            node_id="meta",
+            signal=MetaEventType.NodeReady,
+            epoch=epoch,
+            value=self.spec.id,
+        )
+
 
 @dataclass
 class ZMQRunner(TubeRunner):
@@ -767,6 +830,7 @@ class ZMQRunner(TubeRunner):
     _return_node: Return | None = None
     _to_throw: ErrorValue | None = None
     _current_epoch: int = 0
+    _epoch_futures: dict[int, concurrent.futures.Future] = field(default_factory=dict)
 
     @property
     def running(self) -> bool:
@@ -876,9 +940,9 @@ class ZMQRunner(TubeRunner):
             self.command = cast(CommandNode, self.command)
             self.command.process(self._current_epoch, input)
             self._logger.debug("awaiting epoch %s", self._current_epoch)
-            self.tube.scheduler.await_epoch(self._current_epoch)
-            if self._to_throw:
-                self._throw_error()
+            future = self.await_epoch(self._current_epoch)
+            # waiting on the result will also raise a result when one is set
+            future.result()
             self._logger.debug("collecting return")
 
             return self.collect_return(self._current_epoch)
@@ -936,8 +1000,7 @@ class ZMQRunner(TubeRunner):
                 loop = 0
                 while ret is MetaSignal.NoEvent:
                     self._logger.debug("Awaiting epoch %s", epoch)
-                    self.tube.scheduler.await_epoch(epoch)
-                    self._logger.debug("epoch %s completed", epoch)
+                    self.await_epoch(epoch).result()
                     ret = self.collect_return(epoch)
                     epoch += 1
                     self._current_epoch = epoch
@@ -998,11 +1061,19 @@ class ZMQRunner(TubeRunner):
             self._running.set()
             return None
 
-        else:
+        elif self.tube.has_return:
+            # run until n return values
             results = []
             for res in self.iter(n):
                 results.append(res)
             return results
+
+        else:
+            # run n epochs
+            self.command.start(n)
+            self._running.set()
+            self._current_epoch = self.await_epoch(self._current_epoch + n).result()
+            return None
 
     def stop(self) -> None:
         """
@@ -1024,7 +1095,7 @@ class ZMQRunner(TubeRunner):
         if not self._ignore_events:
             for event in msg.value:
                 self.store.add(event)
-        self.tube.scheduler.update(msg.value)
+        events = self.tube.scheduler.update(msg.value)
         if self._return_node is not None:
             # mark the return node done if we've received the expected events for an epoch
             # do it here since we don't really run the return node like a real node
@@ -1036,7 +1107,13 @@ class ZMQRunner(TubeRunner):
                     and epoch in self.tube.scheduler._epochs
                 ):
                     self._logger.debug("Marking return node ready in epoch %s", epoch)
-                    self.tube.scheduler.done(epoch, self._return_node.id)
+                    ep_ended = self.tube.scheduler.done(epoch, self._return_node.id)
+                    if ep_ended is not None:
+                        events.append(ep_ended)
+        for e in events:
+            if e['node_id'] == "meta" and e['signal'] == MetaEventType.EpochEnded and e['value'] in self._epoch_futures:
+                self._epoch_futures[e['value']].set_result(e['value'])
+                del self._epoch_futures[e['value']]
 
     def on_router(self, msg: Message) -> None:
         if isinstance(msg, ErrorMsg):
@@ -1061,36 +1138,39 @@ class ZMQRunner(TubeRunner):
     def _handle_error(self, msg: ErrorMsg) -> None:
         """Cancel current epoch, stash error for process method to throw"""
         self._logger.error("Received error from node: %s", msg)
+        exception = msg.to_exception()
         self._to_throw = msg.value
         if self._current_epoch is not None:
             # if we're waiting in the process method,
             # end epoch and raise error there
             self.tube.scheduler.end_epoch(self._current_epoch)
+            self.deinit()
+            if self._current_epoch in self._epoch_futures:
+                self._epoch_futures[self._current_epoch].set_exception(exception)
+                del self._epoch_futures[self._current_epoch]
+            else:
+                raise exception
         else:
             # e.g. errors during init, raise here.
-            self._throw_error()
+            raise exception
 
-    def _throw_error(self) -> None:
-        errval = self._to_throw
-        if errval is None:
-            return
-        # clear instance object and store locally, we aren't locked here.
-        self._to_throw = None
-        self._logger.debug(
-            "Deinitializing before throwing error",
-        )
-        self.deinit()
-
-        # add the traceback as a note,
-        # sort of the best we can do without using tblib
-        err = errval["err_type"](*errval["err_args"])
-        tb_message = "\nError re-raised from node runner process\n\n"
-        tb_message += "Original traceback:\n"
-        tb_message += "-" * 20 + "\n"
-        tb_message += errval["traceback"]
-        err.add_note(tb_message)
-
-        raise err
+    #
+    # def _throw_error(self, e) -> None:
+    #     errval = self._to_throw
+    #     if errval is None:
+    #         return
+    #     # clear instance object and store locally, we aren't locked here.
+    #     self._to_throw = None
+    #     self._logger.debug(
+    #         "Deinitializing before throwing error",
+    #     )
+    #     self.deinit()
+    #
+    #     # add the traceback as a note,
+    #     # sort of the best we can do without using tblib
+    #     err = self._rehydrate_error(errval)
+    #
+    #     raise err
 
     def _request_more(self, n: int, current_iter: int, n_epochs: int) -> int:
         """
@@ -1130,3 +1210,9 @@ class ZMQRunner(TubeRunner):
 
     def disable_node(self, node_id: str) -> None:
         raise NotImplementedError()
+
+    def await_epoch(self, epoch: int) -> concurrent.futures.Future:
+        if epoch in self._epoch_futures:
+            return self._epoch_futures[epoch]
+        self._epoch_futures[epoch] = concurrent.futures.Future()
+        return self._epoch_futures[epoch]
