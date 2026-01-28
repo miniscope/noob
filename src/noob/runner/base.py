@@ -526,6 +526,10 @@ def call_async_from_sync(
     References:
         * https://github.com/django/asgiref/blob/2b28409ab83b3e4cf6fed9019403b71f8d7d1c51/asgiref/sync.py#L152
         * https://stackoverflow.com/questions/79663750/call-async-code-inside-sync-code-inside-async-code
+        * https://github.com/python/cpython/issues/66435
+        * https://github.com/python/cpython/issues/93462
+        * https://discuss.python.org/t/support-for-running-async-functions-in-sync-functions/16220/3
+        * https://github.com/fsspec/filesystem_spec/blob/2576617e5cbe441bcc53b021bccd85ff3489fde7/fsspec/asyn.py#L63
     """
     if not iscoroutinefunction_partial(fn):
         raise RuntimeError(

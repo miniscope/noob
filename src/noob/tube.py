@@ -238,6 +238,11 @@ class Tube(BaseModel):
             context={"skip_input_presence": True},
         )
 
+    @property
+    def has_return(self) -> bool:
+        """Whether the tube has a :class:`.Return` node present"""
+        return any(isinstance(node, Return) for node in self.nodes.values())
+
     @classmethod
     def _init_nodes(
         cls, specs: TubeSpecification, input_collection: InputCollection
