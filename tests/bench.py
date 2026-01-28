@@ -1,10 +1,8 @@
 import pytest
-import asyncio
 from pytest_codspeed.plugin import BenchmarkFixture
 
 from noob import Tube
 from noob.runner.base import TubeRunner
-from noob.runner import SynchronousRunner
 from noob.runner.zmq import ZMQRunner
 
 
@@ -31,19 +29,6 @@ def test_long_add(benchmark: BenchmarkFixture, runner: TubeRunner) -> None:
     and there's lots of concurrency possibilities
     """
     benchmark(lambda: runner.process())
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("loaded_tube", ["testing-long-add"], indirect=True)
-async def test_long_add_run(benchmark: BenchmarkFixture, runner: TubeRunner) -> None:
-    """
-    ZMQ runner should be faster for tubes where nodes take a long time
-    and there's lots of concurrency possibilities
-    """
-    if isinstance(runner, SynchronousRunner):
-        pytest.skip()
-    runner.run()
-    await asyncio.sleep(10)
-    runner.stop()
 
 
 @pytest.mark.parametrize("loaded_tube", ["testing-kitchen-sink"], indirect=True)

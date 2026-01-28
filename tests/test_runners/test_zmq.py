@@ -345,6 +345,7 @@ def test_iter_gather(mocker):
     # ceil((11/2)*9) = 50
     assert spy.spy_return == 50
 
+
 @pytest.mark.asyncio
 async def test_noderunner_stores_clear():
     """
@@ -394,9 +395,7 @@ async def test_noderunner_stores_clear():
 
     runner._freerun.set()
     assert len(runner.store.events) == 3
-    epoch = -1
-    async for args, kwargs, epoch in runner.await_inputs():
-        break
+    _, _, epoch = await anext(runner.await_inputs())
     assert len(runner.store.events) == 2
     assert epoch != -1
     assert epoch not in runner.store.events

@@ -24,25 +24,24 @@
 
 import asyncio
 import concurrent.futures
+import contextlib
 import math
 import multiprocessing as mp
 import os
-from datetime import datetime
 import signal
 import threading
 import traceback
-from functools import partial
 from collections import defaultdict
-from collections.abc import Callable, Generator, AsyncGenerator
+from collections.abc import AsyncGenerator, Callable, Generator
 from dataclasses import dataclass, field
+from datetime import datetime
+from functools import partial
 from itertools import count
 from multiprocessing.synchronize import Event as EventType
 from time import time
 from types import FrameType
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 from uuid import uuid4
-
-from noob.network.loop import EventloopMixin
 
 try:
     import zmq
@@ -55,7 +54,7 @@ from zmq.asyncio import Context, Poller, Socket
 from zmq.eventloop.zmqstream import ZMQStream
 
 from noob.config import config
-from noob.event import Event, MetaSignal, MetaEvent, MetaEventType
+from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
 from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope
 from noob.logging import init_logger
@@ -88,7 +87,7 @@ if TYPE_CHECKING:
     pass
 
 
-class CommandNode(EventloopMixin):
+class CommandNode:
     """
     Pub node that controls the state of the other nodes/announces addresses
 
@@ -114,12 +113,38 @@ class CommandNode(EventloopMixin):
         self.port = port
         self.protocol = protocol
         self.logger = init_logger(f"runner.node.{runner_id}.command")
-        self._outbox: zmq.Socket = None  # type: ignore[assignment]
-        self._inbox: ZMQStream = None  # type: ignore[assignment]
-        self._router: ZMQStream = None  # type: ignore[assignment]
+        self._context: Context = None  # type: ignore[assignment]
+        self._poller: Poller = None  # type: ignore[assignment]
+        self._outbox: Socket = None  # type: ignore[assignment]
+        self._inbox: Socket = None  # type: ignore[assignment]
+        self._router: Socket = None  # type: ignore[assignment]
         self._nodes: dict[str, IdentifyValue] = {}
         self._ready_condition = threading.Condition()
         self._callbacks: dict[str, list[Callable[[Message], Any]]] = defaultdict(list)
+        self._ready_future: concurrent.futures.Future | None = None
+        self._waiting_for: set[str] = set()
+        self._quitting: asyncio.Event = None  # type: ignore[assignment]
+        self._tasks = set()
+        self._init = threading.Event()
+        self._loop = None
+
+    @property
+    def context(self) -> Context:
+        if self._context is None:
+            self._context = Context.instance()
+        return self._context
+
+    @property
+    def poller(self) -> Poller:
+        if self._poller is None:
+            self._poller = Poller()
+        return self._poller
+
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        if self._loop is None:
+            self._loop = asyncio.get_running_loop()
+        return self._loop
 
     @property
     def pub_address(self) -> str:
@@ -141,9 +166,40 @@ class CommandNode(EventloopMixin):
         else:
             raise NotImplementedError()
 
+    def run(self) -> None:
+        """
+        Target for :class:`threading.Thread`
+        """
+        asyncio.run(self._run())
+
+    async def _run(self) -> None:
+        self._init.clear()
+        self._loop = asyncio.get_running_loop()
+        self._quitting = asyncio.Event()
+        self.init()
+        self._init.set()
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.gather(self._poll_input(), self._await_quit())
+
+    async def _await_quit(self) -> None:
+        self._quitting.clear()
+        await self._quitting.wait()
+        self.logger.debug("QUITTING!!!!")
+        raise asyncio.CancelledError()
+
+    async def _poll_input(self) -> None:
+        while not self._quitting.is_set():
+            events = await self._poller.poll()
+            events = dict(events)
+            if self._inbox in events:
+                msg = await self._inbox.recv_multipart()
+                await self.on_inbox(msg)
+            if self._router in events:
+                msg = await self._router.recv_multipart()
+                await self.on_router(msg)
+
     def init(self) -> None:
         self.logger.debug("Starting command runner")
-        self.start_loop()
         self._init_sockets()
         self.logger.debug("Command runner started")
 
@@ -151,9 +207,10 @@ class CommandNode(EventloopMixin):
         """Close the eventloop, stop processing messages, reset state"""
         self.logger.debug("Deinitializing")
         msg = DeinitMsg(node_id="command")
-        self._outbox.send_multipart([b"deinit", msg.to_bytes()])
-        self.stop_loop()
-        self.logger.debug("Deinitialized")
+        future = self._outbox.send_multipart([b"deinit", msg.to_bytes()])
+        future = cast(asyncio.Future, future)
+        future.add_done_callback(lambda x: self._quitting.set())
+        self.logger.debug("Queued loop for deinitialization")
 
     def stop(self) -> None:
         self.logger.debug("Stopping command runner")
@@ -178,9 +235,8 @@ class CommandNode(EventloopMixin):
         router = self.context.socket(zmq.ROUTER)
         router.bind(self.router_address)
         router.setsockopt_string(zmq.IDENTITY, "command.router")
-        router = ZMQStream(router, self.loop)
-        router.on_recv(self.on_router)
-        self.logger.debug("Inbox bound to %s", self.router_address)
+        self.poller.register(router, zmq.POLLIN)
+        self.logger.debug("Router bound to %s", self.router_address)
         return router
 
     def _init_inbox(self) -> ZMQStream:
@@ -188,20 +244,19 @@ class CommandNode(EventloopMixin):
         sub = self.context.socket(zmq.SUB)
         sub.setsockopt_string(zmq.IDENTITY, "command.inbox")
         sub.setsockopt_string(zmq.SUBSCRIBE, "")
-        sub = ZMQStream(sub, self.loop)
-        sub.on_recv(self.on_inbox)
+        self.poller.register(sub, zmq.POLLIN)
         return sub
 
-    def announce(self) -> None:
+    async def announce(self) -> None:
         msg = AnnounceMsg(
             node_id="command", value=AnnounceValue(inbox=self.router_address, nodes=self._nodes)
         )
-        self._outbox.send_multipart([b"announce", msg.to_bytes()])
+        await self._outbox.send_multipart([b"announce", msg.to_bytes()])
 
-    def ping(self) -> None:
+    async def ping(self) -> None:
         """Send a ping message asking everyone to identify themselves"""
         msg = PingMsg(node_id="command")
-        self._outbox.send_multipart([b"ping", msg.to_bytes()])
+        await self._outbox.send_multipart([b"ping", msg.to_bytes()])
 
     def start(self, n: int | None = None) -> None:
         """
@@ -233,42 +288,42 @@ class CommandNode(EventloopMixin):
     def clear_callbacks(self) -> None:
         self._callbacks = defaultdict(list)
 
-    def await_ready(self, node_ids: list[NodeID], timeout: float = 10) -> None:
+    def await_ready(self, node_ids: list[NodeID], timeout: float = 10) -> concurrent.futures.Future:
         """
         Wait until all the node_ids have announced themselves
         """
+        future = concurrent.futures.Future()
+        self._waiting_for = set(node_ids)
+        self._ready_future = future
+        wait_until = time() + timeout
 
-        def _ready_nodes() -> set[str]:
-            return {node_id for node_id, state in self._nodes.items() if state["status"] == "ready"}
+        async def _ping() -> None:
+            if self._ready_future is None:
+                return
+            if wait_until < time():
+                raise TimeoutError("Nodes were not ready after the timeout. ")
+            await self.ping()
+            self.loop.call_later(1, asyncio.create_task, _ping())
 
-        def _is_ready() -> bool:
-            ready_nodes = _ready_nodes()
-            waiting_for = set(node_ids)
-            self.logger.debug(
-                "Checking if ready, ready nodes are: %s, waiting for %s",
-                ready_nodes,
-                waiting_for,
-            )
-            return waiting_for.issubset(ready_nodes)
+        self.loop.call_later(1, asyncio.create_task, _ping())
+        return future
 
-        with self._ready_condition:
-            # ping periodically for identifications in case we have slow subscribers
-            start_time = time()
-            ready = False
-            while time() < start_time + timeout and not ready:
-                ready = self._ready_condition.wait_for(_is_ready, timeout=1)
-                if not ready:
-                    self.ping()
+    def _check_ready(self) -> None:
+        if self._ready_future is None:
+            return
+        ready_nodes = {
+            node_id for node_id, state in self._nodes.items() if state["status"] == "ready"
+        }
+        self.logger.debug(
+            "Checking if ready, ready nodes are: %s, waiting for %s",
+            ready_nodes,
+            self._waiting_for,
+        )
+        if self._ready_future is not None and self._waiting_for.issubset(ready_nodes):
+            self._ready_future.set_result(True)
+            self._ready_future = None
 
-        # if still not ready, timeout
-        if not ready:
-            raise TimeoutError(
-                f"Nodes were not ready after the timeout. "
-                f"Waiting for: {set(node_ids)}, "
-                f"ready: {_ready_nodes()}"
-            )
-
-    def on_router(self, msg: list[bytes]) -> None:
+    async def on_router(self, msg: list[bytes]) -> None:
         try:
             message = Message.from_bytes(msg)
             self.logger.debug("Received ROUTER message %s", message)
@@ -281,39 +336,41 @@ class CommandNode(EventloopMixin):
 
         if message.type_ == MessageType.identify:
             message = cast(IdentifyMsg, message)
-            self.on_identify(message)
+            await self.on_identify(message)
         elif message.type_ == MessageType.status:
             message = cast(StatusMsg, message)
-            self.on_status(message)
+            await self.on_status(message)
 
-    def on_inbox(self, msg: list[bytes]) -> None:
+    async def on_inbox(self, msg: list[bytes]) -> None:
         message = Message.from_bytes(msg)
         self.logger.debug("Received INBOX message: %s", message)
         for cb in self._callbacks["inbox"]:
-            cb(message)
+            if iscoroutinefunction_partial(cb):
+                await cb(message)
+            else:
+                self.loop.run_in_executor(None, cb, message)
 
-    def on_identify(self, msg: IdentifyMsg) -> None:
-        with self._ready_condition:
-            self._nodes[msg.node_id] = msg.value
-            self._inbox.connect(msg.value["outbox"])
-            self._ready_condition.notify_all()
+    async def on_identify(self, msg: IdentifyMsg) -> None:
+        self._nodes[msg.node_id] = msg.value
+        self._inbox.connect(msg.value["outbox"])
 
         try:
-            self.announce()
+            await self.announce()
             self.logger.debug("Announced")
         except Exception as e:
             self.logger.exception("Exception announced: %s", e)
 
-    def on_status(self, msg: StatusMsg) -> None:
-        with self._ready_condition:
-            if msg.node_id not in self._nodes:
-                self.logger.warning(
-                    "Node %s sent us a status before sending its full identify message, ignoring",
-                    msg.node_id,
-                )
-                return
-            self._nodes[msg.node_id]["status"] = msg.value
-            self._ready_condition.notify_all()
+        self._check_ready()
+
+    async def on_status(self, msg: StatusMsg) -> None:
+        if msg.node_id not in self._nodes:
+            self.logger.warning(
+                "Node %s sent us a status before sending its full identify message, ignoring",
+                msg.node_id,
+            )
+            return
+        self._nodes[msg.node_id]["status"] = msg.value
+        self._check_ready()
 
 
 class NodeRunner:
@@ -405,6 +462,7 @@ class NodeRunner:
         Target for multiprocessing.run,
         init the class and start it!
         """
+
         # ensure that events and conditions are bound to the eventloop created in the process
         async def _run_inner() -> None:
             nonlocal spec, kwargs
@@ -440,7 +498,9 @@ class NodeRunner:
         loop = asyncio.get_running_loop()
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             async for args, kwargs, epoch in self.await_inputs():
-                self.logger.debug("Running with args: %s, kwargs: %s, epoch: %s", args, kwargs, epoch)
+                self.logger.debug(
+                    "Running with args: %s, kwargs: %s, epoch: %s", args, kwargs, epoch
+                )
                 if is_async:
                     # mypy fails here because it can't propagate the type guard above
                     value = await self._node.process(*args, **kwargs)  # type: ignore[arg-type]
@@ -679,7 +739,7 @@ class NodeRunner:
         async with self._ready_condition:
             self.scheduler.update(events)
             self._ready_condition.notify_all()
-        self.logger.debug('scheduler updated')
+        self.logger.debug("scheduler updated")
 
     async def on_start(self, msg: StartMsg) -> None:
         """
@@ -775,7 +835,9 @@ class NodeRunner:
 
         """
         async with self._ready_condition:
-            await self._ready_condition.wait_for(lambda: self.scheduler.node_is_ready(self.spec.id, epoch))
+            await self._ready_condition.wait_for(
+                lambda: self.scheduler.node_is_ready(self.spec.id, epoch)
+            )
 
             # be FIFO-like and get the earliest epoch the node is ready in
             if epoch is None:
@@ -850,7 +912,8 @@ class ZMQRunner(TubeRunner):
             self.command = CommandNode(runner_id=self.runner_id)
             self.command.add_callback("inbox", self.on_event)
             self.command.add_callback("router", self.on_router)
-            self.command.init()
+            threading.Thread(target=self.command.run, daemon=True).start()
+            self.command._init.wait()
             self._logger.debug("Command node initialized")
 
             for node_id, node in self.tube.nodes.items():
@@ -872,9 +935,10 @@ class ZMQRunner(TubeRunner):
                 self.node_procs[node_id].start()
             self._logger.debug("Started node processes, awaiting ready")
             try:
-                self.command.await_ready(
+                future = self.command.await_ready(
                     [k for k, v in self.tube.nodes.items() if not isinstance(v, Return)]
                 )
+                future.result()
             except TimeoutError as e:
                 self._logger.debug("Timeouterror, deinitializing before throwing")
                 self._initialized.set()
@@ -1111,9 +1175,13 @@ class ZMQRunner(TubeRunner):
                     if ep_ended is not None:
                         events.append(ep_ended)
         for e in events:
-            if e['node_id'] == "meta" and e['signal'] == MetaEventType.EpochEnded and e['value'] in self._epoch_futures:
-                self._epoch_futures[e['value']].set_result(e['value'])
-                del self._epoch_futures[e['value']]
+            if (
+                e["node_id"] == "meta"
+                and e["signal"] == MetaEventType.EpochEnded
+                and e["value"] in self._epoch_futures
+            ):
+                self._epoch_futures[e["value"]].set_result(e["value"])
+                del self._epoch_futures[e["value"]]
 
     def on_router(self, msg: Message) -> None:
         if isinstance(msg, ErrorMsg):

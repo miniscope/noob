@@ -1,10 +1,8 @@
-import asyncio
 import logging
 from collections import deque
 from collections.abc import MutableSequence
 from datetime import UTC, datetime
 from itertools import count
-from threading import Condition
 from typing import Self
 from uuid import uuid4
 
@@ -200,8 +198,7 @@ class Scheduler(BaseModel):
         """
         if epoch in self._epoch_log:
             self.logger.debug(
-                "Marking node %s as done in epoch %s, "
-                "but epoch was already completed. ignoring",
+                "Marking node %s as done in epoch %s, " "but epoch was already completed. ignoring",
                 node_id,
                 epoch,
             )
@@ -355,6 +352,7 @@ class Scheduler(BaseModel):
             generations.append(ready)
             sorter.done(*ready)
         return generations
+
 
 #
 # class AsyncScheduler(Scheduler):
