@@ -298,14 +298,15 @@ class CommandNode:
         wait_until = time() + timeout
 
         async def _ping() -> None:
+            await asyncio.sleep(1)
             if self._ready_future is None:
                 return
             if wait_until < time():
                 raise TimeoutError("Nodes were not ready after the timeout. ")
             await self.ping()
-            self.loop.call_later(1, asyncio.create_task, _ping())
+            await _ping()
 
-        self.loop.call_later(1, asyncio.create_task, _ping())
+        self.loop.create_task(_ping())
         return future
 
     def _check_ready(self) -> None:
@@ -772,15 +773,17 @@ class NodeRunner:
                 value = combined[next(iter(combined.keys()))]
             else:
                 value = list(combined.values())
-            events = self.store.add_value(
-                [Signal(name=k, type_=None) for k in combined],
-                value,
-                node_id="input",
-                epoch=msg.value["epoch"],
-            )
-            scheduler_events = self.scheduler.update(events)
+            async with self._ready_condition:
+                events = self.store.add_value(
+                    [Signal(name=k, type_=None) for k in combined],
+                    value,
+                    node_id="input",
+                    epoch=msg.value["epoch"],
+                )
+                scheduler_events = self.scheduler.update(events)
+                self._ready_condition.notify_all()
+                self.logger.debug("Updated scheduler with process events: %s", scheduler_events)
 
-            self.logger.debug("Updated scheduler with process events: %s", scheduler_events)
         self._process_one.set()
 
     async def on_stop(self, msg: StopMsg) -> None:
@@ -1004,9 +1007,7 @@ class ZMQRunner(TubeRunner):
             self.command = cast(CommandNode, self.command)
             self.command.process(self._current_epoch, input)
             self._logger.debug("awaiting epoch %s", self._current_epoch)
-            future = self.await_epoch(self._current_epoch)
-            # waiting on the result will also raise a result when one is set
-            future.result()
+            self.await_epoch(self._current_epoch)
             self._logger.debug("collecting return")
 
             return self.collect_return(self._current_epoch)
@@ -1064,7 +1065,7 @@ class ZMQRunner(TubeRunner):
                 loop = 0
                 while ret is MetaSignal.NoEvent:
                     self._logger.debug("Awaiting epoch %s", epoch)
-                    self.await_epoch(epoch).result()
+                    self.await_epoch(epoch)
                     ret = self.collect_return(epoch)
                     epoch += 1
                     self._current_epoch = epoch
@@ -1279,8 +1280,10 @@ class ZMQRunner(TubeRunner):
     def disable_node(self, node_id: str) -> None:
         raise NotImplementedError()
 
-    def await_epoch(self, epoch: int) -> concurrent.futures.Future:
-        if epoch in self._epoch_futures:
-            return self._epoch_futures[epoch]
-        self._epoch_futures[epoch] = concurrent.futures.Future()
-        return self._epoch_futures[epoch]
+    def await_epoch(self, epoch: int) -> int:
+        if self.tube.scheduler.epoch_completed(epoch):
+            return epoch
+
+        if epoch not in self._epoch_futures:
+            self._epoch_futures[epoch] = concurrent.futures.Future()
+        return self._epoch_futures[epoch].result()

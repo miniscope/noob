@@ -14,7 +14,9 @@ from noob import Name, process_method
 from noob.node import Node
 
 
-def count_source(limit: int = 10000, start: int = 0) -> Generator[A[int, Name("index")], None, None]:
+def count_source(
+    limit: int = 10000, start: int = 0
+) -> Generator[A[int, Name("index")], None, None]:
     counter = count(start=start)
     if limit == 0:
         while True:
