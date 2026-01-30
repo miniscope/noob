@@ -206,16 +206,19 @@ class CommandNode:
     def deinit(self) -> None:
         """Close the eventloop, stop processing messages, reset state"""
         self.logger.debug("Deinitializing")
-        msg = DeinitMsg(node_id="command")
-        future = self._outbox.send_multipart([b"deinit", msg.to_bytes()])
-        future = cast(asyncio.Future, future)
-        future.add_done_callback(lambda x: self._quitting.set())
+
+        async def _deinit() -> None:
+            msg = DeinitMsg(node_id="command")
+            await self._outbox.send_multipart([b"deinit", msg.to_bytes()])
+            self._quitting.set()
+
+        self.loop.create_task(_deinit())
         self.logger.debug("Queued loop for deinitialization")
 
     def stop(self) -> None:
         self.logger.debug("Stopping command runner")
         msg = StopMsg(node_id="command")
-        self._outbox.send_multipart([b"stop", msg.to_bytes()])
+        self.loop.call_soon_threadsafe(self._outbox.send_multipart, [b"stop", msg.to_bytes()])
         self.logger.debug("Command runner stopped")
 
     def _init_sockets(self) -> None:
@@ -262,18 +265,21 @@ class CommandNode:
         """
         Start running in free-run mode
         """
-        self._outbox.send_multipart([b"start", StartMsg(node_id="command", value=n).to_bytes()])
+        self.loop.call_soon_threadsafe(
+            self._outbox.send_multipart, [b"start", StartMsg(node_id="command", value=n).to_bytes()]
+        )
         self.logger.debug("Sent start message")
 
     def process(self, epoch: int, input: dict | None = None) -> None:
         """Emit a ProcessMsg to process a single round through the graph"""
         # no empty dicts
         input = input if input else None
-        self._outbox.send_multipart(
+        self.loop.call_soon_threadsafe(
+            self._outbox.send_multipart,
             [
                 b"process",
                 ProcessMsg(node_id="command", value={"input": input, "epoch": epoch}).to_bytes(),
-            ]
+            ],
         )
         self.logger.debug("Sent process message")
 
