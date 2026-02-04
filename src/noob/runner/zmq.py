@@ -48,7 +48,6 @@ except ImportError as e:
         "Attempted to import zmq runner, but zmq deps are not installed. install with `noob[zmq]`",
     ) from e
 
-from zmq.asyncio import Context, Poller, Socket
 
 from noob.config import config
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
@@ -315,7 +314,7 @@ class CommandNode(EventloopMixin):
                 self._ready_condition.notify_all()
 
 
-class NodeRunner:
+class NodeRunner(EventloopMixin):
     """
     Runner for a single node
 
@@ -333,7 +332,6 @@ class NodeRunner:
         input_collection: InputCollection,
         protocol: str = "ipc",
     ):
-        self.context = Context.instance()
         self.spec = spec
         self.runner_id = runner_id
         self.input_collection = input_collection
@@ -344,10 +342,6 @@ class NodeRunner:
         self.scheduler: Scheduler = None  # type: ignore[assignment]
         self.logger = init_logger(f"runner.node.{runner_id}.{self.spec.id}")
 
-        self._dealer: Socket = None  # type: ignore[assignment]
-        self._outbox: Socket = None  # type: ignore[assignment]
-        self._inbox: Socket = None  # type: ignore[assignment]
-        self._inbox_poller: Poller = Poller()
         self._node: Node | None = None
         self._depends: tuple[tuple[str, str], ...] | None = None
         self._has_input: bool | None = None
@@ -360,6 +354,7 @@ class NodeRunner:
         self._status_lock = asyncio.Lock()
         self._ready_condition = asyncio.Condition()
         self._to_process = 0
+        super().__init__()
 
     @property
     def outbox_address(self) -> str:
@@ -414,7 +409,6 @@ class NodeRunner:
         asyncio.run(_run_inner())
 
     async def _run(self) -> None:
-
         try:
 
             def _handler(sig: int, frame: FrameType | None = None) -> None:
@@ -427,7 +421,7 @@ class NodeRunner:
             self._process_quitting.clear()
             self._freerun.clear()
             self._process_one.clear()
-            await asyncio.gather(self._poll_inbox(), self._loop())
+            await asyncio.gather(self._poll_receivers(), self._process_loop())
         except KeyboardInterrupt:
             self.logger.debug("Got keyboard interrupt, quitting")
         except Exception as e:
@@ -435,7 +429,7 @@ class NodeRunner:
         finally:
             await self.deinit()
 
-    async def _loop(self) -> None:
+    async def _process_loop(self) -> None:
         is_async = iscoroutinefunction_partial(self._node.process)
         loop = asyncio.get_running_loop()
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -459,13 +453,6 @@ class NodeRunner:
                 if events:
                     await self.update_graph(events)
                     await self.publish_events(events)
-
-    async def _poll_inbox(self) -> None:
-        while not self._process_quitting.is_set():
-            events = await self._inbox_poller.poll()
-            if self._inbox in dict(events):
-                msg = await self._inbox.recv_multipart()
-                await self.on_inbox(msg)
 
     async def await_inputs(self) -> AsyncGenerator[tuple[tuple[Any], dict[str, Any], int]]:
         self._node = cast(Node, self._node)
@@ -500,13 +487,14 @@ class NodeRunner:
 
     async def publish_events(self, events: list[Event]) -> None:
         msg = EventMsg(node_id=self.spec.id, value=events)
-        await self._outbox.send_multipart([b"event", msg.to_bytes()])
+        await self.sockets["outbox"].send_multipart([b"event", msg.to_bytes()])
 
     async def init(self) -> None:
         self.logger.debug("Initializing")
 
         await self.init_node()
         self._init_sockets()
+        self._quitting.clear()
         self.status = (
             NodeStatus.waiting
             if self.depends and [d for d in self.depends if d[0] != "input"]
@@ -520,6 +508,7 @@ class NodeRunner:
         if self._node is not None:
             self._node.deinit()
         await self.update_status(NodeStatus.closed)
+        self._quitting.set()
 
         self.logger.debug("Deinitialization finished")
 
@@ -547,7 +536,7 @@ class NodeRunner:
                     ),
                 ),
             )
-            await self._dealer.send_multipart([ann.to_bytes()])
+            await self.sockets["dealer"].send_multipart([ann.to_bytes()])
         self.logger.debug("Sent identification message: %s", ann)
 
     async def update_status(self, status: NodeStatus) -> None:
@@ -556,7 +545,7 @@ class NodeRunner:
         async with self._status_lock:
             self.status = status
             msg = StatusMsg(node_id=self.spec.id, value=status)
-            await self._dealer.send_multipart([msg.to_bytes()])
+            await self.sockets["dealer"].send_multipart([msg.to_bytes()])
             self.logger.debug("Updated status")
 
     async def init_node(self) -> None:
@@ -568,18 +557,19 @@ class NodeRunner:
             self._ready_condition.notify_all()
 
     def _init_sockets(self) -> None:
-        self._dealer = self._init_dealer()
-        self._outbox = self._init_outbox()
-        self._inbox = self._init_inbox()
+        self._init_loop()
+        self._init_dealer()
+        self._init_outbox()
+        self._init_inbox()
 
-    def _init_dealer(self) -> Socket:
+    def _init_dealer(self) -> None:
         dealer = self.context.socket(zmq.DEALER)
         dealer.setsockopt_string(zmq.IDENTITY, self.spec.id)
         dealer.connect(self.command_router)
+        self.register_socket("dealer", dealer)
         self.logger.debug("Connected to command node at %s", self.command_router)
-        return dealer
 
-    def _init_outbox(self) -> Socket:
+    def _init_outbox(self) -> None:
         pub = self.context.socket(zmq.PUB)
         pub.setsockopt_string(zmq.IDENTITY, self.spec.id)
         if self.protocol == "ipc":
@@ -588,10 +578,9 @@ class NodeRunner:
             raise NotImplementedError()
             # something like:
             # port = pub.bind_to_random_port(self.protocol)
+        self.register_socket("outbox", pub)
 
-        return pub
-
-    def _init_inbox(self) -> Socket:
+    def _init_inbox(self) -> None:
         """
         Init the subscriber, but don't attempt to subscribe to anything but the command yet!
         we do that when we get node Announces
@@ -600,19 +589,11 @@ class NodeRunner:
         sub.setsockopt_string(zmq.IDENTITY, self.spec.id)
         sub.setsockopt_string(zmq.SUBSCRIBE, "")
         sub.connect(self.command_outbox)
-        self._inbox_poller.register(sub, zmq.POLLIN)
+        self.register_socket("inbox", sub, receiver=True)
+        self.add_callback("inbox", self.on_inbox)
         self.logger.debug("Subscribed to command outbox %s", self.command_outbox)
-        return sub
 
-    async def on_inbox(self, msg: list[bytes]) -> None:
-        try:
-            message = Message.from_bytes(msg)
-
-            self.logger.debug("INBOX received %s", msg)
-        except Exception as e:
-            self.logger.exception("Error decoding message %s %s", msg, e)
-            return
-
+    async def on_inbox(self, message: Message) -> None:
         # FIXME: all this switching sux,
         # just have a decorator to register a handler for a given message type
         if message.type_ == MessageType.announce:
@@ -655,7 +636,7 @@ class NodeRunner:
                 # TODO: a way to check if we're already connected, without storing it locally?
                 outbox = msg.value["nodes"][node_id]["outbox"]
                 self.logger.debug("Subscribing to %s at %s", node_id, outbox)
-                self._inbox.connect(outbox)
+                self.sockets["inbox"].connect(outbox)
                 self.logger.debug("Subscribed to %s at %s", node_id, outbox)
         self._nodes = msg.value["nodes"]
         if set(self._nodes) >= depended_nodes - {"input"} and self.status == NodeStatus.waiting:
@@ -764,7 +745,7 @@ class NodeRunner:
                 traceback=tbexception,
             ),
         )
-        await self._dealer.send_multipart([msg.to_bytes()])
+        await self.sockets["dealer"].send_multipart([msg.to_bytes()])
 
     async def await_node(self, epoch: int | None = None) -> MetaEvent:
         """
