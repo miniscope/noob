@@ -74,8 +74,12 @@ def concat(strings: list[str]) -> str:
     return "".join(strings)
 
 
-def exclaim(string: str) -> str:
-    return string + "!"
+def multi_concat(**kwargs: list[str]) -> str:
+    return "".join("".join(letter for letter in word) for word in kwargs.values())
+
+
+def exclaim(string: str, hype: int = 1) -> str:
+    return string + ("!" * hype)
 
 
 def repeat(string: str, times: int) -> str:
