@@ -347,7 +347,6 @@ class NodeRunner(EventloopMixin):
         self._has_input: bool | None = None
         self._nodes: dict[str, IdentifyValue] = {}
         self._counter = count()
-        self._process_quitting = asyncio.Event()
         self._freerun = asyncio.Event()
         self._process_one = asyncio.Event()
         self._status: NodeStatus = NodeStatus.stopped
@@ -418,7 +417,6 @@ class NodeRunner(EventloopMixin):
             signal.signal(signal.SIGTERM, _handler)
             await self.init()
             self._node = cast(Node, self._node)
-            self._process_quitting.clear()
             self._freerun.clear()
             self._process_one.clear()
             await asyncio.gather(self._poll_receivers(), self._process_loop())
@@ -456,7 +454,7 @@ class NodeRunner(EventloopMixin):
 
     async def await_inputs(self) -> AsyncGenerator[tuple[tuple[Any], dict[str, Any], int]]:
         self._node = cast(Node, self._node)
-        while not self._process_quitting.is_set():
+        while not self._quitting.is_set():
             # if we are not freerunning, keep track of how many times we are supposed to run,
             # and run until we aren't supposed to anymore!
             if not self._freerun.is_set():
@@ -491,7 +489,6 @@ class NodeRunner(EventloopMixin):
 
     async def init(self) -> None:
         self.logger.debug("Initializing")
-
         await self.init_node()
         self._init_sockets()
         self._quitting.clear()
@@ -504,10 +501,15 @@ class NodeRunner(EventloopMixin):
         self.logger.debug("Initialization finished")
 
     async def deinit(self) -> None:
+        """
+        Deinitialize the node class after receiving on_deinit message and
+        draining out the end of the _process_loop.
+        """
         self.logger.debug("Deinitializing")
         if self._node is not None:
             self._node.deinit()
-        await self.update_status(NodeStatus.closed)
+
+        # should have already been called in on_deinit, but just to make sure we're killed dead...
         self._quitting.set()
 
         self.logger.debug("Deinitialization finished")
@@ -722,7 +724,9 @@ class NodeRunner(EventloopMixin):
 
         Cause the main loop to end, which calls deinit
         """
-        self._process_quitting.set()
+        await self.update_status(NodeStatus.closed)
+        self._quitting.set()
+
         pid = mp.current_process().pid
         if pid is None:
             return
