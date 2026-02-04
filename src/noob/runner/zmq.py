@@ -354,6 +354,7 @@ class NodeRunner(EventloopMixin):
         self._ready_condition = asyncio.Condition()
         self._to_process = 0
         super().__init__()
+        self._quitting = asyncio.Event()
 
     @property
     def outbox_address(self) -> str:
