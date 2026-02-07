@@ -240,7 +240,6 @@ class CommandNode(EventloopMixin):
         """
         Wait until all the node_ids have announced themselves
         """
-        self._waiting.clear()
 
         def _ready_nodes() -> set[str]:
             return {node_id for node_id, state in self._nodes.items() if state["status"] == "ready"}
@@ -271,7 +270,6 @@ class CommandNode(EventloopMixin):
                 f"Waiting for: {set(node_ids)}, "
                 f"ready: {_ready_nodes()}"
             )
-        self._waiting.set()
 
     async def on_router(self, message: Message) -> None:
         self.logger.debug("Received ROUTER message %s", message)
