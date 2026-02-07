@@ -3,7 +3,6 @@ from pytest_codspeed.plugin import BenchmarkFixture
 
 from noob import Tube
 from noob.runner.base import TubeRunner
-from noob.runner.zmq import ZMQRunner
 
 
 def test_load_tube(benchmark: BenchmarkFixture) -> None:
@@ -17,8 +16,6 @@ def test_kitchen_sink_process(benchmark: BenchmarkFixture, runner: TubeRunner) -
 
 @pytest.mark.parametrize("loaded_tube", ["testing-kitchen-sink"], indirect=True)
 def test_kitchen_sink_run(benchmark: BenchmarkFixture, runner: TubeRunner) -> None:
-    if isinstance(runner, ZMQRunner):
-        pytest.skip("ZMQ runner freerun mode not supported yet")
     benchmark(lambda: runner.run(n=10))
 
 

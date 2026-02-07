@@ -14,7 +14,9 @@ from noob import Name, process_method
 from noob.node import Node
 
 
-def count_source(limit: int = 1000, start: int = 0) -> Generator[A[int, Name("index")], None, None]:
+def count_source(
+    limit: int = 10000, start: int = 0
+) -> Generator[A[int, Name("index")], None, None]:
     counter = count(start=start)
     if limit == 0:
         while True:
@@ -156,8 +158,8 @@ def input_party(
     return True
 
 
-def long_add(value: float) -> float:
-    sleep(0.25)
+def long_add(value: float, sleep_for: float = 0.25) -> float:
+    sleep(sleep_for)
     return value + 1
 
 
