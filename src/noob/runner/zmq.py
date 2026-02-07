@@ -30,7 +30,7 @@ import os
 import signal
 import threading
 import traceback
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator, MutableSequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
@@ -111,10 +111,9 @@ class CommandNode(EventloopMixin):
         self.protocol = protocol
         self.logger = init_logger(f"runner.node.{runner_id}.command")
         self._nodes: dict[str, IdentifyValue] = {}
-        self._ready_condition: threading.Condition | None = None
+        self._ready_condition: threading.Condition = None  # type: ignore[assignment]
         self._waiting_for: set[str] = set()
         self._waiting: threading.Event = threading.Event()
-        self._tasks = set()
         self._init = threading.Event()
         self._waiting.set()
         super().__init__()
@@ -429,6 +428,7 @@ class NodeRunner(EventloopMixin):
             await self.deinit()
 
     async def _process_loop(self) -> None:
+        self._node = cast(Node, self._node)
         is_async = iscoroutinefunction_partial(self._node.process)
         loop = asyncio.get_running_loop()
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -438,7 +438,7 @@ class NodeRunner(EventloopMixin):
                 )
                 if is_async:
                     # mypy fails here because it can't propagate the type guard above
-                    value = await self._node.process(*args, **kwargs)  # type: ignore[arg-type]
+                    value = await self._node.process(*args, **kwargs)  # type: ignore[misc]
                 else:
                     part = partial(self._node.process, *args, **kwargs)
                     value = await loop.run_in_executor(executor, part)
@@ -1063,7 +1063,7 @@ class ZMQRunner(TubeRunner):
             # run n epochs
             self.command.start(n)
             self._running.set()
-            self._current_epoch = self.await_epoch(self._current_epoch + n).result()
+            self._current_epoch = self.await_epoch(self._current_epoch + n)
             return None
 
     def stop(self) -> None:
@@ -1087,6 +1087,7 @@ class ZMQRunner(TubeRunner):
             for event in msg.value:
                 self.store.add(event)
         events = self.tube.scheduler.update(msg.value)
+        events = cast(MutableSequence[Event | MetaEvent], events)
         if self._return_node is not None:
             # mark the return node done if we've received the expected events for an epoch
             # do it here since we don't really run the return node like a real node

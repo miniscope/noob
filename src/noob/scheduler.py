@@ -32,7 +32,6 @@ class Scheduler(BaseModel):
 
     _clock: count = PrivateAttr(default_factory=count)
     _epochs: dict[int, TopoSorter] = PrivateAttr(default_factory=dict)
-    # _epoch_condition: Condition = PrivateAttr(default_factory=Condition)
     _epoch_log: deque = PrivateAttr(default_factory=lambda: deque(maxlen=100))
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -226,29 +225,6 @@ class Scheduler(BaseModel):
             return self.end_epoch(epoch)
 
         return None
-
-    def await_epoch(self, epoch: int | None = None) -> int:
-        """
-        Block until an epoch is completed.
-
-        Args:
-            epoch (int, None): if `int` , wait until the epoch is ready,
-                otherwise wait until the next epoch is finished, in whatever order.
-
-        Returns:
-            int: the epoch that was completed.
-        """
-
-        # check if we have already completed this epoch
-        if isinstance(epoch, int) and self.epoch_completed(epoch):
-            return epoch
-
-        if epoch is None:
-            self._epoch_condition.wait()
-            return self._epoch_log[-1]
-        else:
-            self._epoch_condition.wait_for(lambda: self.epoch_completed(epoch))
-            return epoch
 
     def epoch_completed(self, epoch: int) -> bool:
         """

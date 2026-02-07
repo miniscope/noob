@@ -49,7 +49,7 @@ class EventloopMixin:
     def __init__(self):
         self._context = None
         self._loop = None
-        self._quitting = None
+        self._quitting: asyncio.Event = None  # type: ignore[assignment]
         self._sockets: dict[str, Socket] = {}
         """
         All sockets, mapped from some common name to the socket.
@@ -61,7 +61,7 @@ class EventloopMixin:
             lambda: _CallbackDict(sync=[], asyncio=[])
         )
         """Callbacks for each receiver socket"""
-        if not hasattr(self, "logger") or self.logger is None:
+        if not hasattr(self, "logger"):
             self.logger = init_logger("eventloop")
 
     @property
