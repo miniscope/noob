@@ -112,10 +112,7 @@ class CommandNode(EventloopMixin):
         self.logger = init_logger(f"runner.node.{runner_id}.command")
         self._nodes: dict[str, IdentifyValue] = {}
         self._ready_condition: threading.Condition = None  # type: ignore[assignment]
-        self._waiting_for: set[str] = set()
-        self._waiting: threading.Event = threading.Event()
         self._init = threading.Event()
-        self._waiting.set()
         super().__init__()
 
     @property
@@ -296,9 +293,8 @@ class CommandNode(EventloopMixin):
         except Exception as e:
             self.logger.exception("Exception announced: %s", e)
 
-        if not self._waiting.is_set():
-            with self._ready_condition:
-                self._ready_condition.notify_all()
+        with self._ready_condition:
+            self._ready_condition.notify_all()
 
     async def on_status(self, msg: StatusMsg) -> None:
         if msg.node_id not in self._nodes:
@@ -308,9 +304,9 @@ class CommandNode(EventloopMixin):
             )
             return
         self._nodes[msg.node_id]["status"] = msg.value
-        if not self._waiting.is_set():
-            with self._ready_condition:
-                self._ready_condition.notify_all()
+
+        with self._ready_condition:
+            self._ready_condition.notify_all()
 
 
 class NodeRunner(EventloopMixin):
@@ -1149,24 +1145,6 @@ class ZMQRunner(TubeRunner):
         else:
             # e.g. errors during init, raise here.
             raise exception
-
-    #
-    # def _throw_error(self, e) -> None:
-    #     errval = self._to_throw
-    #     if errval is None:
-    #         return
-    #     # clear instance object and store locally, we aren't locked here.
-    #     self._to_throw = None
-    #     self._logger.debug(
-    #         "Deinitializing before throwing error",
-    #     )
-    #     self.deinit()
-    #
-    #     # add the traceback as a note,
-    #     # sort of the best we can do without using tblib
-    #     err = self._rehydrate_error(errval)
-    #
-    #     raise err
 
     def _request_more(self, n: int, current_iter: int, n_epochs: int) -> int:
         """
