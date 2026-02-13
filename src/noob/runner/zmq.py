@@ -1187,7 +1187,7 @@ class ZMQRunner(TubeRunner):
     def disable_node(self, node_id: str) -> None:
         raise NotImplementedError()
 
-    def await_epoch(self, epoch: int) -> int:
+    def await_epoch(self, epoch: Epoch) -> Epoch:
         if self.tube.scheduler.epoch_completed(epoch):
             return epoch
 

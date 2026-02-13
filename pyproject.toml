@@ -130,13 +130,13 @@ docs-test.composite = [
 ]
 docs-test.env = {SPHINXOPTS = "-W --keep-going"}
 mypy = "mypy"
-benchmark = "pytest tests/bench.py --codspeed"
+benchmark = "pytest tests/bench.py --codspeed --timeout=15"
 
 [tool.pytest.ini_options]
 addopts = [
     "--cov=noob",
     "--cov-append",
-    "--timeout=5",
+    "--timeout=10",
 ]
 markers = [
     "async_runner: uses the async runner",

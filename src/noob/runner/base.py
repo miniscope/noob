@@ -352,7 +352,7 @@ class TubeRunner(ABC):
         """
         return node, value
 
-    def _handle_events(self, node: Node, value: Any, epoch: int) -> None:
+    def _handle_events(self, node: Node, value: Any, epoch: Epoch) -> None:
         """
         After calling a node, handle its return value:
 
@@ -392,7 +392,7 @@ class TubeRunner(ABC):
             yield context
 
     @abstractmethod
-    def collect_return(self, epoch: int | None = None) -> ReturnNodeType:
+    def collect_return(self, epoch: Epoch | None = None) -> ReturnNodeType:
         """
         If any :class:`.Return` nodes are in the tube,
         gather their return values to return from :meth:`.TubeRunner.process`

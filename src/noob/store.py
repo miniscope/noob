@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import count
 from threading import Condition
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, Literal, TypeAlias
 
 from noob.const import META_SIGNAL
 from noob.event import Event, MetaSignal
@@ -124,7 +124,6 @@ class EventStore:
                         event = evt
                         break
         else:
-            epoch = cast(Epoch, epoch)
             events = self.events[epoch][node_id][signal]
             event = events[-1] if events else None
 

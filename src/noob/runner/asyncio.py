@@ -198,7 +198,7 @@ class AsyncRunner(TubeRunner):
         self.tube.nodes[node_id].deinit()
         self.tube.disable_node(node_id)
 
-    def collect_return(self, epoch: int | None = None) -> ReturnNodeType:
+    def collect_return(self, epoch: Epoch | None = None) -> ReturnNodeType:
         """The return node holds values from a single epoch, get and transform them"""
         if epoch is not None:
             raise ValueError("Sync runner only stores a single epoch at a time")

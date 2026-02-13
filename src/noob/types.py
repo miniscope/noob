@@ -196,7 +196,7 @@ class EpochSegment(NamedTuple):
 
 
 class Epoch(tuple[EpochSegment, ...]):
-    def __new__(cls, epoch: int | tuple[tuple[NodeID, int], ...]):
+    def __new__(cls, epoch: int | tuple[EpochSegment, ...]):
         if isinstance(epoch, int):
             epoch = (EpochSegment("tube", epoch),)
         return super().__new__(cls, epoch)
@@ -216,7 +216,7 @@ class Epoch(tuple[EpochSegment, ...]):
             steps=[tuple_schema, core_schema.no_info_plain_validator_function(_cast)],
         )
 
-    def __eq__(self, other: Epoch | int) -> bool:
+    def __eq__(self, other: Any) -> bool:
         if isinstance(other, int):
             if len(self) == 1:
                 return self[0].epoch == other
@@ -224,12 +224,10 @@ class Epoch(tuple[EpochSegment, ...]):
                 return False
         else:
             return tuple.__eq__(self, other)
-            # msg = f"Can only compare equality to an int or another epoch, got {other}"
-            # raise TypeError(msg)
 
     __hash__ = tuple.__hash__
 
-    def __gt__(self, other: Epoch | int) -> bool:
+    def __gt__(self, other: Epoch | int) -> bool:  # type: ignore[override]
         if isinstance(other, Epoch | tuple):
             return tuple(e.epoch for e in self) > tuple(e.epoch for e in other)
         elif isinstance(other, int):
@@ -237,11 +235,11 @@ class Epoch(tuple[EpochSegment, ...]):
         else:
             raise TypeError("Can only compare equality to an int or another epoch")
 
-    def __ge__(self, other: Epoch | int) -> bool:
+    def __ge__(self, other: Epoch | int) -> bool:  # type: ignore[override]
         return self == other or self > other
 
-    def __lt__(self, other: Epoch | int) -> bool:
+    def __lt__(self, other: Epoch | int) -> bool:  # type: ignore[override]
         return not self > other
 
-    def __le__(self, other: Epoch | int) -> bool:
+    def __le__(self, other: Epoch | int) -> bool:  # type: ignore[override]
         return self == other or self < other
