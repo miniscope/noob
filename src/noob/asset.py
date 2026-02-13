@@ -6,7 +6,7 @@ from typing import Any, Generic, ParamSpec, Self, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from noob.types import AbsoluteIdentifier, DependencyIdentifier, PythonIdentifier
+from noob.types import AbsoluteIdentifier, DependencyIdentifier, Epoch, PythonIdentifier
 from noob.utils import resolve_python_identifier
 
 TOutput = TypeVar("TOutput")
@@ -95,7 +95,7 @@ class Asset(BaseModel):
     """The signal that this asset gets updated by. See :attr:`.AssetSpecification.depends`"""
     obj: Any | None = None
     """Instantiated asset instance"""
-    stored_at: int = -1
+    stored_at: Epoch = Epoch(-1)
     """The latest epoch the asset was stored at. Only used when depends is not `None`"""
 
     model_config = ConfigDict(extra="forbid")
@@ -148,7 +148,7 @@ class Asset(BaseModel):
                 id=spec.id, fn=obj, spec=spec, params=params, scope=scope, depends=depends
             )
 
-    def update(self, value: Any, epoch: int) -> None:
+    def update(self, value: Any, epoch: Epoch) -> None:
         self.obj = deepcopy(value)
         self.stored_at = epoch
 

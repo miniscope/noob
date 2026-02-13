@@ -41,6 +41,8 @@ from types import FrameType
 from typing import TYPE_CHECKING, Any, cast, overload
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 try:
     import zmq
 except ImportError as e:
@@ -77,7 +79,7 @@ from noob.node import Node, NodeSpecification, Return, Signal
 from noob.runner.base import TubeRunner
 from noob.scheduler import Scheduler
 from noob.store import EventStore
-from noob.types import NodeID, ReturnNodeType
+from noob.types import Epoch, NodeID, ReturnNodeType
 from noob.utils import iscoroutinefunction_partial
 
 if TYPE_CHECKING:
@@ -223,7 +225,7 @@ class CommandNode(EventloopMixin):
         )
         self.logger.debug("Sent start message")
 
-    def process(self, epoch: int, input: dict | None = None) -> None:
+    def process(self, epoch: Epoch, input: dict | None = None) -> None:
         """Emit a ProcessMsg to process a single round through the graph"""
         # no empty dicts
         input = input if input else None
@@ -447,7 +449,7 @@ class NodeRunner(EventloopMixin):
                     await self.update_graph(events)
                     await self.publish_events(events)
 
-    async def await_inputs(self) -> AsyncGenerator[tuple[tuple[Any], dict[str, Any], int]]:
+    async def await_inputs(self) -> AsyncGenerator[tuple[tuple[Any], dict[str, Any], Epoch]]:
         self._node = cast(Node, self._node)
         while not self._quitting.is_set():
             # if we are not freerunning, keep track of how many times we are supposed to run,
@@ -461,7 +463,7 @@ class NodeRunner(EventloopMixin):
                     self._to_process = 0
                     self._process_one.clear()
 
-            epoch = next(self._counter) if self._node.stateful else None
+            epoch = Epoch(next(self._counter)) if self._node.stateful else None
 
             ready = await self.await_node(epoch=epoch)
             edges = self._node.edges
@@ -736,23 +738,25 @@ class NodeRunner(EventloopMixin):
         """
         tbexception = "\n".join(traceback.format_tb(err.__traceback__))
         self.logger.debug("Throwing error in main runner: %s", tbexception)
+        args = (err.title, err.line_errors) if isinstance(err, ValidationError) else err.args
+
         msg = ErrorMsg(
             node_id=self.spec.id,
             value=ErrorValue(
                 err_type=type(err),
-                err_args=err.args,
+                err_args=args,
                 traceback=tbexception,
             ),
         )
         await self.sockets["dealer"].send_multipart([msg.to_bytes()])
 
-    async def await_node(self, epoch: int | None = None) -> MetaEvent:
+    async def await_node(self, epoch: Epoch | None = None) -> MetaEvent:
         """
         Block until a node is ready
 
         Args:
             node_id:
-            epoch (int, None): if `int` , wait until the node is ready in the given epoch,
+            epoch (Epoch, None): if `int` , wait until the node is ready in the given epoch,
                 otherwise wait until the node is ready in any epoch
 
         Returns:
@@ -815,8 +819,8 @@ class ZMQRunner(TubeRunner):
     _ignore_events: bool = False
     _return_node: Return | None = None
     _to_throw: ErrorValue | None = None
-    _current_epoch: int = 0
-    _epoch_futures: dict[int, concurrent.futures.Future] = field(default_factory=dict)
+    _current_epoch: Epoch = Epoch(0)
+    _epoch_futures: dict[Epoch, concurrent.futures.Future] = field(default_factory=dict)
 
     @property
     def running(self) -> bool:
@@ -972,7 +976,7 @@ class ZMQRunner(TubeRunner):
             raise RuntimeError("Already Running!")
         self.command = cast(CommandNode, self.command)
 
-        epoch = self._current_epoch
+        epoch = self._current_epoch[0].epoch
         start_epoch = epoch
         stop_epoch = epoch + n if n is not None else epoch
         # start running without a limit - we'll check as we go.
@@ -985,10 +989,10 @@ class ZMQRunner(TubeRunner):
                 loop = 0
                 while ret is MetaSignal.NoEvent:
                     self._logger.debug("Awaiting epoch %s", epoch)
-                    self.await_epoch(epoch)
-                    ret = self.collect_return(epoch)
+                    self.await_epoch(Epoch(epoch))
+                    ret = self.collect_return(Epoch(epoch))
                     epoch += 1
-                    self._current_epoch = epoch
+                    self._current_epoch = Epoch(epoch)
                     if loop > self.max_iter_loops:
                         raise RuntimeError("Reached maximum process calls per iteration")
                     # if we have run out of epochs to run, request some more with a cheap heuristic
@@ -1057,7 +1061,7 @@ class ZMQRunner(TubeRunner):
             # run n epochs
             self.command.start(n)
             self._running.set()
-            self._current_epoch = self.await_epoch(self._current_epoch + n)
+            self._current_epoch = self.await_epoch(Epoch(self._current_epoch[0].epoch + n))
             return None
 
     def stop(self) -> None:
@@ -1109,7 +1113,7 @@ class ZMQRunner(TubeRunner):
         if isinstance(msg, ErrorMsg):
             self._handle_error(msg)
 
-    def collect_return(self, epoch: int | None = None) -> Any:
+    def collect_return(self, epoch: Epoch | None = None) -> Any:
         if epoch is None:
             raise ValueError("Must specify epoch in concurrent runners")
         if self._return_node is None:

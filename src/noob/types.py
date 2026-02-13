@@ -9,18 +9,18 @@ from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, TypedDict, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, Literal, NamedTuple, TypeAlias, TypedDict, TypeVar
 
-from annotated_types import Ge
 from pydantic import (
     AfterValidator,
     BeforeValidator,
     Field,
+    GetCoreSchemaHandler,
     PlainSerializer,
     TypeAdapter,
     WrapSerializer,
 )
-from pydantic_core import PydanticSerializationError
+from pydantic_core import CoreSchema, PydanticSerializationError, core_schema
 from pydantic_core.core_schema import SerializerFunctionWrapHandler
 
 from noob.const import RESERVED_IDS
@@ -154,7 +154,6 @@ Picklable = Annotated[
 
 # type aliases, mostly for documentation's sake
 NodeID: TypeAlias = Annotated[str, AfterValidator(_is_identifier), AfterValidator(_not_reserved)]
-Epoch: TypeAlias = Annotated[int, Ge(0)]
 SignalName: TypeAlias = Annotated[str, AfterValidator(_is_identifier)]
 
 ReturnNodeType: TypeAlias = None | dict[str, Any] | Any
@@ -189,3 +188,60 @@ AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)
 class RunnerContext(TypedDict):
     runner: TubeRunner
     tube: Tube
+
+
+class EpochSegment(NamedTuple):
+    node_id: NodeID | Literal["tube"]
+    epoch: int
+
+
+class Epoch(tuple[EpochSegment, ...]):
+    def __new__(cls, epoch: int | tuple[tuple[NodeID, int], ...]):
+        if isinstance(epoch, int):
+            epoch = (EpochSegment("tube", epoch),)
+        return super().__new__(cls, epoch)
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        tuple_schema = core_schema.tuple_schema([handler(EpochSegment)])
+
+        def _cast(val: tuple | Epoch) -> Epoch:
+            if not isinstance(val, Epoch):
+                val = Epoch(val)
+            return val
+
+        return core_schema.chain_schema(
+            steps=[tuple_schema, core_schema.no_info_plain_validator_function(_cast)],
+        )
+
+    def __eq__(self, other: Epoch | int) -> bool:
+        if isinstance(other, int):
+            if len(self) == 1:
+                return self[0].epoch == other
+            else:
+                return False
+        else:
+            return tuple.__eq__(self, other)
+            # msg = f"Can only compare equality to an int or another epoch, got {other}"
+            # raise TypeError(msg)
+
+    __hash__ = tuple.__hash__
+
+    def __gt__(self, other: Epoch | int) -> bool:
+        if isinstance(other, Epoch | tuple):
+            return tuple(e.epoch for e in self) > tuple(e.epoch for e in other)
+        elif isinstance(other, int):
+            return self[0].epoch > other
+        else:
+            raise TypeError("Can only compare equality to an int or another epoch")
+
+    def __ge__(self, other: Epoch | int) -> bool:
+        return self == other or self > other
+
+    def __lt__(self, other: Epoch | int) -> bool:
+        return not self > other
+
+    def __le__(self, other: Epoch | int) -> bool:
+        return self == other or self < other

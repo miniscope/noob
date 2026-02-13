@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import count
 from threading import Condition
-from typing import Any, TypeAlias
+from typing import Any, Literal, TypeAlias, cast
 
 from noob.const import META_SIGNAL
 from noob.event import Event, MetaSignal
@@ -66,7 +66,9 @@ class EventStore:
             self._event_condition.notify_all()
         return event
 
-    def add_value(self, signals: list[Signal], value: Any, node_id: str, epoch: int) -> list[Event]:
+    def add_value(
+        self, signals: list[Signal], value: Any, node_id: str, epoch: Epoch
+    ) -> list[Event]:
         """
         Add the result of a :meth:`.Node.process` call to the event store.
 
@@ -80,7 +82,7 @@ class EventStore:
                 with a list in case the length of signals is 1. Otherwise, it's zipped
                 with :signals:
             node_id (str): ID of the node that emitted the events
-            epoch (int): Epoch count that the signal was emitted in
+            epoch (Epoch): Epoch count that the signal was emitted in
         """
         timestamp = datetime.now(UTC)
         if value is MetaSignal.NoEvent or (isinstance(value, str) and value == MetaSignal.NoEvent):
@@ -105,7 +107,7 @@ class EventStore:
             self._event_condition.notify_all()
         return new_events
 
-    def get(self, node_id: str, signal: str, epoch: int) -> Event:
+    def get(self, node_id: str, signal: str, epoch: Epoch | Literal[-1]) -> Event:
         """
         Get the event with the matching node_id and signal name from a given epoch.
 
@@ -115,12 +117,14 @@ class EventStore:
             KeyError: if no event with the matching node_id and signal name exists
         """
         event = None
-        if epoch == -1:
-            for ep in reversed(self.events.keys()):
-                if (evt := self.get(node_id, signal, ep)) is not None:
-                    event = evt
-                    break
+        if isinstance(epoch, int) and epoch == -1:
+            if epoch == -1:
+                for ep in reversed(self.events.keys()):
+                    if (evt := self.get(node_id, signal, ep)) is not None:
+                        event = evt
+                        break
         else:
+            epoch = cast(Epoch, epoch)
             events = self.events[epoch][node_id][signal]
             event = events[-1] if events else None
 
@@ -131,7 +135,7 @@ class EventStore:
         else:
             return event
 
-    def collect(self, edges: list[Edge], epoch: int) -> dict | None:
+    def collect(self, edges: list[Edge], epoch: Epoch | Literal[-1]) -> dict | None:
         """
         Gather events into a form that can be consumed by a :meth:`.Node.process` method,
         given the collection of inbound edges (usually from :meth:`.Tube.in_edges` ).
@@ -160,7 +164,7 @@ class EventStore:
 
         return self.transform_events(edges=edges, events=events)
 
-    def collect_events(self, edges: list[Edge], epoch: int) -> list[Event] | None:
+    def collect_events(self, edges: list[Edge], epoch: Epoch | Literal[-1]) -> list[Event] | None:
         """
         Collect the event objects from a set of dependencies indicated by edges in a given epoch.
 
@@ -184,7 +188,7 @@ class EventStore:
 
         return events if events else None
 
-    def clear(self, epoch: int | None = None) -> None:
+    def clear(self, epoch: Epoch | None = None) -> None:
         """
         Clear events for a specific or all epochs.
 
