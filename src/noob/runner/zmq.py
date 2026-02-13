@@ -738,7 +738,7 @@ class NodeRunner(EventloopMixin):
         """
         tbexception = "\n".join(traceback.format_tb(err.__traceback__))
         self.logger.debug("Throwing error in main runner: %s", tbexception)
-        args = (err.title, err.line_errors) if isinstance(err, ValidationError) else err.args
+        args = (err.title, err.line_errors) if isinstance(err, ValidationError) else err.args  # type: ignore[attr-defined,unused-ignore]
 
         msg = ErrorMsg(
             node_id=self.spec.id,
