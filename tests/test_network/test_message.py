@@ -5,6 +5,7 @@ import pytest
 
 from noob.event import Event
 from noob.network.message import EventMsg
+from noob.types import Epoch
 
 
 class PickleClass:
@@ -22,14 +23,19 @@ def test_jsonable_event():
         node_id="example",
         value=[
             Event(
-                id=0, timestamp=datetime.now(UTC), node_id="example", signal="x", epoch=0, value=100
+                id=0,
+                timestamp=datetime.now(UTC),
+                node_id="example",
+                signal="x",
+                epoch=Epoch(0),
+                value=100,
             ),
             Event(
                 id=1,
                 timestamp=datetime.now(UTC),
                 node_id="example",
                 signal="y",
-                epoch=0,
+                epoch=Epoch(0),
                 value="hello",
             ),
         ],
@@ -55,7 +61,7 @@ def test_pickleable_event():
                 timestamp=datetime.now(UTC),
                 node_id="example",
                 signal="x",
-                epoch=0,
+                epoch=Epoch(0),
                 value=PickleClass(x=100),
             ),
         ],

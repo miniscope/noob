@@ -8,7 +8,7 @@ from noob.event import MetaEvent
 from noob.node import Node, Return
 from noob.runner.base import TubeRunner
 from noob.scheduler import Scheduler
-from noob.types import ReturnNodeType
+from noob.types import Epoch, ReturnNodeType
 from noob.utils import iscoroutinefunction_partial
 
 
@@ -108,7 +108,7 @@ class AsyncRunner(TubeRunner):
         self.store.clear()
         self.tube.scheduler.add_epoch()
 
-    async def _get_ready(self, epoch: int | None = None) -> list[MetaEvent]:  # type: ignore[override]
+    async def _get_ready(self, epoch: Epoch | None = None) -> list[MetaEvent]:  # type: ignore[override]
         if self._exception:
             await self._raise_exception()
         ready = self.tube.scheduler.get_ready()
@@ -130,7 +130,9 @@ class AsyncRunner(TubeRunner):
         self._pending_futures.add(future)
         return future
 
-    def _handle_events(self, node: Node, value: asyncio.Future | asyncio.Task, epoch: int) -> None:
+    def _handle_events(
+        self, node: Node, value: asyncio.Future | asyncio.Task, epoch: Epoch
+    ) -> None:
         value.add_done_callback(partial(self._node_complete, node=node, epoch=epoch))
 
     def _filter_ready(self, nodes: list[MetaEvent], scheduler: Scheduler) -> list[MetaEvent]:
@@ -144,7 +146,7 @@ class AsyncRunner(TubeRunner):
                 evts.append(node)
         return evts
 
-    def _node_complete(self, future: asyncio.Future, node: Node, epoch: int) -> None:
+    def _node_complete(self, future: asyncio.Future, node: Node, epoch: Epoch) -> None:
         self._pending_futures.remove(future)
         if future.exception():
             self._logger.debug("Node %s raised exception, re-raising outside of callback")
@@ -196,7 +198,7 @@ class AsyncRunner(TubeRunner):
         self.tube.nodes[node_id].deinit()
         self.tube.disable_node(node_id)
 
-    def collect_return(self, epoch: int | None = None) -> ReturnNodeType:
+    def collect_return(self, epoch: Epoch | None = None) -> ReturnNodeType:
         """The return node holds values from a single epoch, get and transform them"""
         if epoch is not None:
             raise ValueError("Sync runner only stores a single epoch at a time")

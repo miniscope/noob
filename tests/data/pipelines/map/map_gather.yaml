@@ -17,7 +17,8 @@ nodes:
   d:
     type: gather
     depends:
-      - c.value
+      - value: c.value
+      - n: b.n
   e:
     type: noob.testing.concat
     depends:

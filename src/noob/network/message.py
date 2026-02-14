@@ -21,7 +21,7 @@ from pydantic_core.core_schema import SerializerFunctionWrapHandler
 
 from noob.const import META_SIGNAL
 from noob.event import Event, MetaSignal
-from noob.types import Picklable
+from noob.types import Epoch, Picklable
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
@@ -96,7 +96,7 @@ class ErrorValue(TypedDict):
 
 
 class ProcessValue(TypedDict):
-    epoch: int
+    epoch: Epoch
     input: dict | None
 
 

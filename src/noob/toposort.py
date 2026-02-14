@@ -57,6 +57,9 @@ class TopoSorter:
         self._out_nodes: set[NodeID] = set()
         self._done_nodes: set[NodeID] = set()
         self._disabled_nodes: set[NodeID] = set()
+        self._ran_nodes: set[NodeID] = set()  # FIXME: this is awkward -
+        # naming is weird, "done" nodes get "expired" too, same as nodes that were not run,
+        # but we don't have a way of finding "nodes which ran successfully"
         self._npassedout = 0
         self._nfinished = 0
 
@@ -82,6 +85,10 @@ class TopoSorter:
         return not self.__eq__(other)
 
     @property
+    def node_info(self) -> dict[str, _NodeInfo]:
+        return self._node2info
+
+    @property
     def ready_nodes(self) -> set[NodeID]:
         return self._ready_nodes
 
@@ -92,6 +99,10 @@ class TopoSorter:
     @property
     def done_nodes(self) -> set[NodeID]:
         return self._done_nodes
+
+    @property
+    def ran_nodes(self) -> set[NodeID]:
+        return self._ran_nodes
 
     def mark_ready(self, *nodes: NodeID) -> None:
         """
@@ -244,6 +255,7 @@ class TopoSorter:
                         self.mark_expired(successor)
                     else:
                         self.mark_ready(successor)
+        self._ran_nodes.update(nodes)
 
     def find_cycle(self) -> list[str] | None:
         n2i = self._node2info

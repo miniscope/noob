@@ -1,16 +1,22 @@
 import sys
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any, Generic, Literal
 
-from noob.types import Picklable, SerializableDatetime
+from noob.types import Epoch, Picklable, SerializableDatetime
 
 if sys.version_info < (3, 12):
-    from typing_extensions import TypedDict
-else:
+    from typing_extensions import TypedDict, TypeVar
+elif sys.version_info < (3, 13):
     from typing import TypedDict
 
+    from typing_extensions import TypeVar
+else:
+    from typing import TypedDict, TypeVar
 
-class Event(TypedDict):
+_TEvent = TypeVar("_TEvent", default=Any)
+
+
+class Event(TypedDict, Generic[_TEvent]):
     """
     Container for a single value returned from a single :meth:`.Node.process` call
     """
@@ -23,10 +29,21 @@ class Event(TypedDict):
     """ID of node that emitted the event"""
     signal: str
     """name of the signal that emitted the event"""
-    epoch: int
+    epoch: Epoch
     """Epoch number the event was emitted in"""
-    value: Picklable[Any]
+    value: Picklable[_TEvent]
     """Value emitted by the processing node"""
+
+
+def is_event(instance: Any) -> bool:
+    """
+    TypedDicts don't support instancechecks by default,
+    we want to use typed dicts for perf's sake,
+    but we still also would like to check if something is an event
+    """
+    if not isinstance(instance, dict):
+        return False
+    return all(key in instance for key in Event.__annotations__)
 
 
 class MetaEventType(StrEnum):

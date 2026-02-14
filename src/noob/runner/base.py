@@ -22,7 +22,7 @@ from noob.exceptions import InputMissingError
 from noob.input import InputScope
 from noob.node import Edge, Node
 from noob.store import EventStore
-from noob.types import PythonIdentifier, ReturnNodeType, RunnerContext
+from noob.types import Epoch, PythonIdentifier, ReturnNodeType, RunnerContext
 from noob.utils import iscoroutinefunction_partial
 
 if TYPE_CHECKING:
@@ -259,7 +259,7 @@ class TubeRunner(ABC):
         """
         return
 
-    def _get_ready(self, epoch: int | None = None) -> list[MetaEvent]:
+    def _get_ready(self, epoch: Epoch | None = None) -> list[MetaEvent]:
         return self.tube.scheduler.get_ready(epoch=epoch)
 
     def _filter_ready(self, nodes: list[MetaEvent], scheduler: Scheduler) -> list[MetaEvent]:
@@ -290,7 +290,7 @@ class TubeRunner(ABC):
         return self.tube.nodes[node_id]
 
     def _collect_input(
-        self, node: Node, epoch: int, input: dict | None = None
+        self, node: Node, epoch: Epoch, input: dict | None = None
     ) -> tuple[tuple, dict[PythonIdentifier, Any]]:
         """
         Gather input to give to the passed Node from the :attr:`.TubeRunner.store`
@@ -309,12 +309,25 @@ class TubeRunner(ABC):
 
         inputs: dict[PythonIdentifier, Any] = {}
 
+        if "epoch" in node.injections:
+            inputs |= {node.injections["epoch"]: epoch}
+
         self.tube.state.init(AssetScope.node)
         state_inputs = self.tube.state.collect(edges, epoch)
         inputs |= state_inputs if state_inputs else inputs
 
-        event_inputs = self.store.collect(edges, epoch)
-        inputs |= event_inputs if event_inputs else inputs
+        if "events" in node.injections:
+            events = self.store.collect_events(edges, epoch)
+            if events:
+                inputs |= {
+                    node.injections["events"]: self.store.transform_events(
+                        node.edges, events, as_events=True
+                    )
+                }
+                inputs |= self.store.transform_events(node.edges, events, as_events=False)
+        else:
+            event_inputs = self.store.collect(edges, epoch)
+            inputs |= event_inputs if event_inputs else inputs
 
         input_inputs = self.tube.input_collection.collect(edges, input)
         inputs |= input_inputs if input_inputs else inputs
@@ -352,7 +365,7 @@ class TubeRunner(ABC):
         """
         return node, value
 
-    def _handle_events(self, node: Node, value: Any, epoch: int) -> None:
+    def _handle_events(self, node: Node, value: Any, epoch: Epoch) -> None:
         """
         After calling a node, handle its return value:
 
@@ -392,7 +405,7 @@ class TubeRunner(ABC):
             yield context
 
     @abstractmethod
-    def collect_return(self, epoch: int | None = None) -> ReturnNodeType:
+    def collect_return(self, epoch: Epoch | None = None) -> ReturnNodeType:
         """
         If any :class:`.Return` nodes are in the tube,
         gather their return values to return from :meth:`.TubeRunner.process`

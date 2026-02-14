@@ -8,6 +8,7 @@ from noob import SynchronousRunner, Tube
 from noob.event import Event, MetaEventType
 from noob.exceptions import EpochCompletedError
 from noob.toposort import TopoSorter
+from noob.types import Epoch
 
 
 def test_epoch_increment():
@@ -54,7 +55,7 @@ def test_event_store_filter():
     runner = SynchronousRunner(tube)
     gen = runner.iter(5)
     for i, out in enumerate(gen):
-        assert runner.store.get(node_id="b", signal="value", epoch=i)["value"] == out
+        assert runner.store.get(node_id="b", signal="value", epoch=Epoch(i))["value"] == out
 
 
 def test_epoch_completion(basic_tubes):
@@ -68,14 +69,14 @@ def test_epoch_completion(basic_tubes):
     scheduler.add_epoch()
 
     eoe = None
-    while scheduler.is_active(0):
+    while scheduler.is_active(Epoch(0)):
         ready_nodes = scheduler.get_ready()
         for ready in ready_nodes:
             # until we're done, eoe should have been None in the last iteration
             assert eoe is None
             # marking the very last one as done should emit the end of epoch event
             # (we should also break out of the while loop after the last assignment)
-            eoe = scheduler.done(epoch=0, node_id=ready["value"])
+            eoe = scheduler.done(epoch=Epoch(0), node_id=ready["value"])
 
     assert (
         isinstance(eoe["id"], int)
