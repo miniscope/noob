@@ -4,7 +4,7 @@ Tube runners for running tubes
 
 import contextlib
 from collections import defaultdict
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import count
@@ -12,7 +12,7 @@ from threading import Condition
 from typing import Any, Literal, TypeAlias
 
 from noob.const import META_SIGNAL
-from noob.event import Event, MetaSignal
+from noob.event import Event, MetaSignal, is_event
 from noob.node import Edge
 from noob.node.base import Signal
 from noob.types import Epoch, NodeID, SignalName
@@ -54,15 +54,17 @@ class EventStore:
                     events.extend(signal_evts)
         return events
 
-    def add(self, event: Event) -> Event:
+    def add(self, event: Event | Sequence[Event]) -> Event:
         """
         Add an existing event to the store, returning it.
 
         Mostly an abstraction layer to give ourselves room above the `events` list
         in cast we want to change the internal implementation of how events are stored
         """
+        events = [event] if not isinstance(event, Sequence) else event
         with self._event_condition:
-            self.events[event["epoch"]][event["node_id"]][event["signal"]].append(event)
+            for e in events:
+                self.events[e["epoch"]][e["node_id"]][e["signal"]].append(event)
             self._event_condition.notify_all()
         return event
 
@@ -73,7 +75,15 @@ class EventStore:
         Add the result of a :meth:`.Node.process` call to the event store.
 
         Split the dictionary of values into separate :class:`.Event` s,
-        store along with current timestamp
+        store along with current timestamp.
+
+        .. note::
+            Nodes can emit explicit, pre-created event objects, either a single
+            :class:`.Event` or a :class:`~collections.abc.Sequence` of events.
+            These events are passed through as-is rather than being wrapped in new events.
+
+            This is an "advanced" feature and can cause unpredictable behavior
+            if the emitted events have incorrect epochs, signals, etc.
 
         Args:
             signals (list[Signal]): Signals from which the value was emitted by
@@ -93,16 +103,25 @@ class EventStore:
 
             new_events = []
             for signal, val in zip(signals, values):
-                new_event = Event(
-                    id=next(self.counter),
-                    timestamp=timestamp,
-                    node_id=node_id,
-                    epoch=epoch,
-                    signal=signal.name,
-                    value=val,
-                )
-                self.add(new_event)
-                new_events.append(new_event)
+                # Nodes can emit explicit events or collections of events
+                if is_event(val):
+                    self.add(val)
+                    new_events.append(val)
+                elif isinstance(val, Sequence) and is_event(val[0]):
+                    for e in val:
+                        self.add(e)
+                    new_events.extend(val)
+                else:
+                    new_event = Event(
+                        id=next(self.counter),
+                        timestamp=timestamp,
+                        node_id=node_id,
+                        epoch=epoch,
+                        signal=signal.name,
+                        value=val,
+                    )
+                    self.add(new_event)
+                    new_events.append(new_event)
 
             self._event_condition.notify_all()
         return new_events

@@ -209,7 +209,7 @@ class Scheduler(BaseModel):
         Mark a node in a given epoch as done.
 
         """
-        if epoch in self._epoch_log:
+        if not isinstance(epoch, int) and epoch[0].epoch in self._epoch_log:
             self.logger.debug(
                 "Marking node %s as done in epoch %s, " "but epoch was already completed. ignoring",
                 node_id,

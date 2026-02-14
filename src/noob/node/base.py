@@ -9,6 +9,7 @@ from typing import (
     Self,
     TypeVar,
     Union,
+    _UnionGenericAlias,
     cast,
     get_args,
     get_origin,
@@ -25,6 +26,7 @@ from pydantic import (
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
+from noob.types import Epoch
 from noob.utils import resolve_python_identifier
 
 if TYPE_CHECKING:
@@ -52,7 +54,7 @@ class Slot(BaseModel):
 
 class Signal(BaseModel):
     name: str
-    type_: type | None | UnionType | GenericAlias
+    type_: type | None | UnionType | GenericAlias | _UnionGenericAlias
 
     # Unable to generate pydantic-core schema for <class 'types.UnionType'>
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -185,6 +187,8 @@ class Node(BaseModel):
     _slots: dict[str, Slot] | None = None
     _gen: Generator | None = None
     _edges: list[Edge] | None = None
+    _requires_epoch: str | None = None
+    """"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -358,6 +362,19 @@ class Node(BaseModel):
 
         self._edges = edges
         return self._edges
+
+    @functools.cached_property
+    def requires_epoch(self) -> str | None:
+        """
+        If a node's process method requests the current epoch via a param with an
+        :class:`~.types.Epoch` annotation, returns the name of the parameter to inject it as.
+        """
+        sig = inspect.signature(self.process)
+        epoch_key = [k for k, v in sig.parameters.items() if v.annotation and v.annotation is Epoch]
+        if not epoch_key:
+            return None
+        else:
+            return epoch_key[0]
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)

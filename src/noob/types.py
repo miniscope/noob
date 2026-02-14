@@ -5,6 +5,7 @@ import builtins
 import pickle
 import re
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
@@ -196,10 +197,21 @@ class EpochSegment(NamedTuple):
 
 
 class Epoch(tuple[EpochSegment, ...]):
-    def __new__(cls, epoch: int | tuple[EpochSegment, ...]):
+    def __new__(cls, epoch: int | Iterable[EpochSegment, ...]):
         if isinstance(epoch, int):
             epoch = (EpochSegment("tube", epoch),)
         return super().__new__(cls, epoch)
+
+    def make_subepochs(self, node_id: NodeID, n: int) -> list[Epoch]:
+        """
+        Make n subepochs for the current epoch.
+        """
+        return [self / EpochSegment(node_id=node_id, epoch=i) for i in range(n)]
+
+    @property
+    def parent(self) -> Epoch:
+        """If a subepoch, return the parent epoch. If the root epoch, return self"""
+        return Epoch(self[:-1]) if len(self) > 1 else self
 
     @classmethod
     def __get_pydantic_core_schema__(
@@ -243,3 +255,8 @@ class Epoch(tuple[EpochSegment, ...]):
 
     def __le__(self, other: Epoch | int) -> bool:  # type: ignore[override]
         return self == other or self < other
+
+    def __truediv__(self, other: EpochSegment | tuple[str, int]) -> Epoch:
+        segment = EpochSegment(*other) if not isinstance(other, EpochSegment) else other
+
+        return Epoch((*self, segment))

@@ -309,6 +309,8 @@ class TubeRunner(ABC):
 
         inputs: dict[PythonIdentifier, Any] = {}
 
+        inputs |= {node.requires_epoch: epoch} if node.requires_epoch else {}
+
         self.tube.state.init(AssetScope.node)
         state_inputs = self.tube.state.collect(edges, epoch)
         inputs |= state_inputs if state_inputs else inputs

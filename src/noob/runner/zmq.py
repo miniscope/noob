@@ -467,9 +467,11 @@ class NodeRunner(EventloopMixin):
 
             ready = await self.await_node(epoch=epoch)
             edges = self._node.edges
-            inputs = self.store.collect(edges, ready["epoch"])
-            if inputs is None:
-                inputs = {}
+
+            inputs = {}
+            inputs |= {self._node.requires_epoch: epoch} if self._node.requires_epoch else {}
+            store_inputs = self.store.collect(edges, ready["epoch"])
+            inputs |= store_inputs if store_inputs else {}
             args, kwargs = self.store.split_args_kwargs(inputs)
             # clear events for this epoch, since we have consumed what we need here.
             self.store.clear(ready["epoch"])
