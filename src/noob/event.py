@@ -1,13 +1,17 @@
 import sys
 from enum import StrEnum
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal
 
 from noob.types import Epoch, Picklable, SerializableDatetime
 
 if sys.version_info < (3, 12):
-    from typing_extensions import TypedDict
-else:
+    from typing_extensions import TypedDict, TypeVar
+elif sys.version_info < (3, 13):
     from typing import TypedDict
+
+    from typing_extensions import TypeVar
+else:
+    from typing import TypedDict, TypeVar
 
 _TEvent = TypeVar("_TEvent", default=Any)
 
