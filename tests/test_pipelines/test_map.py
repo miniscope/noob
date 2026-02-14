@@ -19,7 +19,7 @@ def test_map_basic():
             assert val["letter"] == [letter + "!" for letter in val["word"]]
 
 
-@pytest.mark.xfail(reason="map not implemented")
+@pytest.mark.skip(reason="map not implemented")
 def test_map_depends():
     """
     A node that depends on a normal event and a mapped one has the normal event repeated
@@ -33,7 +33,7 @@ def test_map_depends():
             assert val["letter"] == [letter + ("!" * val["count"]) for letter in val["word"]]
 
 
-@pytest.mark.xfail(reason="map not implemented")
+@pytest.mark.skip(reason="map not implemented")
 def test_map_double_depends():
     """
     A node cannot be downstream of multiple, unrelated maps
@@ -42,7 +42,7 @@ def test_map_double_depends():
         Tube.from_specification("testing-map-depends-double")
 
 
-@pytest.mark.xfail(reason="map not implemented")
+@pytest.mark.skip(reason="map not implemented")
 def test_map_gather():
     """
     Gathering after a map collapses the sub-epoch
@@ -60,7 +60,7 @@ def test_map_gather():
             )
 
 
-@pytest.mark.xfail(reason="map not implemented")
+@pytest.mark.skip(reason="map not implemented")
 def test_map_nested():
     """
     Maps can map mappings
