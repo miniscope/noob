@@ -344,7 +344,8 @@ class Node(BaseModel):
                 required = True
                 if isinstance(arrow, Mapping):  # keyword argument
                     target_slot, source_signal = next(iter(arrow.items()))
-                    required = self.slots[target_slot].required
+                    if target_slot in self.slots:
+                        required = self.slots[target_slot].required
 
                 elif isinstance(arrow, str):  # positional argument
                     target_slot = position_index

@@ -5,15 +5,15 @@ description: A node depends on the output of map and a normal signal
 
 nodes:
   count:
-    type: noob.nodes.count_source
+    type: noob.testing.count_source
   word:
-    type: noob.nodes.word_source
+    type: noob.testing.word_source
   map:
     type: map
     depends:
       - value: word.word
   exclaim:
-    type: noob.nodes.exclaim
+    type: noob.testing.exclaim
     depends:
       - string: map.value
       - hype: count.index

@@ -19,7 +19,6 @@ def test_map_basic():
             assert val["letter"] == [letter + "!" for letter in val["word"]]
 
 
-@pytest.mark.skip(reason="map not implemented")
 def test_map_depends():
     """
     A node that depends on a normal event and a mapped one has the normal event repeated
@@ -27,13 +26,13 @@ def test_map_depends():
     tube = Tube.from_specification("testing-map-depends")
     runner = SynchronousRunner(tube)
     with runner:
-        for _ in range(5):
+        for i in range(5):
             val = runner.process()
-            assert isinstance(val["letter"], list)
-            assert val["letter"] == [letter + ("!" * val["count"]) for letter in val["word"]]
+            assert isinstance(val["letters"], list)
+            assert val["count"] == i
+            assert val["letters"] == [letter + ("!" * val["count"]) for letter in val["word"]]
 
 
-@pytest.mark.skip(reason="map not implemented")
 def test_map_double_depends():
     """
     A node cannot be downstream of multiple, unrelated maps

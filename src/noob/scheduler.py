@@ -406,8 +406,10 @@ class Scheduler(BaseModel):
         """
         Subgraph that is downstream of a given node (including the node itself).
         """
+        from noob.tube import downstream_nodes
+
         if node_id not in self._subgraphs:
-            downstream = self._downstream_nodes(node_id)
+            downstream = downstream_nodes(self.edges, node_id)
             self._subgraphs[node_id] = (
                 {node_id: self.nodes[node_id] for node_id in downstream},
                 [e for e in self.edges if e.target_node in downstream],
