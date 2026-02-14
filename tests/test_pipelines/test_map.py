@@ -6,7 +6,6 @@ from noob import SynchronousRunner, Tube
 pytestmark = pytest.mark.map
 
 
-@pytest.mark.xfail(reason="map not implemented")
 def test_map_basic():
     """
     Map splits up an iterator and processes its elements individually

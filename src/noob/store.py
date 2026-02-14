@@ -9,13 +9,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import count
 from threading import Condition
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, overload
 
 from noob.const import META_SIGNAL
 from noob.event import Event, MetaSignal, is_event
 from noob.node import Edge
 from noob.node.base import Signal
-from noob.types import Epoch, NodeID, SignalName
+from noob.types import Epoch, EventMap, NodeID, SignalName
 
 EventDict: TypeAlias = dict[Epoch, dict[NodeID, dict[SignalName, list[Event]]]]
 """
@@ -54,17 +54,15 @@ class EventStore:
                     events.extend(signal_evts)
         return events
 
-    def add(self, event: Event | Sequence[Event]) -> Event:
+    def add(self, event: Event) -> Event:
         """
         Add an existing event to the store, returning it.
 
         Mostly an abstraction layer to give ourselves room above the `events` list
         in cast we want to change the internal implementation of how events are stored
         """
-        events = [event] if not isinstance(event, Sequence) else event
         with self._event_condition:
-            for e in events:
-                self.events[e["epoch"]][e["node_id"]][e["signal"]].append(event)
+            self.events[event["epoch"]][event["node_id"]][event["signal"]].append(event)
             self._event_condition.notify_all()
         return event
 
@@ -144,7 +142,14 @@ class EventStore:
                         break
         else:
             events = self.events[epoch][node_id][signal]
-            event = events[-1] if events else None
+            if events:
+                event = events[-1]
+            elif len(epoch) > 1:
+                for parent in epoch.parents:
+                    events = self.events[parent][node_id][signal]
+                    if events:
+                        event = events[-1]
+                        break
 
         if event is None:
             raise KeyError(
@@ -220,7 +225,21 @@ class EventStore:
                 del self.events[epoch]
 
     @staticmethod
-    def transform_events(edges: list[Edge], events: list[Event]) -> dict:
+    @overload
+    def transform_events(
+        edges: list[Edge], events: list[Event], as_events: Literal[False] = False
+    ) -> dict: ...
+
+    @staticmethod
+    @overload
+    def transform_events(
+        edges: list[Edge], events: list[Event], as_events: Literal[True] = True
+    ) -> EventMap: ...
+
+    @staticmethod
+    def transform_events(
+        edges: list[Edge], events: list[Event], as_events: bool = False
+    ) -> dict | EventMap:
         """
         Transform the values of a set of events to a dict that can be consumed by the
         target node's process method.
@@ -237,7 +256,10 @@ class EventStore:
             ]
             if not evts:
                 continue
-            args[edge.target_slot] = evts[-1]["value"]
+            if as_events:
+                args[edge.target_slot] = evts[-1]
+            else:
+                args[edge.target_slot] = evts[-1]["value"]
         return args
 
     @staticmethod

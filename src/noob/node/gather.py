@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from multiprocessing import Lock
 from multiprocessing.synchronize import Lock as LockType
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from pydantic import PrivateAttr
 
@@ -60,14 +60,14 @@ class Gather(Node, Generic[_TInput]):
             if self._should_return(trigger):
                 try:
                     # collapse epoch if in a sub-epoch
-                    if len(epoch) > 1:
-                        epoch = epoch.parent
+                    ep = epoch.parent if len(epoch) > 1 else epoch
+                    ep = cast(Epoch, ep)
                     return Event(
                         id=uuid.uuid4().int,
                         timestamp=datetime.now(UTC),
                         node_id=self.id,
                         signal="value",
-                        epoch=epoch,
+                        epoch=ep,
                         value=self._items,
                     )
                 finally:

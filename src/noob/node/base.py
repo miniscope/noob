@@ -2,7 +2,7 @@ import functools
 import inspect
 from collections.abc import Callable, Generator, Mapping
 from types import GeneratorType, GenericAlias, UnionType
-from typing import (
+from typing import (  # type: ignore[attr-defined]
     TYPE_CHECKING,
     Annotated,
     Any,
@@ -26,11 +26,20 @@ from pydantic import (
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
-from noob.types import Epoch
+from noob.types import Epoch, EventMap
 from noob.utils import resolve_python_identifier
 
 if TYPE_CHECKING:
     from noob.input import InputCollection
+
+_INJECTION_MAP = {"epoch": Epoch, "events": EventMap}
+"""
+Mapping between the keys for things that can be injected in a Process method
+to the types that trigger their injection
+
+epoch - the current epoch
+events - see EventMap
+"""
 
 
 class Slot(BaseModel):
@@ -187,8 +196,7 @@ class Node(BaseModel):
     _slots: dict[str, Slot] | None = None
     _gen: Generator | None = None
     _edges: list[Edge] | None = None
-    _requires_epoch: str | None = None
-    """"""
+    _injections: dict[str, str] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -364,17 +372,21 @@ class Node(BaseModel):
         return self._edges
 
     @functools.cached_property
-    def requires_epoch(self) -> str | None:
+    def injections(self) -> dict[str, str]:
         """
-        If a node's process method requests the current epoch via a param with an
-        :class:`~.types.Epoch` annotation, returns the name of the parameter to inject it as.
+        If a node's process method requests a dependency to be injected,
+        returns a map from the type of inejction to the kwargs to pass them as.
         """
         sig = inspect.signature(self.process)
-        epoch_key = [k for k, v in sig.parameters.items() if v.annotation and v.annotation is Epoch]
-        if not epoch_key:
-            return None
-        else:
-            return epoch_key[0]
+        injections = {}
+        for injection_key, inj_type in _INJECTION_MAP.items():
+            for param, param_info in sig.parameters.items():
+                if not param_info.annotation:
+                    continue
+                if param_info.annotation is inj_type:
+                    injections[injection_key] = param
+
+        return injections
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)

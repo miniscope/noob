@@ -33,6 +33,7 @@ else:
 
 if TYPE_CHECKING:
     from noob import Tube
+    from noob.event import Event
     from noob.runner import TubeRunner
 
 CONFIG_ID_PATTERN = r"[\w\-\/#]+"
@@ -158,6 +159,11 @@ NodeID: TypeAlias = Annotated[str, AfterValidator(_is_identifier), AfterValidato
 SignalName: TypeAlias = Annotated[str, AfterValidator(_is_identifier)]
 
 ReturnNodeType: TypeAlias = None | dict[str, Any] | Any
+EventMap: TypeAlias = dict[PythonIdentifier, "Event"]
+"""
+Type that can be requested to get the raw events rather than event values.
+Keys are the slot ids that the events would be transformed and passed to.
+"""
 
 
 @dataclass
@@ -197,7 +203,7 @@ class EpochSegment(NamedTuple):
 
 
 class Epoch(tuple[EpochSegment, ...]):
-    def __new__(cls, epoch: int | Iterable[EpochSegment, ...]):
+    def __new__(cls, epoch: int | Iterable[EpochSegment]):
         if isinstance(epoch, int):
             epoch = (EpochSegment("tube", epoch),)
         return super().__new__(cls, epoch)
@@ -209,9 +215,15 @@ class Epoch(tuple[EpochSegment, ...]):
         return [self / EpochSegment(node_id=node_id, epoch=i) for i in range(n)]
 
     @property
-    def parent(self) -> Epoch:
-        """If a subepoch, return the parent epoch. If the root epoch, return self"""
-        return Epoch(self[:-1]) if len(self) > 1 else self
+    def parent(self) -> Epoch | None:
+        """If a subepoch, return the parent epoch. If the root epoch, return None"""
+        return Epoch(self[:-1]) if len(self) > 1 else None
+
+    @property
+    def parents(self) -> tuple[Epoch, ...]:
+        if len(self) == 1:
+            return tuple()
+        return tuple(Epoch(self[:i]) for i in range(-1, len(self) * -1, -1))
 
     @classmethod
     def __get_pydantic_core_schema__(

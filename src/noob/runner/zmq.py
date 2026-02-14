@@ -466,12 +466,26 @@ class NodeRunner(EventloopMixin):
             epoch = Epoch(next(self._counter)) if self._node.stateful else None
 
             ready = await self.await_node(epoch=epoch)
+            epoch = ready["epoch"]
             edges = self._node.edges
 
-            inputs = {}
-            inputs |= {self._node.requires_epoch: epoch} if self._node.requires_epoch else {}
-            store_inputs = self.store.collect(edges, ready["epoch"])
-            inputs |= store_inputs if store_inputs else {}
+            inputs: dict = {}
+            inputs |= (
+                {self._node.injections["epoch"]: epoch} if "epoch" in self._node.injections else {}
+            )
+            # FIXME: code duplication with base runner, move this to the store
+            if "events" in self._node.injections:
+                events = self.store.collect_events(edges, epoch)
+                if events:
+                    inputs |= {
+                        self._node.injections["events"]: self.store.transform_events(
+                            self._node.edges, events, as_events=True
+                        )
+                    }
+                    inputs |= self.store.transform_events(self._node.edges, events, as_events=False)
+            else:
+                event_inputs = self.store.collect(edges, epoch)
+                inputs |= event_inputs if event_inputs else inputs
             args, kwargs = self.store.split_args_kwargs(inputs)
             # clear events for this epoch, since we have consumed what we need here.
             self.store.clear(ready["epoch"])
@@ -1121,11 +1135,17 @@ class ZMQRunner(TubeRunner):
         if self._return_node is None:
             return None
         else:
-            events = self.store.collect(self._return_node.edges, epoch)
-            if events is None:
+            raw_events = self.store.collect_events(self._return_node.edges, epoch)
+            if raw_events is None:
                 return MetaSignal.NoEvent
+
+            events = self.store.transform_events(self._return_node.edges, raw_events)
+            events[self._return_node.injections["events"]] = self.store.transform_events(
+                self._return_node.edges, raw_events, as_events=True
+            )
+
             args, kwargs = self.store.split_args_kwargs(events)
-            self._return_node.process(*args, **kwargs)
+            self._return_node.process(*args, **kwargs)  # type: ignore[call-arg]
             ret = self._return_node.get(keep=False)
             if self.autoclear_store:
                 self.store.clear(epoch)

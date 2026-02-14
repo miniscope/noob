@@ -309,14 +309,25 @@ class TubeRunner(ABC):
 
         inputs: dict[PythonIdentifier, Any] = {}
 
-        inputs |= {node.requires_epoch: epoch} if node.requires_epoch else {}
+        if "epoch" in node.injections:
+            inputs |= {node.injections["epoch"]: epoch}
 
         self.tube.state.init(AssetScope.node)
         state_inputs = self.tube.state.collect(edges, epoch)
         inputs |= state_inputs if state_inputs else inputs
 
-        event_inputs = self.store.collect(edges, epoch)
-        inputs |= event_inputs if event_inputs else inputs
+        if "events" in node.injections:
+            events = self.store.collect_events(edges, epoch)
+            if events:
+                inputs |= {
+                    node.injections["events"]: self.store.transform_events(
+                        node.edges, events, as_events=True
+                    )
+                }
+                inputs |= self.store.transform_events(node.edges, events, as_events=False)
+        else:
+            event_inputs = self.store.collect(edges, epoch)
+            inputs |= event_inputs if event_inputs else inputs
 
         input_inputs = self.tube.input_collection.collect(edges, input)
         inputs |= input_inputs if input_inputs else inputs
