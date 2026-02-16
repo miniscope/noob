@@ -472,6 +472,8 @@ class NodeRunner(EventloopMixin):
             inputs = self.store.collect(edges, epoch, eventmap=self._node.injections.get("events"))
             if inputs is None:
                 inputs = {}
+            if self._node.injections.get("epoch"):
+                inputs[self._node.injections["epoch"]] = epoch
 
             args, kwargs = self.store.split_args_kwargs(inputs)
             # clear events for this epoch, since we have consumed what we need here.
