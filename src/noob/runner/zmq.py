@@ -1127,6 +1127,8 @@ class ZMQRunner(TubeRunner):
             events = self.store.collect(
                 self._return_node.edges, epoch, eventmap=self._return_node.injections.get("events")
             )
+            if not events:
+                return MetaSignal.NoEvent
             args, kwargs = self.store.split_args_kwargs(events)
             self._return_node.process(*args, **kwargs)  # type: ignore[call-arg]
             ret = self._return_node.get(keep=False)
