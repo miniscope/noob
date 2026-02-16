@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from noob import SynchronousRunner, Tube
+from noob.types import Epoch
 
 pytestmark = pytest.mark.map
 
@@ -41,7 +42,6 @@ def test_map_double_depends():
         Tube.from_specification("testing-map-depends-double")
 
 
-@pytest.mark.skip(reason="map not implemented")
 def test_map_gather():
     """
     Gathering after a map collapses the sub-epoch
@@ -49,17 +49,17 @@ def test_map_gather():
     tube = Tube.from_specification("testing-map-gather")
     runner = SynchronousRunner(tube)
     with runner:
-        for _ in range(5):
+        for i in range(5):
             val = runner.process()
-            assert val["letter"] == [letter + ("!" * val["count"]) for letter in val["word"]]
+            assert val["letter"] == [letter + "!" for letter in val["word"]]
             assert val["reconstructed"] == "".join(val["letter"])
-            raise NotImplementedError(
-                "When epochs are refactored, assert that after the gather node, "
-                "the epoch number returns to normal"
-            )
+            assert "c" not in runner.store.events[Epoch(i)]
+            assert runner.store.events[Epoch(i)]["d"]["value"][0]["value"] == val["letter"]
+            assert runner.store.events[Epoch(i)]["e"]["value"][0]["value"] == val["reconstructed"]
+            assert not runner.store.events[Epoch(i) / ("b", 0)]["d"]["value"]
+            assert not runner.store.events[Epoch(i) / ("b", 0)]["e"]["value"]
 
 
-@pytest.mark.skip(reason="map not implemented")
 def test_map_nested():
     """
     Maps can map mappings
@@ -67,11 +67,21 @@ def test_map_nested():
     tube = Tube.from_specification("testing-map-nested")
     runner = SynchronousRunner(tube)
     with runner:
-        for _ in range(5):
+        for a_i in range(5):
             val = runner.process()
             # mapping a list and then returning it just... reconstructs the list
             assert val["word"] == val["words"]
-            # letters is a double-nested list, [['c', 'a', 't'], ['d', 'o', 'g'], ...]
-            for i, letters in enumerate(val["letters"]):
-                assert letters == [letter for letter in val["words"][i]]
-            raise NotImplementedError("When epochs are refactored, check the epochs are correct")
+            # letters just the flattened list of all letters
+            assert val["letter"] == [letter for letter in "".join(val["words"])]
+            # emit a list of words at the top level
+            assert runner.store.events[Epoch(a_i)]["a"]["multi_words"][0]["value"] == val["words"]
+            # first map emits individual words
+            for b_i in range(len(val["words"])):
+                assert (
+                    runner.store.events[Epoch(a_i) / ("b", b_i)]["b"]["value"][0]["value"]
+                    == val["words"][b_i]
+                )
+                # second map emits individual letters
+                for c_i in range(len(val["words"][b_i])):
+                    ep_events = runner.store.events[Epoch(a_i) / ("b", b_i) / ("c", c_i)]
+                    assert ep_events["c"]["value"][0]["value"] == val["words"][b_i][c_i]

@@ -126,14 +126,15 @@ class TopoSorter:
         Mark node(s) as having been completed without making its dependent nodes ready -
         used when a node emits ``NoEvent``
         """
-        for node in nodes:
+        expired = self._done_nodes - set(nodes)
+        for node in expired:
             self._ready_nodes.discard(node)
             if node in self._out_nodes:
                 self._out_nodes.discard(node)
             else:
                 self._npassedout += 1
-        self._done_nodes.update(nodes)
-        self._nfinished += len(nodes)
+        self._done_nodes.update(expired)
+        self._nfinished += len(expired)
 
     def add(self, node: NodeID, *predecessors: NodeID) -> None:
         """
@@ -255,7 +256,27 @@ class TopoSorter:
                         self.mark_expired(successor)
                     else:
                         self.mark_ready(successor)
+
         self._ran_nodes.update(nodes)
+
+    def resurrect(self, *nodes: str) -> None:
+        """
+        If a node was marked as expired (but not run),
+        returns it to the processing graph -
+        the inverse of :meth:`.mark_expired`
+        """
+        for node in nodes:
+            if node in self._ran_nodes:
+                raise AlreadyDoneError(
+                    f"node {node!r} was marked done, not expired! can only resurrect expired nodes."
+                )
+            if node not in self._done_nodes or node in self._disabled_nodes:
+                continue
+            self._done_nodes.remove(node)
+            self._nfinished -= 1
+            self._npassedout -= 1
+            if self._node2info[node].nqueue == 0:
+                self.mark_ready(node)
 
     def find_cycle(self) -> list[str] | None:
         n2i = self._node2info

@@ -1,6 +1,6 @@
 from collections import defaultdict
 from importlib import resources
-from itertools import combinations
+from itertools import permutations
 from typing import Self
 
 from pydantic import (
@@ -386,22 +386,28 @@ class Tube(BaseModel):
 
         shadows = {node_id: downstream_nodes(self.edges, node_id) for node_id in self.nodes}
         map_nodes = set(node_id for node_id, node in self.nodes.items() if isinstance(node, Map))
-        for map_a, map_b in combinations(map_nodes, 2):
-            if map_b in shadows[map_a]:
+        for map_a, map_b in permutations(map_nodes, 2):
+            if map_b in shadows[map_a] or map_a in shadows[map_b]:
                 continue
-            difference = shadows[map_b] - shadows[map_a]
-            assert not difference, (
+            intersection = (shadows[map_b] - {map_b}).intersection(shadows[map_a] - {map_a})
+            assert not intersection, (
                 f"Nodes can only be in the downstream shadow of a single map operation, "
                 f"or a nested chain of map operations. "
-                f"{difference} are downstream of unrelated map nodes {map_a} and {map_b}"
+                f"{intersection} are downstream of unrelated map nodes {map_a} and {map_b}"
             )
         return self
 
 
-def downstream_nodes(edges: list[Edge], node_id: str) -> set[str]:
+def downstream_nodes(edges: list[Edge], node_id: str, exclude: set[str] | None = None) -> set[str]:
     """
     The set of nodes that through some chain of dependencies depend on the given node_id
+
+    Args:
+        exclude (set[str]): Nodes (and their successors) to exclude from downstream graph
     """
+    if exclude is None:
+        exclude = set()
+
     # Build adjacency list: source -> targets
     adjacency: dict[str, list[str]] = defaultdict(list)
     for edge in edges:
@@ -413,7 +419,7 @@ def downstream_nodes(edges: list[Edge], node_id: str) -> set[str]:
     while queue:
         current = queue.pop(0)
         for successor in adjacency.get(current, []):
-            if successor not in downstream:
+            if successor not in downstream and successor not in exclude:
                 downstream.add(successor)
                 queue.append(successor)
     return downstream

@@ -3,14 +3,14 @@ from collections import defaultdict, deque
 from collections.abc import MutableSequence
 from datetime import UTC, datetime
 from itertools import count
-from typing import Literal, Self
+from typing import Self
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from noob.const import META_SIGNAL
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import EpochCompletedError, EpochExistsError, NotOutYetError
+from noob.exceptions import AlreadyDoneError, EpochCompletedError, EpochExistsError, NotOutYetError
 from noob.logging import init_logger
 from noob.node import Edge, NodeSpecification
 from noob.toposort import TopoSorter
@@ -89,9 +89,16 @@ class Scheduler(BaseModel):
 
         graph = self._init_graph(epoch=this_epoch)
         self._epochs[this_epoch] = graph
-        if len(this_epoch) > 1:
+
+        # handle subepochs
+        if this_epoch.parent is not None:
             for parent in this_epoch.parents:
                 self._subepochs[parent].add(this_epoch)
+
+            # a node inducing subepochs expires the node in the (immediate) parent epoch
+            if this_epoch[-1].node_id not in self._epochs[this_epoch.parent].done_nodes:
+                self._epochs[this_epoch.parent].mark_expired(this_epoch[-1].node_id)
+
         return this_epoch
 
     def is_active(self, epoch: Epoch | None = None) -> bool:
@@ -135,7 +142,6 @@ class Scheduler(BaseModel):
             for node_id in graph.get_ready()
             if node_id in _VIRTUAL_NODES or self.nodes[node_id].enabled
         ]
-
         return ready_nodes
 
     def node_is_ready(self, node: NodeID, epoch: Epoch | None = None) -> bool:
@@ -207,15 +213,6 @@ class Scheduler(BaseModel):
             else:
                 epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"])
 
-            # if event in sub-epoch, ensure parent epoch is expired
-            # sub-epochs should be created above, so parent epoch shouldn't be prematurely ended
-            if (
-                e["epoch"].parent is not None
-                and e["epoch"][-2].node_id not in self[e["epoch"].parent].done_nodes
-            ):
-                self[e["epoch"].parent].mark_expired(e["node_id"])
-                marked_done.add((e["epoch"].parent, e["node_id"]))
-
             if epoch_ended:
                 end_events.append(epoch_ended)
 
@@ -223,12 +220,11 @@ class Scheduler(BaseModel):
 
         return ret_events
 
-    def done(self, epoch: Epoch | Literal[-1], node_id: str) -> MetaEvent | None:
+    def done(self, epoch: Epoch, node_id: str) -> MetaEvent | None:
         """
         Mark a node in a given epoch as done.
-
         """
-        if not isinstance(epoch, int) and epoch[0].epoch in self._epoch_log:
+        if epoch[0].epoch in self._epoch_log:
             self.logger.debug(
                 "Marking node %s as done in epoch %s, " "but epoch was already completed. ignoring",
                 node_id,
@@ -243,6 +239,18 @@ class Scheduler(BaseModel):
             # so we have to manually mark them as "out"
             self[epoch].mark_out(node_id)
             self[epoch].done(node_id)
+        except AlreadyDoneError as e:
+            # if we induced subepochs but emitted another event in the parent epoch,
+            # we were marked expired when the subepochs were created
+            # (which is fine)
+            if node_id not in self[epoch].ran_nodes and any(
+                subep[-1].node_id == node_id for subep in self._subepochs[epoch]
+            ):
+                return None
+            else:
+                raise e
+
+        self._done_subepochs(epoch, node_id)
 
         if not self[epoch].is_active():
             return self.end_epoch(epoch)
@@ -282,9 +290,11 @@ class Scheduler(BaseModel):
             ep = epoch
         else:
             raise TypeError("Can only end an epoch with an integer or Epoch")
-
-        self._epoch_log.append(ep[0].epoch)
-        del self._epochs[ep]
+        self.logger.debug("Ending epoch %s", ep)
+        if len(ep) == 1:
+            self._epoch_log.append(ep[0].epoch)
+            del self._epochs[ep]
+            # FIXME: cleanup subepochs
 
         return MetaEvent(
             id=uuid4().int,
@@ -382,26 +392,6 @@ class Scheduler(BaseModel):
             sorter.done(*ready)
         return generations
 
-    def _downstream_nodes(self, node_id: str) -> set[str]:
-        """
-        Get all nodes downstream of a given node (including the node itself).
-        """
-        # Build adjacency list: source -> targets
-        adjacency: dict[str, list[str]] = defaultdict(list)
-        for edge in self.edges:
-            adjacency[edge.source_node].append(edge.target_node)
-
-        # BFS from node_id
-        downstream = {node_id}
-        queue = [node_id]
-        while queue:
-            current = queue.pop(0)
-            for successor in adjacency.get(current, []):
-                if successor not in downstream:
-                    downstream.add(successor)
-                    queue.append(successor)
-        return downstream
-
     def _subgraph(self, node_id: str) -> tuple[dict[str, NodeSpecification], list[Edge]]:
         """
         Subgraph that is downstream of a given node (including the node itself).
@@ -415,3 +405,58 @@ class Scheduler(BaseModel):
                 [e for e in self.edges if e.target_node in downstream],
             )
         return self._subgraphs[node_id]
+
+    def _done_subepochs(self, epoch: Epoch, node_id: NodeID) -> None:
+        """
+        Called when a node in a parent epoch is marked done -
+        mark the node done in all subepochs,
+        but ensure that nodes that are exclusively downstream of this node
+        (i.e. no dependencies on nodes within the mapped subepoch)
+        are removed from the graph.
+
+        This is to support gather-like operations from non-gather nodes in 3rd party tubes:
+        nodes downstream of both this node and other nodes in the subepoch run in subepochs,
+        but nodes that are exclusively downstream of this node only run in the parent epoch
+        """
+        from noob.tube import downstream_nodes
+
+        if not self._subepochs[epoch]:
+            return
+
+        our_subgraph = set(self._subgraph(node_id)[0])
+        _exclusive_subgraphs = {}
+
+        for subepoch in self._subepochs[epoch]:
+            if (
+                node_id in self._epochs[subepoch].ran_nodes
+                or node_id not in self._epochs[subepoch].node_info
+                or subepoch[-1].node_id == node_id
+            ):
+                # fine
+                continue
+            elif node_id in self._epochs[subepoch].done_nodes:
+                # needs to be resurrected
+                self._epochs[subepoch].resurrect(node_id)
+
+            if node_id not in self._epochs[subepoch].out_nodes:
+                self._epochs[subepoch].mark_out(node_id)
+            self._epochs[subepoch].done(node_id)
+            self.logger.debug(
+                "Marking %s done in subepoch %s because event emitted in parent epoch",
+                node_id,
+                subepoch,
+            )
+
+            # mark all nodes that are exclusively downstream of this node expired
+            subep_node = subepoch[-1].node_id
+            if subep_node not in _exclusive_subgraphs:
+                _exclusive_subgraphs[subep_node] = downstream_nodes(
+                    self.edges, subep_node, exclude={node_id}
+                )
+            exclusive_subgraph = our_subgraph - _exclusive_subgraphs[subep_node] - {node_id}
+            self.logger.debug(
+                "Expiring %s because exclusively downstream of parent epoch", exclusive_subgraph
+            )
+
+            for exclusive in exclusive_subgraph:
+                self._epochs[subepoch].mark_expired(exclusive)
