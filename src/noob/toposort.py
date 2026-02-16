@@ -126,7 +126,7 @@ class TopoSorter:
         Mark node(s) as having been completed without making its dependent nodes ready -
         used when a node emits ``NoEvent``
         """
-        expired = self._done_nodes - set(nodes)
+        expired = set(nodes) - self._done_nodes
         for node in expired:
             self._ready_nodes.discard(node)
             if node in self._out_nodes:
