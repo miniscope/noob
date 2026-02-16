@@ -316,18 +316,8 @@ class TubeRunner(ABC):
         state_inputs = self.tube.state.collect(edges, epoch)
         inputs |= state_inputs if state_inputs else inputs
 
-        if "events" in node.injections:
-            events = self.store.collect_events(edges, epoch)
-            if events:
-                inputs |= {
-                    node.injections["events"]: self.store.transform_events(
-                        node.edges, events, as_events=True
-                    )
-                }
-                inputs |= self.store.transform_events(node.edges, events, as_events=False)
-        else:
-            event_inputs = self.store.collect(edges, epoch)
-            inputs |= event_inputs if event_inputs else inputs
+        event_inputs = self.store.collect(edges, epoch, eventmap=node.injections.get("events"))
+        inputs |= event_inputs if event_inputs else inputs
 
         input_inputs = self.tube.input_collection.collect(edges, input)
         inputs |= input_inputs if input_inputs else inputs

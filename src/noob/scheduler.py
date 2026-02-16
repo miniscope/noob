@@ -441,11 +441,6 @@ class Scheduler(BaseModel):
             if node_id not in self._epochs[subepoch].out_nodes:
                 self._epochs[subepoch].mark_out(node_id)
             self._epochs[subepoch].done(node_id)
-            self.logger.debug(
-                "Marking %s done in subepoch %s because event emitted in parent epoch",
-                node_id,
-                subepoch,
-            )
 
             # mark all nodes that are exclusively downstream of this node expired
             subep_node = subepoch[-1].node_id
@@ -454,9 +449,6 @@ class Scheduler(BaseModel):
                     self.edges, subep_node, exclude={node_id}
                 )
             exclusive_subgraph = our_subgraph - _exclusive_subgraphs[subep_node] - {node_id}
-            self.logger.debug(
-                "Expiring %s because exclusively downstream of parent epoch", exclusive_subgraph
-            )
 
             for exclusive in exclusive_subgraph:
                 self._epochs[subepoch].mark_expired(exclusive)

@@ -158,7 +158,9 @@ class EventStore:
         else:
             return event
 
-    def collect(self, edges: list[Edge], epoch: Epoch | Literal[-1]) -> dict | None:
+    def collect(
+        self, edges: list[Edge], epoch: Epoch | Literal[-1], eventmap: str | None = None
+    ) -> dict | None:
         """
         Gather events into a form that can be consumed by a :meth:`.Node.process` method,
         given the collection of inbound edges (usually from :meth:`.Tube.in_edges` ).
@@ -176,16 +178,19 @@ class EventStore:
         get the the events from the most recent epoch where all events are present,
         and if no epochs are present with a full set of events, return None
 
-        .. todo::
-
-            Add an example
-
+        args:
+            eventmap (str): If present, return an :class:`.EventMap` in this key
         """
         events = self.collect_events(edges, epoch)
         if events is None:
             return None
 
-        return self.transform_events(edges=edges, events=events)
+        transformed_events = self.transform_events(edges=edges, events=events)
+
+        if eventmap is not None:
+            transformed_events[eventmap] = self.transform_events(edges, events, as_events=True)
+
+        return transformed_events
 
     def collect_events(self, edges: list[Edge], epoch: Epoch | Literal[-1]) -> list[Event] | None:
         """

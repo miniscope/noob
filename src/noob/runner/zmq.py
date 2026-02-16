@@ -469,23 +469,10 @@ class NodeRunner(EventloopMixin):
             epoch = ready["epoch"]
             edges = self._node.edges
 
-            inputs: dict = {}
-            inputs |= (
-                {self._node.injections["epoch"]: epoch} if "epoch" in self._node.injections else {}
-            )
-            # FIXME: code duplication with base runner, move this to the store
-            if "events" in self._node.injections:
-                events = self.store.collect_events(edges, epoch)
-                if events:
-                    inputs |= {
-                        self._node.injections["events"]: self.store.transform_events(
-                            self._node.edges, events, as_events=True
-                        )
-                    }
-                    inputs |= self.store.transform_events(self._node.edges, events, as_events=False)
-            else:
-                event_inputs = self.store.collect(edges, epoch)
-                inputs |= event_inputs if event_inputs else inputs
+            inputs = self.store.collect(edges, epoch, eventmap=self._node.injections.get("events"))
+            if inputs is None:
+                inputs = {}
+
             args, kwargs = self.store.split_args_kwargs(inputs)
             # clear events for this epoch, since we have consumed what we need here.
             self.store.clear(ready["epoch"])
@@ -1135,15 +1122,9 @@ class ZMQRunner(TubeRunner):
         if self._return_node is None:
             return None
         else:
-            raw_events = self.store.collect_events(self._return_node.edges, epoch)
-            if raw_events is None:
-                return MetaSignal.NoEvent
-
-            events = self.store.transform_events(self._return_node.edges, raw_events)
-            events[self._return_node.injections["events"]] = self.store.transform_events(
-                self._return_node.edges, raw_events, as_events=True
+            events = self.store.collect(
+                self._return_node.edges, epoch, eventmap=self._return_node.injections.get("events")
             )
-
             args, kwargs = self.store.split_args_kwargs(events)
             self._return_node.process(*args, **kwargs)  # type: ignore[call-arg]
             ret = self._return_node.get(keep=False)
