@@ -151,13 +151,13 @@ def test_source_node_completion(spec, input, sources):
     # Epoch 0 won't be finished
     scheduler.add_epoch()
     # We will finish the latest epoch
-    scheduler.add_epoch()
+    epoch_1 = scheduler.add_epoch()
     assert not scheduler.sources_finished()
     for node_id in sources:
         scheduler.get_ready()
         # Default checks the latest epoch
         assert not scheduler.sources_finished()
-        scheduler.done(epoch=-1, node_id=node_id)
+        scheduler.done(epoch=epoch_1, node_id=node_id)
     assert scheduler.sources_finished()
 
 
@@ -175,7 +175,7 @@ def test_clear_ended_epochs():
     scheduler.add_epoch()
     for node in scheduler.nodes:
         scheduler.get_ready()
-        scheduler.done(epoch=0, node_id=node)
+        scheduler.done(epoch=Epoch(0), node_id=node)
         if node != "c":
             assert len(scheduler._epochs) == 2
         else:
@@ -226,13 +226,17 @@ def test_disable_nodes():
     tube = Tube.from_specification("testing-basic")
     scheduler = tube.scheduler
     scheduler.disable_node("b")
-    scheduler.add_epoch()
+    epoch = scheduler.add_epoch()
     ready_nodes = scheduler.get_ready()
 
     # only "a" is returned, even though "b" also has no dependencies,
     # since "b" is disabled.
     assert {node["value"] for node in ready_nodes} == {"a"}
-    scheduler.done(epoch=-1, node_id="a")
+    scheduler.done(epoch=epoch, node_id="a")
 
     # nothing ready anymore
     assert not scheduler.get_ready()
+
+
+def test_map_creating():
+    pass
