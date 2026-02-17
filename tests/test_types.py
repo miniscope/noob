@@ -8,6 +8,16 @@ from noob.network.message import EventMsg
 from noob.types import Epoch, EpochSegment
 
 
+def test_epoch_from_int():
+    """
+    Creating an epoch from an integer creates a "root" epoch with the implicit "tube" node
+    """
+    epoch = Epoch(0)
+    assert len(epoch) == 1
+    assert epoch[0].epoch == 0
+    assert epoch[0].node_id == "tube"
+
+
 def test_epoch_contains():
     """
     Contains (based on __eq__) still works for epochs when used as dict keys

@@ -252,7 +252,7 @@ class Scheduler(BaseModel):
 
         self._done_subepochs(epoch, node_id)
 
-        if not self[epoch].is_active():
+        if not self.is_active(epoch):
             return self.end_epoch(epoch)
         return None
 
@@ -262,7 +262,7 @@ class Scheduler(BaseModel):
         i.e. when the node emitted ``NoEvent``
         """
         self[epoch].mark_expired(node_id)
-        if not self[epoch].is_active():
+        if not self.is_active(epoch):
             return self.end_epoch(epoch)
 
         return None

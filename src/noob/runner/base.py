@@ -300,7 +300,7 @@ class TubeRunner(ABC):
             dict: empty dict if Node is a :class:`.Source`
             None: if no input is available
         """
-        if not node.spec or not node.spec.depends:
+        if (not node.spec or not node.spec.depends) and not node.injections:
             return tuple(), {}
         if input is None:
             input = {}
@@ -308,7 +308,6 @@ class TubeRunner(ABC):
         edges = self.tube.in_edges(node)
 
         inputs: dict[PythonIdentifier, Any] = {}
-
         if "epoch" in node.injections:
             inputs |= {node.injections["epoch"]: epoch}
 
