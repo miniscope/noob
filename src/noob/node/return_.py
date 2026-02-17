@@ -17,9 +17,11 @@ class Return(Node):
     Special sink node that returns values from a tube runner's `process` method
     """
 
+    stateful: bool = False
+
     _args: tuple | None = None
     _kwargs: dict = PrivateAttr(default_factory=lambda: defaultdict(list))
-    _seen_epochs: set[Epoch] = set()
+    _seen_epochs: set[tuple[Epoch, str]] = set()
 
     def process(self, *args: Any, __events: EventMap, **kwargs: Any) -> MetaSignal:
         """
@@ -31,12 +33,10 @@ class Return(Node):
             self._args += args
 
         for key, val in kwargs.items():
-            if __events[key]["epoch"] in self._seen_epochs:
+            if (__events[key]["epoch"], key) in self._seen_epochs:
                 continue
-            self._kwargs[key].append(val)
-
-        for evt in __events.values():
-            self._seen_epochs.add(evt["epoch"])
+            self._kwargs[key].append((__events[key]["epoch"], val))
+            self._seen_epochs.add((__events[key]["epoch"], key))
 
         return MetaSignal.NoEvent
 
@@ -45,8 +45,13 @@ class Return(Node):
         Get the stored value from the process call, clearing it.
         """
         if self._kwargs:
-            # flatten kwargs if only one received
-            kwargs = {key: val[0] if len(val) == 1 else val for key, val in self._kwargs.items()}
+            # sort by epoch and flatten if only one value received
+            kwargs = {}
+            for key, val in self._kwargs.items():
+                if len(val) == 1:
+                    kwargs[key] = val[0][1]
+                else:
+                    kwargs[key] = [item[1] for item in sorted(val, key=lambda i: i[0])]
         else:
             kwargs = {}
 

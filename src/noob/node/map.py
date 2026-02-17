@@ -26,6 +26,8 @@ class Map(Node):
     ```
     """
 
+    stateful: bool = False
+
     def process(
         self, value: Sequence[_TInput], epoch: Epoch
     ) -> tuple[A[list[Event[_TInput]], Name("value")], A[int, Name("n")]]:

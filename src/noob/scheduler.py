@@ -128,6 +128,9 @@ class Scheduler(BaseModel):
             graphs = [(ep, self._epochs[ep]) for ep in {*self._subepochs[epoch], epoch}]
         else:
             graphs = list(self._epochs.items())
+        graphs = sorted(
+            graphs, key=lambda g: (tuple(e.node_id for e in g[0]), tuple(e.epoch for e in g[0]))
+        )
 
         ready_nodes = [
             MetaEvent(

@@ -14,6 +14,16 @@ from noob.utils import iscoroutinefunction_partial
 
 @dataclass
 class AsyncRunner(TubeRunner):
+    """
+    Run nodes in an asyncio eventloop as soon as they are ready.
+
+    .. important::
+
+        The AsyncIO runner respects stateful nodes across top-level epochs,
+        but currently runs subepochs induced by a `map` operation out of order!
+        Either make your nodes stateless or use another runner until total ordering is implemented!
+
+    """
 
     eventloop: asyncio.AbstractEventLoop = field(default_factory=asyncio.get_running_loop)
     exception_timeout: float = 10

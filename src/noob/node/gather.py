@@ -44,7 +44,7 @@ class Gather(Node, Generic[_TInput]):
     """
 
     n: int | None = None
-    _items: list[_TInput] = PrivateAttr(default_factory=list)
+    _items: list[tuple[Epoch, _TInput]] = PrivateAttr(default_factory=list)
     _lock: LockType = PrivateAttr(default_factory=Lock)
 
     def process(
@@ -56,8 +56,9 @@ class Gather(Node, Generic[_TInput]):
         if trigger is not None and self.n is not None:
             raise ValueError("Cannot use trigger mode while `n` is set")
         with self._lock:
-            self._items.append(value)
+            self._items.append((epoch, value))
             if self._should_return(trigger):
+                items = [item[1] for item in sorted(self._items, key=lambda i: i[0])]
                 try:
                     # collapse epoch if in a sub-epoch
                     ep = epoch.parent if len(epoch) > 1 else epoch
@@ -68,7 +69,7 @@ class Gather(Node, Generic[_TInput]):
                         node_id=self.id,
                         signal="value",
                         epoch=ep,
-                        value=self._items,
+                        value=items,
                     )
                 finally:
                     # clear list after returning
