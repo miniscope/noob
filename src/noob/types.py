@@ -225,11 +225,19 @@ class Epoch(tuple[EpochSegment, ...]):
             return tuple()
         return tuple(Epoch(self[:i]) for i in range(-1, len(self) * -1, -1))
 
+    @property
+    def root(self) -> Epoch:
+        """The root epoch - self if epoch is not a subepoch, otherwise top-most parent"""
+        if len(self) == 1:
+            return self
+        else:
+            return self.parents[-1]
+
     @classmethod
     def __get_pydantic_core_schema__(
         cls, source_type: Any, handler: GetCoreSchemaHandler
     ) -> CoreSchema:
-        tuple_schema = core_schema.tuple_schema([handler(EpochSegment)])
+        tuple_schema = core_schema.tuple_variable_schema(handler(EpochSegment))
 
         def _cast(val: tuple | Epoch) -> Epoch:
             if not isinstance(val, Epoch):

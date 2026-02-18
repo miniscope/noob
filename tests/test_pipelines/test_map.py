@@ -65,7 +65,7 @@ async def test_map_gather(loaded_tube: Tube, all_runners: TubeRunner):
             val = runner.process()
         assert val["letter"] == [letter + "!" for letter in val["word"]]
         assert val["reconstructed"] == "".join(val["letter"])
-        assert "c" not in runner.store.events[Epoch(i)]
+        assert not runner.store.events[Epoch(i)]["c"]["value"]
         assert runner.store.events[Epoch(i)]["d"]["value"][0]["value"] == val["letter"]
         assert runner.store.events[Epoch(i)]["e"]["value"][0]["value"] == val["reconstructed"]
         assert not runner.store.events[Epoch(i) / ("b", 0)]["d"]["value"]

@@ -62,6 +62,10 @@ class Scheduler(BaseModel):
             self.source_nodes = [id_ for id_ in graph.ready_nodes if id_ not in _VIRTUAL_NODES]
         return self
 
+    @property
+    def subepochs(self) -> dict[Epoch, set[Epoch]]:
+        return self._subepochs
+
     def add_epoch(self, epoch: int | Epoch | None = None) -> Epoch:
         """
         Add another epoch with a prepared graph to the scheduler.
@@ -97,7 +101,7 @@ class Scheduler(BaseModel):
 
             # a node inducing subepochs expires the node in the (immediate) parent epoch
             if this_epoch[-1].node_id not in self._epochs[this_epoch.parent].done_nodes:
-                self._epochs[this_epoch.parent].mark_expired(this_epoch[-1].node_id)
+                self.expire(this_epoch.parent, this_epoch[-1].node_id)
 
         return this_epoch
 
@@ -115,17 +119,24 @@ class Scheduler(BaseModel):
         else:
             return any(graph.is_active() for graph in self._epochs.values())
 
-    def get_ready(self, epoch: Epoch | None = None) -> list[MetaEvent]:
+    def get_ready(
+        self, epoch: Epoch | None = None, node_id: NodeID | None = None
+    ) -> list[MetaEvent]:
         """
         Output the set of nodes that are ready across different epochs.
 
         Args:
             epoch (Epoch | None): if an Epoch, get ready events for that epoch,
                 if ``None`` , get ready events for all epochs.
+            node_id (str | None): If present, only get ready events for a single node
         """
 
         if epoch is not None:
-            graphs = [(ep, self._epochs[ep]) for ep in {*self._subepochs[epoch], epoch}]
+            graphs = [
+                (ep, self._epochs[ep])
+                for ep in {*self._subepochs.get(epoch, set()), epoch}
+                if ep in self._epochs
+            ]
         else:
             graphs = list(self._epochs.items())
         graphs = sorted(
@@ -139,11 +150,11 @@ class Scheduler(BaseModel):
                 node_id="meta",
                 signal=MetaEventType.NodeReady,
                 epoch=epoch,
-                value=node_id,
+                value=node,
             )
             for epoch, graph in graphs
-            for node_id in graph.get_ready()
-            if node_id in _VIRTUAL_NODES or self.nodes[node_id].enabled
+            for node in graph.get_ready(node_id)
+            if node in _VIRTUAL_NODES or (node not in self.nodes or self.nodes[node].enabled)
         ]
         return ready_nodes
 
@@ -162,8 +173,12 @@ class Scheduler(BaseModel):
         if epoch in self._epoch_log:
             return True
 
-        graphs = self._epochs.items() if epoch is None else [(epoch, self[epoch])]
-        is_ready = any(node_id == node for epoch, graph in graphs for node_id in graph.ready_nodes)
+        graphs = (
+            self._epochs.items()
+            if epoch is None
+            else [(ep, self[ep]) for ep in [epoch, *self._subepochs[epoch]]]
+        )
+        is_ready = any(node in graph.ready_nodes for epoch, graph in graphs)
         return is_ready
 
     def __getitem__(self, epoch: Epoch | int) -> TopoSorter:
@@ -251,9 +266,11 @@ class Scheduler(BaseModel):
             ):
                 return None
             else:
-                raise e
+                raise AlreadyDoneError(f"Node {node_id} already done in {epoch}") from e
 
         self._done_subepochs(epoch, node_id)
+        for parent in epoch.parents:
+            self[parent].mark_expired(node_id)
 
         if not self.is_active(epoch):
             return self.end_epoch(epoch)
@@ -265,6 +282,10 @@ class Scheduler(BaseModel):
         i.e. when the node emitted ``NoEvent``
         """
         self[epoch].mark_expired(node_id)
+        # if any immediate successors are already marked as "ready," we also want to cancel them.
+        if info := self[epoch].node_info.get(node_id):
+            for successor in info.successors:
+                self[epoch].ready_nodes.discard(successor)
         if not self.is_active(epoch):
             return self.end_epoch(epoch)
 
@@ -279,7 +300,9 @@ class Scheduler(BaseModel):
             and epoch not in self._epochs
             and (epoch in self._epoch_log or epoch < min(self._epoch_log))
         )
-        active_completed = epoch in self._epochs and not self._epochs[epoch].is_active()
+        active_completed = epoch in self._epochs and not any(
+            self._epochs[ep].is_active() for ep in [epoch, *self._subepochs[epoch]]
+        )
         return previously_completed or active_completed
 
     def end_epoch(self, epoch: Epoch | int | None = None) -> MetaEvent | None:
@@ -360,9 +383,8 @@ class Scheduler(BaseModel):
             sorter = TopoSorter(nodes, edges)
             # mark any nodes that are completed in the parent as completed in the subepoch
             parent_epoch = self[epoch.parent]
-            parent_deps = set(sorter.node_info) - set(nodes)
-            self.logger.debug("Marking parent deps expired or done: %s", parent_deps)
-            for parent_dep in set(sorter.node_info) - set(nodes):
+            parent_deps = set(sorter.node_info) - set(nodes) - {epoch[-1].node_id}
+            for parent_dep in parent_deps:
                 if parent_dep in parent_epoch.ran_nodes:
                     sorter.mark_out(parent_dep)
                     sorter.done(parent_dep)
@@ -404,7 +426,7 @@ class Scheduler(BaseModel):
         if node_id not in self._subgraphs:
             downstream = downstream_nodes(self.edges, node_id)
             self._subgraphs[node_id] = (
-                {node_id: self.nodes[node_id] for node_id in downstream},
+                {node_id: self.nodes[node_id] for node_id in downstream if node_id in self.nodes},
                 [e for e in self.edges if e.target_node in downstream],
             )
         return self._subgraphs[node_id]

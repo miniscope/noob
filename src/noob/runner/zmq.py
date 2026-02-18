@@ -30,9 +30,10 @@ import os
 import signal
 import threading
 import traceback
+from collections import deque
 from collections.abc import AsyncGenerator, Generator, MutableSequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import partial
 from itertools import count
 from multiprocessing.synchronize import Event as EventType
@@ -342,12 +343,12 @@ class NodeRunner(EventloopMixin):
         self._has_input: bool | None = None
         self._nodes: dict[str, IdentifyValue] = {}
         self._counter = count()
+        self._epochs_todo = deque()
         self._freerun = asyncio.Event()
         self._process_one = asyncio.Event()
         self._status: NodeStatus = NodeStatus.stopped
         self._status_lock = asyncio.Lock()
         self._ready_condition = asyncio.Condition()
-        self._to_process = 0
         super().__init__()
         self._quitting = asyncio.Event()
 
@@ -441,49 +442,66 @@ class NodeRunner(EventloopMixin):
                 events = self.store.add_value(self._node.signals, value, self._node.id, epoch)
                 async with self._ready_condition:
                     self.scheduler.add_epoch()
+
+                    # nodes don't report epoch endings since they don't know about the full tube
+                    events = [e for e in events if e["node_id"] != "meta"]
+                    if events:
+                        self.scheduler.update(events)
+                        await self.publish_events(events)
                     self._ready_condition.notify_all()
 
-                # nodes should not report epoch endings since they don't know about the full tube
-                events = [e for e in events if e["node_id"] != "meta"]
-                if events:
-                    await self.update_graph(events)
-                    await self.publish_events(events)
-
     async def await_inputs(self) -> AsyncGenerator[tuple[tuple[Any], dict[str, Any], Epoch]]:
+        """
+        Iterate inputs as they are ready
+
+        Handle multiple types of running
+        - `process` based: run a single epoch, or set of epochs at a time
+        - free`run` based: run until told to stop
+
+        And multiple types of nodes
+        - stateful: must call epochs and subepochs in order
+        - stateless: call whichever epoch whenever the dependencies are met
+        """
         self._node = cast(Node, self._node)
+        epoch = None
         while not self._quitting.is_set():
-            # if we are not freerunning, keep track of how many times we are supposed to run,
-            # and run until we aren't supposed to anymore!
-            if not self._freerun.is_set():
-                if self._to_process <= 0:
-                    self._to_process = 0
-                    await self._process_one.wait()
-                self._to_process -= 1
-                if self._to_process <= 0:
-                    self._to_process = 0
-                    self._process_one.clear()
+            if not self._freerun.is_set() and (len(self._epochs_todo) == 0 and epoch is None):
+                self._process_one.clear()
+                await self._process_one.wait()
 
-            epoch = Epoch(next(self._counter)) if self._node.stateful else None
+            # if we don't have a current epoch that we're working on...
+            if epoch is None:
+                if len(self._epochs_todo) > 0:
+                    # given to us explicitly by a `process` call
+                    epoch = self._epochs_todo.popleft()
+                else:
+                    # infer while freerunning
+                    epoch = Epoch(next(self._counter)) if self._node.stateful else None
 
-            ready = await self.await_node(epoch=epoch)
-            epoch = ready["epoch"]
-            edges = self._node.edges
+            readies = await self.await_node(epoch=epoch)
 
-            inputs = self.store.collect(edges, epoch, eventmap=self._node.injections.get("events"))
-            if inputs is None:
-                inputs = {}
-            if self._node.injections.get("epoch"):
-                inputs[self._node.injections["epoch"]] = epoch
+            if epoch is None:
+                # stateless nodes - run the given epoch to completion
+                epoch = list(dict.fromkeys([r["epoch"].root for r in readies]))[0]
+                self._counter = count(max(next(self._counter), epoch.root[0].epoch + 1))
 
-            args, kwargs = self.store.split_args_kwargs(inputs)
-            # clear events for this epoch, since we have consumed what we need here.
-            self.store.clear(ready["epoch"])
-            yield args, kwargs, ready["epoch"]
+            for ready in readies:
+                edges = self._node.edges
 
-    async def update_graph(self, events: list[Event]) -> None:
-        async with self._ready_condition:
-            self.scheduler.update(events)
-            self._ready_condition.notify_all()
+                inputs = self.store.collect(
+                    edges, ready["epoch"], eventmap=self._node.injections.get("events")
+                )
+                if inputs is None:
+                    inputs = {}
+                if self._node.injections.get("epoch"):
+                    inputs[self._node.injections["epoch"]] = ready["epoch"]
+
+                args, kwargs = self.store.split_args_kwargs(inputs)
+                yield args, kwargs, ready["epoch"]
+
+            if self.scheduler.epoch_completed(epoch):
+                self.logger.debug("Epoch completed: %s", epoch)
+                epoch = None
 
     async def publish_events(self, events: list[Event]) -> None:
         msg = EventMsg(node_id=self.spec.id, value=events)
@@ -555,7 +573,11 @@ class NodeRunner(EventloopMixin):
     async def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
         self._node.init()
-        self.scheduler = Scheduler(nodes={self.spec.id: self.spec}, edges=self._node.edges)
+        self.scheduler = Scheduler(
+            nodes={self.spec.id: self.spec},
+            edges=self._node.edges,
+            logger=init_logger(f"noob.scheduler.{self.spec.id}"),
+        )
         async with self._ready_condition:
             self.scheduler.add_epoch()
             self._ready_condition.notify_all()
@@ -654,6 +676,7 @@ class NodeRunner(EventloopMixin):
             await self.update_status(self.status)
 
     async def on_event(self, msg: EventMsg) -> None:
+        self.logger.debug("RECEIVED EVENTS: %s", msg.value)
         events = msg.value
         if not self.depends:
             self.logger.debug("No dependencies, not storing events")
@@ -662,11 +685,9 @@ class NodeRunner(EventloopMixin):
         to_add = [e for e in events if (e["node_id"], e["signal"]) in self.depends]
         for event in to_add:
             self.store.add(event)
-        self.logger.debug("scheduler updating")
         async with self._ready_condition:
             self.scheduler.update(events)
             self._ready_condition.notify_all()
-        self.logger.debug("scheduler updated")
 
     async def on_start(self, msg: StartMsg) -> None:
         """
@@ -676,7 +697,7 @@ class NodeRunner(EventloopMixin):
         if msg.value is None:
             self._freerun.set()
         else:
-            self._to_process += msg.value
+            self._epochs_todo.extend(Epoch(next(self._counter)) for _ in range(msg.value))
         self._process_one.set()
 
     async def on_process(self, msg: ProcessMsg) -> None:
@@ -684,7 +705,8 @@ class NodeRunner(EventloopMixin):
         Process a single graph iteration
         """
         self.logger.debug("Received Process message: %s", msg)
-        self._to_process += 1
+        self._epochs_todo.append(msg.value["epoch"])
+        self._counter = count(max(next(self._counter), msg.value["epoch"].root[0].epoch + 1))
         if self.has_input and self.depends:  # for mypy - depends is always true if has_input is
             # combine with any tube-scoped input and store as events
             # when calling the node, we get inputs from the eventstore rather than input collection
@@ -715,7 +737,8 @@ class NodeRunner(EventloopMixin):
     async def on_stop(self, msg: StopMsg) -> None:
         """Stop processing (but stay responsive)"""
         self._process_one.clear()
-        self._to_process = 0
+        # TODO: "soft stop" where we finish the remaining epochs
+        self._epochs_todo = deque()
         self._freerun.clear()
         await self.update_status(NodeStatus.stopped)
         self.logger.debug("Stopped")
@@ -743,7 +766,7 @@ class NodeRunner(EventloopMixin):
         """
         tbexception = "\n".join(traceback.format_tb(err.__traceback__))
         self.logger.debug("Throwing error in main runner: %s", tbexception)
-        args = (err.title, err.line_errors) if isinstance(err, ValidationError) else err.args  # type: ignore[attr-defined,unused-ignore]
+        args = (err.title, err.errors()) if isinstance(err, ValidationError) else err.args  # type: ignore[attr-defined,unused-ignore]
 
         msg = ErrorMsg(
             node_id=self.spec.id,
@@ -755,16 +778,13 @@ class NodeRunner(EventloopMixin):
         )
         await self.sockets["dealer"].send_multipart([msg.to_bytes()])
 
-    async def await_node(self, epoch: Epoch | None = None) -> MetaEvent:
+    async def await_node(self, epoch: Epoch | None = None) -> list[MetaEvent]:
         """
         Block until a node is ready
 
         Args:
-            node_id:
             epoch (Epoch, None): if `int` , wait until the node is ready in the given epoch,
                 otherwise wait until the node is ready in any epoch
-
-        Returns:
 
         """
         async with self._ready_condition:
@@ -774,8 +794,8 @@ class NodeRunner(EventloopMixin):
 
             # be FIFO-like and get the earliest epoch the node is ready in
             if epoch is None:
-                for ep in self.scheduler._epochs:
-                    if self.scheduler.node_is_ready(self.spec.id, ep):
+                for ep, graph in self.scheduler._epochs.items():
+                    if self.spec.id in graph.ready_nodes:
                         epoch = ep
                         break
 
@@ -788,16 +808,10 @@ class NodeRunner(EventloopMixin):
 
             # mark just one event as "out."
             # threadsafe because we are holding the lock that protects graph mutation
-            self.scheduler[epoch].mark_out(self.spec.id)
+            ready = self.scheduler.get_ready(epoch, node_id=self.spec.id)
+            ready = [r for r in ready if r["value"] == self.spec.id]
 
-        return MetaEvent(
-            id=uuid4().int,
-            timestamp=datetime.now(),
-            node_id="meta",
-            signal=MetaEventType.NodeReady,
-            epoch=epoch,
-            value=self.spec.id,
-        )
+        return ready
 
 
 @dataclass
@@ -1078,7 +1092,7 @@ class ZMQRunner(TubeRunner):
         self.command.stop()
         self._running.clear()
 
-    def on_event(self, msg: Message) -> None:
+    async def on_event(self, msg: Message) -> None:
         self._logger.debug("EVENT received: %s", msg)
         if msg.type_ != MessageType.event:
             self._logger.debug(f"Ignoring message type {msg.type_}")
@@ -1097,14 +1111,25 @@ class ZMQRunner(TubeRunner):
             # to avoid an unnecessary pickling/unpickling across the network
             epochs = set(e["epoch"] for e in msg.value)
             for epoch in epochs:
-                if (
-                    self.tube.scheduler.node_is_ready(self._return_node.id, epoch)
-                    and epoch in self.tube.scheduler._epochs
-                ):
-                    self._logger.debug("Marking return node ready in epoch %s", epoch)
-                    ep_ended = self.tube.scheduler.done(epoch, self._return_node.id)
+                ready_epochs = self.tube.scheduler.get_ready(epoch, self._return_node.id)
+                for ready in ready_epochs:
+                    self._logger.debug("Marking return node ready in epoch %s", ready["epoch"])
+                    ep_ended = self.tube.scheduler.expire(ready["epoch"], self._return_node.id)
                     if ep_ended is not None:
                         events.append(ep_ended)
+            roots = set(e.root for e in epochs)
+            for root in roots:
+                if self.tube.scheduler.epoch_completed(root):
+                    events.append(
+                        MetaEvent(
+                            id=uuid4().int,
+                            timestamp=datetime.now(UTC),
+                            node_id="meta",
+                            signal=MetaEventType.EpochEnded,
+                            value=root,
+                            epoch=root,
+                        )
+                    )
         for e in events:
             if (
                 e["node_id"] == "meta"
@@ -1124,13 +1149,18 @@ class ZMQRunner(TubeRunner):
         if self._return_node is None:
             return None
         else:
-            events = self.store.collect(
-                self._return_node.edges, epoch, eventmap=self._return_node.injections.get("events")
-            )
-            if not events:
-                return MetaSignal.NoEvent
-            args, kwargs = self.store.split_args_kwargs(events)
-            self._return_node.process(*args, **kwargs)  # type: ignore[call-arg]
+            if self.tube.scheduler.subepochs[epoch]:
+                epochs = sorted(self.tube.scheduler.subepochs[epoch]) + [epoch]
+            else:
+                epochs = [epoch]
+            for ep in epochs:
+                events = self.store.collect(
+                    self._return_node.edges, ep, eventmap=self._return_node.injections.get("events")
+                )
+                if not events:
+                    return MetaSignal.NoEvent
+                args, kwargs = self.store.split_args_kwargs(events)
+                self._return_node.process(*args, **kwargs)  # type: ignore[call-arg]
             ret = self._return_node.get(keep=False)
             if self.autoclear_store:
                 self.store.clear(epoch)

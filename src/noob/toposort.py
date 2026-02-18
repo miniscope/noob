@@ -183,7 +183,7 @@ class TopoSorter:
             # in case node is called multiple times
             self._ready_nodes.discard(node)
 
-    def get_ready(self) -> tuple[str, ...]:
+    def get_ready(self, node_id: NodeID | None = None) -> tuple[str, ...]:
         """
         Return a tuple of all the nodes that are ready.
 
@@ -191,9 +191,15 @@ class TopoSorter:
         as processed by calling "done", further calls will return all new nodes that
         have all their predecessors already processed. Once no more progress can be made,
         empty tuples are returned.
+
+        Args:
+            node_id (str | None): If present, only return if the given node is ready
         """
         # Get the nodes that are ready and mark them
-        result = tuple(self.ready_nodes)
+        if node_id is None:
+            result = tuple(self.ready_nodes)
+        else:
+            result = tuple(node for node in self.ready_nodes if node == node_id)
         self.mark_out(*result)
 
         return result

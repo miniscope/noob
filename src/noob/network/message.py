@@ -174,7 +174,7 @@ class ErrorMsg(Message):
 
     def to_exception(self) -> Exception:
         err = self.value["err_type"](*self.value["err_args"])
-        tb_message = "\nError re-raised from node runner process\n\n"
+        tb_message = f"\nError re-raised from node runner process {self.node_id}\n\n"
         tb_message += "Original traceback:\n"
         tb_message += "-" * 20 + "\n"
         tb_message += self.value["traceback"]
