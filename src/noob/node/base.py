@@ -27,7 +27,7 @@ from pydantic import (
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
 from noob.types import Epoch, EventMap
-from noob.utils import resolve_python_identifier
+from noob.utils import iscoroutinefunction_partial, resolve_python_identifier
 
 if TYPE_CHECKING:
     from noob.input import InputCollection
@@ -388,6 +388,15 @@ class Node(BaseModel):
                     injections[injection_key] = param
 
         return injections
+
+    @functools.cached_property
+    def is_coroutine(self) -> bool:
+        """
+        is the process method a coroutine?
+
+        (checking this on every call proves to be surprisingly expensive)
+        """
+        return iscoroutinefunction_partial(self.process)
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)

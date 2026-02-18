@@ -343,7 +343,7 @@ class TubeRunner(ABC):
 
         Subclasses may override to customize behavior
         """
-        if iscoroutinefunction_partial(node.process):
+        if node.is_coroutine:
             return call_async_from_sync(node.process, *args, **kwargs)
         else:
             return node.process(*args, **kwargs)
