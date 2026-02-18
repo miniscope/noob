@@ -464,10 +464,31 @@ class NodeRunner(EventloopMixin):
         """
         self._node = cast(Node, self._node)
         epoch = None
+        # FIXME: This handling of statefulness is shamefully awful and if you see this
+        # YELL AT JONNY TO FIX IT.
+        # i am just committing for now to see if it works and also to perf test using CI benchmarks
+        expected_epoch = Epoch(0) if self._node.stateful else None
         while not self._quitting.is_set():
-            if not self._freerun.is_set() and (len(self._epochs_todo) == 0 and epoch is None):
+            if (
+                not self._freerun.is_set()
+                and epoch is None
+                and (
+                    len(self._epochs_todo) == 0
+                    or (
+                        len(self._epochs_todo) > 0
+                        and self._node.stateful
+                        and self._epochs_todo[0] != expected_epoch
+                    )
+                )
+            ):
                 self._process_one.clear()
                 await self._process_one.wait()
+                if (
+                    len(self._epochs_todo) > 0
+                    and self._node.stateful
+                    and self._epochs_todo[0] != expected_epoch
+                ):
+                    continue
 
             # if we don't have a current epoch that we're working on...
             if epoch is None:
@@ -478,6 +499,8 @@ class NodeRunner(EventloopMixin):
                     # infer while freerunning
                     epoch = Epoch(next(self._counter)) if self._node.stateful else None
 
+                if self._node.stateful:
+                    expected_epoch = Epoch(epoch[0].epoch + 1)
             readies = await self.await_node(epoch=epoch)
 
             if epoch is None:
@@ -501,6 +524,7 @@ class NodeRunner(EventloopMixin):
 
             if self.scheduler.epoch_completed(epoch):
                 self.logger.debug("Epoch completed: %s", epoch)
+                self.store.clear(epoch)
                 epoch = None
 
     async def publish_events(self, events: list[Event]) -> None:
@@ -706,6 +730,8 @@ class NodeRunner(EventloopMixin):
         """
         self.logger.debug("Received Process message: %s", msg)
         self._epochs_todo.append(msg.value["epoch"])
+        if self._node.stateful:
+            self._epochs_todo = deque(sorted(self._epochs_todo))
         self._counter = count(max(next(self._counter), msg.value["epoch"].root[0].epoch + 1))
         if self.has_input and self.depends:  # for mypy - depends is always true if has_input is
             # combine with any tube-scoped input and store as events
