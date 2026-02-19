@@ -1032,9 +1032,7 @@ class ZMQRunner(TubeRunner):
                 ret = MetaSignal.NoEvent
                 loop = 0
                 while ret is MetaSignal.NoEvent:
-                    self._logger.debug("Awaiting epoch %s, current_iter: %s", epoch, current_iter)
                     self.await_epoch(Epoch(epoch))
-                    self._logger.debug("AWAITED %s, current_iter: %s", epoch, current_iter)
                     ret = self.collect_return(Epoch(epoch))
                     epoch += 1
                     self._current_epoch = Epoch(epoch)
@@ -1100,7 +1098,6 @@ class ZMQRunner(TubeRunner):
             results = []
             for res in self.iter(n):
                 results.append(res)
-            self._logger.debug("RETURNING FROM RUN")
             return results
 
         else:
