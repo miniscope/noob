@@ -9,7 +9,6 @@ from noob.node import Node, Return
 from noob.runner.base import TubeRunner
 from noob.scheduler import Scheduler
 from noob.types import Epoch, ReturnNodeType
-from noob.utils import iscoroutinefunction_partial
 
 
 @dataclass
@@ -132,8 +131,9 @@ class AsyncRunner(TubeRunner):
 
     def _call_node(self, node: Node, *args: Any, **kwargs: Any) -> Any:
         future: asyncio.Task | asyncio.Future
-        if iscoroutinefunction_partial(node.process):
-            future = self.eventloop.create_task(node.process(*args, **kwargs))
+        if node.is_coroutine:
+            # mypy can't propagate type guard in cached is_coroutine property
+            future = self.eventloop.create_task(node.process(*args, **kwargs))  # type: ignore[arg-type]
         else:
             part = partial(node.process, *args, **kwargs)
             future = self.eventloop.run_in_executor(None, part)

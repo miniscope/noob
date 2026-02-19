@@ -280,3 +280,9 @@ class Epoch(tuple[EpochSegment, ...]):
         segment = EpochSegment(*other) if not isinstance(other, EpochSegment) else other
 
         return Epoch((*self, segment))
+
+    def __repr__(self) -> str:
+        if len(self) == 1:
+            return str(self[0].epoch)
+        else:
+            return str(tuple(tuple(ep) for ep in self))
