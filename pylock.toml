@@ -524,6 +524,21 @@ dependencies = [
 ]
 
 [[packages]]
+name = "click"
+version = "8.3.1"
+requires-python = ">=3.10"
+sdist = {name = "click-8.3.1.tar.gz", url = "https://files.pythonhosted.org/packages/3d/fa/656b739db8587d7b5dfa22e22ed02566950fbfbcdc20311993483657a5c0/click-8.3.1.tar.gz", hashes = {sha256 = "12ff4785d337a1bb490bb7e9c2b1ee5da3112e94a8622f26a6c77f5d2fc6842a"}}
+wheels = [
+    {name = "click-8.3.1-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl",hashes = {sha256 = "981153a64e25f12d547d3426c367a4857371575ee7ad18df2a6183ab0545b2a6"}},
+]
+marker = "\"default\" in dependency_groups or \"dev\" in extras or \"docs\" in extras"
+
+[packages.tool.pdm]
+dependencies = [
+    "colorama; platform_system == \"Windows\"",
+]
+
+[[packages]]
 name = "platformdirs"
 version = "4.5.1"
 requires-python = ">=3.10"
@@ -614,11 +629,11 @@ dependencies = [
 
 [[packages]]
 name = "pydantic-settings"
-version = "2.12.0"
+version = "2.13.0"
 requires-python = ">=3.10"
-sdist = {name = "pydantic_settings-2.12.0.tar.gz", url = "https://files.pythonhosted.org/packages/43/4b/ac7e0aae12027748076d72a8764ff1c9d82ca75a7a52622e67ed3f765c54/pydantic_settings-2.12.0.tar.gz", hashes = {sha256 = "005538ef951e3c2a68e1c08b292b5f2e71490def8589d4221b95dab00dafcfd0"}}
+sdist = {name = "pydantic_settings-2.13.0.tar.gz", url = "https://files.pythonhosted.org/packages/96/a1/ae859ffac5a3338a66b74c5e29e244fd3a3cc483c89feaf9f56c39898d75/pydantic_settings-2.13.0.tar.gz", hashes = {sha256 = "95d875514610e8595672800a5c40b073e99e4aae467fa7c8f9c263061ea2e1fe"}}
 wheels = [
-    {name = "pydantic_settings-2.12.0-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/c1/60/5d4751ba3f4a40a6891f24eec885f51afd78d208498268c734e256fb13c4/pydantic_settings-2.12.0-py3-none-any.whl",hashes = {sha256 = "fddb9fd99a5b18da837b29710391e945b1e30c135477f484084ee513adb93809"}},
+    {name = "pydantic_settings-2.13.0-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/b0/1a/dd1b9d7e627486cf8e7523d09b70010e05a4bc41414f4ae6ce184cf0afb6/pydantic_settings-2.13.0-py3-none-any.whl",hashes = {sha256 = "d67b576fff39cd086b595441bf9c75d4193ca9c0ed643b90360694d0f1240246"}},
 ]
 marker = "\"default\" in dependency_groups or \"dev\" in extras or \"docs\" in extras"
 
@@ -755,7 +770,7 @@ sdist = {name = "colorama-0.4.6.tar.gz", url = "https://files.pythonhosted.org/p
 wheels = [
     {name = "colorama-0.4.6-py2.py3-none-any.whl",url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl",hashes = {sha256 = "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"}},
 ]
-marker = "\"dev\" in extras or \"docs\" in extras or \"tests\" in extras"
+marker = "\"default\" in dependency_groups or \"dev\" in extras or \"docs\" in extras or \"tests\" in extras"
 
 [packages.tool.pdm]
 dependencies = []
@@ -971,21 +986,6 @@ marker = "\"dev\" in extras or \"docs\" in extras or \"tests\" in extras or \"zm
 [packages.tool.pdm]
 dependencies = [
     "pycparser; implementation_name != \"PyPy\"",
-]
-
-[[packages]]
-name = "click"
-version = "8.3.1"
-requires-python = ">=3.10"
-sdist = {name = "click-8.3.1.tar.gz", url = "https://files.pythonhosted.org/packages/3d/fa/656b739db8587d7b5dfa22e22ed02566950fbfbcdc20311993483657a5c0/click-8.3.1.tar.gz", hashes = {sha256 = "12ff4785d337a1bb490bb7e9c2b1ee5da3112e94a8622f26a6c77f5d2fc6842a"}}
-wheels = [
-    {name = "click-8.3.1-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl",hashes = {sha256 = "981153a64e25f12d547d3426c367a4857371575ee7ad18df2a6183ab0545b2a6"}},
-]
-marker = "\"dev\" in extras or \"docs\" in extras"
-
-[packages.tool.pdm]
-dependencies = [
-    "colorama; platform_system == \"Windows\"",
 ]
 
 [[packages]]
@@ -2757,7 +2757,7 @@ marker = "\"dev\" in extras or \"docs\" in extras"
 dependencies = []
 
 [tool.pdm]
-hashes = {sha256 = "8de386475f4ef212b56aa6ebe5eaf7bff0fc26582272248098fcabf26d2475e6"}
+hashes = {sha256 = "ff5ae223fe019cac2c0e3f4d759f94a560d24cce0f9da1e376b86eb7d16fa585"}
 strategy = ["inherit_metadata", "static_urls"]
 
 [[tool.pdm.targets]]
