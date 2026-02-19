@@ -466,7 +466,7 @@ class NodeRunner(EventloopMixin):
         epoch = None
         # FIXME: This handling of statefulness is shamefully awful and if you see this
         # YELL AT JONNY TO FIX IT.
-        # i am just committing for now to see if it works and also to perf test using CI benchmarks
+        # This logic should all be consolidated into the scheduler, see issue #144
         expected_epoch = Epoch(0) if self._node.stateful else None
         while not self._quitting.is_set():
             if (

@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from collections import defaultdict, deque
 from collections.abc import MutableSequence
@@ -319,8 +320,9 @@ class Scheduler(BaseModel):
         self.logger.debug("Ending epoch %s", ep)
         if len(ep) == 1:
             self._epoch_log.append(ep[0].epoch)
-            del self._epochs[ep]
-            # FIXME: cleanup subepochs
+            for subep in {ep, *self._subepochs[ep]}:
+                with contextlib.suppress(KeyError):
+                    del self._epochs[subep]
 
         return MetaEvent(
             id=uuid4().int,

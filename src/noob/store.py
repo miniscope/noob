@@ -43,6 +43,7 @@ class EventStore:
     counter: count = field(default_factory=count)
 
     _event_condition: Condition = field(default_factory=Condition)
+    _subepochs: dict[Epoch, set[Epoch]] = field(default_factory=lambda: defaultdict(set))
 
     @property
     def flat_events(self) -> list[Event]:
@@ -63,6 +64,8 @@ class EventStore:
         """
         with self._event_condition:
             self.events[event["epoch"]][event["node_id"]][event["signal"]].append(event)
+            for parent in event["epoch"].parents:
+                self._subepochs[parent].add(event["epoch"])
             self._event_condition.notify_all()
         return event
 
@@ -228,6 +231,10 @@ class EventStore:
         else:
             with contextlib.suppress(KeyError):
                 del self.events[epoch]
+            for subep in self._subepochs[epoch]:
+                with contextlib.suppress(KeyError):
+                    del self.events[subep]
+            del self._subepochs[epoch]
 
     @staticmethod
     @overload
