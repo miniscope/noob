@@ -21,7 +21,7 @@ from pydantic_core.core_schema import SerializerFunctionWrapHandler
 
 from noob.const import META_SIGNAL
 from noob.event import Event, MetaSignal
-from noob.types import Picklable
+from noob.types import Epoch, Picklable
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
@@ -96,7 +96,7 @@ class ErrorValue(TypedDict):
 
 
 class ProcessValue(TypedDict):
-    epoch: int
+    epoch: Epoch
     input: dict | None
 
 
@@ -174,7 +174,7 @@ class ErrorMsg(Message):
 
     def to_exception(self) -> Exception:
         err = self.value["err_type"](*self.value["err_args"])
-        tb_message = "\nError re-raised from node runner process\n\n"
+        tb_message = f"\nError re-raised from node runner process {self.node_id}\n\n"
         tb_message += "Original traceback:\n"
         tb_message += "-" * 20 + "\n"
         tb_message += self.value["traceback"]

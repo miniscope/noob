@@ -4,18 +4,18 @@ Tube runners for running tubes
 
 import contextlib
 from collections import defaultdict
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import count
 from threading import Condition
-from typing import Any, TypeAlias
+from typing import Any, Literal, TypeAlias, overload
 
 from noob.const import META_SIGNAL
-from noob.event import Event, MetaSignal
+from noob.event import Event, MetaSignal, is_event
 from noob.node import Edge
 from noob.node.base import Signal
-from noob.types import Epoch, NodeID, SignalName
+from noob.types import Epoch, EventMap, NodeID, SignalName
 
 EventDict: TypeAlias = dict[Epoch, dict[NodeID, dict[SignalName, list[Event]]]]
 """
@@ -43,6 +43,7 @@ class EventStore:
     counter: count = field(default_factory=count)
 
     _event_condition: Condition = field(default_factory=Condition)
+    _subepochs: dict[Epoch, set[Epoch]] = field(default_factory=lambda: defaultdict(set))
 
     @property
     def flat_events(self) -> list[Event]:
@@ -63,15 +64,27 @@ class EventStore:
         """
         with self._event_condition:
             self.events[event["epoch"]][event["node_id"]][event["signal"]].append(event)
+            for parent in event["epoch"].parents:
+                self._subepochs[parent].add(event["epoch"])
             self._event_condition.notify_all()
         return event
 
-    def add_value(self, signals: list[Signal], value: Any, node_id: str, epoch: int) -> list[Event]:
+    def add_value(
+        self, signals: list[Signal], value: Any, node_id: str, epoch: Epoch
+    ) -> list[Event]:
         """
         Add the result of a :meth:`.Node.process` call to the event store.
 
         Split the dictionary of values into separate :class:`.Event` s,
-        store along with current timestamp
+        store along with current timestamp.
+
+        .. note::
+            Nodes can emit explicit, pre-created event objects, either a single
+            :class:`.Event` or a :class:`~collections.abc.Sequence` of events.
+            These events are passed through as-is rather than being wrapped in new events.
+
+            This is an "advanced" feature and can cause unpredictable behavior
+            if the emitted events have incorrect epochs, signals, etc.
 
         Args:
             signals (list[Signal]): Signals from which the value was emitted by
@@ -80,7 +93,7 @@ class EventStore:
                 with a list in case the length of signals is 1. Otherwise, it's zipped
                 with :signals:
             node_id (str): ID of the node that emitted the events
-            epoch (int): Epoch count that the signal was emitted in
+            epoch (Epoch): Epoch count that the signal was emitted in
         """
         timestamp = datetime.now(UTC)
         if value is MetaSignal.NoEvent or (isinstance(value, str) and value == MetaSignal.NoEvent):
@@ -91,21 +104,30 @@ class EventStore:
 
             new_events = []
             for signal, val in zip(signals, values):
-                new_event = Event(
-                    id=next(self.counter),
-                    timestamp=timestamp,
-                    node_id=node_id,
-                    epoch=epoch,
-                    signal=signal.name,
-                    value=val,
-                )
-                self.add(new_event)
-                new_events.append(new_event)
+                # Nodes can emit explicit events or collections of events
+                if is_event(val):
+                    self.add(val)
+                    new_events.append(val)
+                elif isinstance(val, Sequence) and is_event(val[0]):
+                    for e in val:
+                        self.add(e)
+                    new_events.extend(val)
+                else:
+                    new_event = Event(
+                        id=next(self.counter),
+                        timestamp=timestamp,
+                        node_id=node_id,
+                        epoch=epoch,
+                        signal=signal.name,
+                        value=val,
+                    )
+                    self.add(new_event)
+                    new_events.append(new_event)
 
             self._event_condition.notify_all()
         return new_events
 
-    def get(self, node_id: str, signal: str, epoch: int) -> Event:
+    def get(self, node_id: str, signal: str, epoch: Epoch | Literal[-1]) -> Event:
         """
         Get the event with the matching node_id and signal name from a given epoch.
 
@@ -115,14 +137,22 @@ class EventStore:
             KeyError: if no event with the matching node_id and signal name exists
         """
         event = None
-        if epoch == -1:
-            for ep in reversed(self.events.keys()):
-                if (evt := self.get(node_id, signal, ep)) is not None:
-                    event = evt
-                    break
+        if isinstance(epoch, int) and epoch == -1:
+            if epoch == -1:
+                for ep in reversed(self.events.keys()):
+                    if (evt := self.get(node_id, signal, ep)) is not None:
+                        event = evt
+                        break
         else:
             events = self.events[epoch][node_id][signal]
-            event = events[-1] if events else None
+            if events:
+                event = events[-1]
+            elif len(epoch) > 1:
+                for parent in epoch.parents:
+                    events = self.events[parent][node_id][signal]
+                    if events:
+                        event = events[-1]
+                        break
 
         if event is None:
             raise KeyError(
@@ -131,7 +161,9 @@ class EventStore:
         else:
             return event
 
-    def collect(self, edges: list[Edge], epoch: int) -> dict | None:
+    def collect(
+        self, edges: list[Edge], epoch: Epoch | Literal[-1], eventmap: str | None = None
+    ) -> dict | None:
         """
         Gather events into a form that can be consumed by a :meth:`.Node.process` method,
         given the collection of inbound edges (usually from :meth:`.Tube.in_edges` ).
@@ -149,18 +181,21 @@ class EventStore:
         get the the events from the most recent epoch where all events are present,
         and if no epochs are present with a full set of events, return None
 
-        .. todo::
-
-            Add an example
-
+        args:
+            eventmap (str): If present, return an :class:`.EventMap` in this key
         """
         events = self.collect_events(edges, epoch)
         if events is None:
             return None
 
-        return self.transform_events(edges=edges, events=events)
+        transformed_events = self.transform_events(edges=edges, events=events)
 
-    def collect_events(self, edges: list[Edge], epoch: int) -> list[Event] | None:
+        if eventmap is not None:
+            transformed_events[eventmap] = self.transform_events(edges, events, as_events=True)
+
+        return transformed_events
+
+    def collect_events(self, edges: list[Edge], epoch: Epoch | Literal[-1]) -> list[Event] | None:
         """
         Collect the event objects from a set of dependencies indicated by edges in a given epoch.
 
@@ -184,7 +219,7 @@ class EventStore:
 
         return events if events else None
 
-    def clear(self, epoch: int | None = None) -> None:
+    def clear(self, epoch: Epoch | None = None) -> None:
         """
         Clear events for a specific or all epochs.
 
@@ -196,9 +231,27 @@ class EventStore:
         else:
             with contextlib.suppress(KeyError):
                 del self.events[epoch]
+            for subep in self._subepochs[epoch]:
+                with contextlib.suppress(KeyError):
+                    del self.events[subep]
+            del self._subepochs[epoch]
 
     @staticmethod
-    def transform_events(edges: list[Edge], events: list[Event]) -> dict:
+    @overload
+    def transform_events(
+        edges: list[Edge], events: list[Event], as_events: Literal[False] = False
+    ) -> dict: ...
+
+    @staticmethod
+    @overload
+    def transform_events(
+        edges: list[Edge], events: list[Event], as_events: Literal[True] = True
+    ) -> EventMap: ...
+
+    @staticmethod
+    def transform_events(
+        edges: list[Edge], events: list[Event], as_events: bool = False
+    ) -> dict | EventMap:
         """
         Transform the values of a set of events to a dict that can be consumed by the
         target node's process method.
@@ -215,7 +268,10 @@ class EventStore:
             ]
             if not evts:
                 continue
-            args[edge.target_slot] = evts[-1]["value"]
+            if as_events:
+                args[edge.target_slot] = evts[-1]
+            else:
+                args[edge.target_slot] = evts[-1]["value"]
         return args
 
     @staticmethod

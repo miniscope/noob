@@ -11,7 +11,7 @@ dependencies = [
     "pydantic>=2.10.6",
     "pydantic-settings[yaml]>=2.8.1",
     "platformdirs>=4.3.7",
-    'typing-extensions>=4.15.0;python_version<"3.12"',
+    'typing-extensions>=4.15.0;python_version<"3.13"',
     "ruamel-yaml>=0.18.16",
 ]
 requires-python = ">=3.11"
@@ -130,13 +130,13 @@ docs-test.composite = [
 ]
 docs-test.env = {SPHINXOPTS = "-W --keep-going"}
 mypy = "mypy"
-benchmark = "pytest tests/bench.py --codspeed"
+benchmark = "pytest tests/bench.py --codspeed --timeout=15"
 
 [tool.pytest.ini_options]
 addopts = [
     "--cov=noob",
     "--cov-append",
-    "--timeout=15",
+    "--timeout=10",
 ]
 markers = [
     "async_runner: uses the async runner",

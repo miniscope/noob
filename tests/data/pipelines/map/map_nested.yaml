@@ -15,7 +15,7 @@ nodes:
   c:
     type: map
     depends:
-      - string: b.value
+      - value: b.value
   return:
     type: return
     depends:

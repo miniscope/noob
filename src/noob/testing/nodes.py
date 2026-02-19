@@ -12,6 +12,7 @@ from faker import Faker
 
 from noob import Name, process_method
 from noob.node import Node
+from noob.types import Epoch, EventMap
 
 
 def count_source(
@@ -33,7 +34,9 @@ def letter_source() -> Generator[A[str, Name("letter")]]:
 def word_source() -> Generator[A[str, Name("word")]]:
     fake = Faker()
     while True:
-        yield fake.word()
+        word = fake.word()
+        if len(word) > 1:
+            yield word
 
 
 def multi_words_source(n: int) -> Generator[A[list[str], Name("multi_words")]]:
@@ -250,3 +253,11 @@ class InitCounter(Node):
 
     def deinit(self) -> None:
         self._deinits += 1
+
+
+def inject_epoch(epoch: Epoch) -> Epoch:
+    return epoch
+
+
+def inject_eventmap(special_value: Any, events: EventMap) -> EventMap:
+    return events

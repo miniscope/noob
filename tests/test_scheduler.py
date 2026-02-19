@@ -8,6 +8,7 @@ from noob import SynchronousRunner, Tube
 from noob.event import Event, MetaEventType
 from noob.exceptions import EpochCompletedError
 from noob.toposort import TopoSorter
+from noob.types import Epoch
 
 
 def test_epoch_increment():
@@ -54,7 +55,7 @@ def test_event_store_filter():
     runner = SynchronousRunner(tube)
     gen = runner.iter(5)
     for i, out in enumerate(gen):
-        assert runner.store.get(node_id="b", signal="value", epoch=i)["value"] == out
+        assert runner.store.get(node_id="b", signal="value", epoch=Epoch(i))["value"] == out
 
 
 def test_epoch_completion(basic_tubes):
@@ -68,14 +69,14 @@ def test_epoch_completion(basic_tubes):
     scheduler.add_epoch()
 
     eoe = None
-    while scheduler.is_active(0):
+    while scheduler.is_active(Epoch(0)):
         ready_nodes = scheduler.get_ready()
         for ready in ready_nodes:
             # until we're done, eoe should have been None in the last iteration
             assert eoe is None
             # marking the very last one as done should emit the end of epoch event
             # (we should also break out of the while loop after the last assignment)
-            eoe = scheduler.done(epoch=0, node_id=ready["value"])
+            eoe = scheduler.done(epoch=Epoch(0), node_id=ready["value"])
 
     assert (
         isinstance(eoe["id"], int)
@@ -150,13 +151,13 @@ def test_source_node_completion(spec, input, sources):
     # Epoch 0 won't be finished
     scheduler.add_epoch()
     # We will finish the latest epoch
-    scheduler.add_epoch()
+    epoch_1 = scheduler.add_epoch()
     assert not scheduler.sources_finished()
     for node_id in sources:
         scheduler.get_ready()
         # Default checks the latest epoch
         assert not scheduler.sources_finished()
-        scheduler.done(epoch=-1, node_id=node_id)
+        scheduler.done(epoch=epoch_1, node_id=node_id)
     assert scheduler.sources_finished()
 
 
@@ -174,7 +175,7 @@ def test_clear_ended_epochs():
     scheduler.add_epoch()
     for node in scheduler.nodes:
         scheduler.get_ready()
-        scheduler.done(epoch=0, node_id=node)
+        scheduler.done(epoch=Epoch(0), node_id=node)
         if node != "c":
             assert len(scheduler._epochs) == 2
         else:
@@ -225,13 +226,107 @@ def test_disable_nodes():
     tube = Tube.from_specification("testing-basic")
     scheduler = tube.scheduler
     scheduler.disable_node("b")
-    scheduler.add_epoch()
+    epoch = scheduler.add_epoch()
     ready_nodes = scheduler.get_ready()
 
     # only "a" is returned, even though "b" also has no dependencies,
     # since "b" is disabled.
     assert {node["value"] for node in ready_nodes} == {"a"}
-    scheduler.done(epoch=-1, node_id="a")
+    scheduler.done(epoch=epoch, node_id="a")
 
     # nothing ready anymore
     assert not scheduler.get_ready()
+
+
+def test_map_creating_subepochs_expires_parent_epoch():
+    """
+    When a node induces a map by creating subepochs,
+    that node should be marked exhausted in the parent epoch
+    """
+    tube = Tube.from_specification("testing-map-basic")
+    scheduler = tube.scheduler
+    ep = scheduler.add_epoch()
+    scheduler.done(ep, node_id="a")
+    scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
+    assert "b" in scheduler._epochs[ep].done_nodes
+    assert "b" not in scheduler._epochs[ep].ran_nodes
+
+
+def test_get_ready_yields_all_mapped_subepochs():
+    """
+    get_ready should yield all mapped subepochs at once when accessed with the parent epoch
+    """
+    tube = Tube.from_specification("testing-map-basic")
+    scheduler = tube.scheduler
+    ep = scheduler.add_epoch()
+    scheduler.done(ep, node_id="a")
+    scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
+    ready = scheduler.get_ready(ep)
+    assert len(ready) == 3
+    assert {r["epoch"] for r in ready} == {ep / ("b", i) for i in range(3)}
+
+
+def test_map_gather_only_parent_epoch():
+    """
+    When a gather node collapses subepochs, nodes that are exclusively downstream of the gather node
+    only run in the parent epoch
+    """
+    tube = Tube.from_specification("testing-map-gather")
+    scheduler = tube.scheduler
+    ep = scheduler.add_epoch()
+    scheduler.done(ep, node_id="a")
+    scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
+    for i in range(3):
+        scheduler.done(ep / ("b", i), node_id="c")
+    scheduler.done(ep, node_id="d")
+    ready = scheduler.get_ready(ep)
+    assert len(ready) == 1
+    assert ready[0]["epoch"] == ep
+
+
+def test_map_gather_mixed_epochs():
+    """
+    When a gather node collapses subepochs,
+    it yields nodes that are exlusively downstream of the gather node in the parent epoch,
+    and nodes that are in the mapped subepoch in the subepochs.
+    """
+    tube = Tube.from_specification("testing-map-gather")
+    scheduler = tube.scheduler
+    ep = scheduler.add_epoch()
+    scheduler.done(ep, node_id="a")
+    scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
+    for i in range(3):
+        scheduler.done(ep / ("b", i), node_id="c")
+    for i in range(3):
+        scheduler.expire(ep / ("b", i), node_id="d")
+    scheduler.done(ep, node_id="d")
+    scheduler.done(ep, node_id="e")
+    ready = scheduler.get_ready(ep)
+    assert len(ready) == 3
+    assert {r["epoch"] for r in ready} == {ep / ("b", i) for i in range(3)}
+
+
+def test_is_active_when_subepochs_active():
+    """Scheduler stays active for an epoch as long as there are active subepochs"""
+    tube = Tube.from_specification("testing-map-basic")
+    scheduler = tube.scheduler
+    ep = scheduler.add_epoch()
+    scheduler.done(ep, node_id="a")
+    scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
+    assert not scheduler._epochs[ep].is_active()
+    assert scheduler._epochs[ep / ("b", 0)].is_active()
+    assert scheduler.is_active(ep)
+    scheduler.update([_make_event(ep / ("b", i), "c") for i in range(3)])
+    assert not scheduler._epochs[ep].is_active()
+    assert scheduler._epochs[ep / ("b", 0)].is_active()
+    assert scheduler.is_active(ep)
+    for i in range(3):
+        scheduler.expire(ep / ("b", i), node_id="return")
+        assert not scheduler._epochs[ep / ("b", i)].is_active()
+    assert not scheduler.is_active(ep)
+
+
+def _make_event(epoch: Epoch, node_id: str) -> Event:
+    return Event(
+        id=0, epoch=epoch, node_id=node_id, timestamp=datetime.now(), signal="zzz", value=0
+    )

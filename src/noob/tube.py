@@ -1,5 +1,6 @@
 from collections import defaultdict
 from importlib import resources
+from itertools import permutations
 from typing import Self
 
 from pydantic import (
@@ -365,6 +366,63 @@ class Tube(BaseModel):
                 )
 
         return self
+
+    @model_validator(mode="after")
+    def no_cross_map_dependencies(self) -> Self:
+        """
+        A node can only be downstream of one linear chain of map operations.
+
+        Fine:
+
+        * a -> map_b -> c
+        * a -> map_b -> map_c -> d
+
+        Not fine:
+
+        * a -> map_a -> c; b -> map_b -> c
+
+        """
+        from noob.node.map import Map
+
+        shadows = {node_id: downstream_nodes(self.edges, node_id) for node_id in self.nodes}
+        map_nodes = set(node_id for node_id, node in self.nodes.items() if isinstance(node, Map))
+        for map_a, map_b in permutations(map_nodes, 2):
+            if map_b in shadows[map_a] or map_a in shadows[map_b]:
+                continue
+            intersection = (shadows[map_b] - {map_b}).intersection(shadows[map_a] - {map_a})
+            assert not intersection, (
+                f"Nodes can only be in the downstream shadow of a single map operation, "
+                f"or a nested chain of map operations. "
+                f"{intersection} are downstream of unrelated map nodes {map_a} and {map_b}"
+            )
+        return self
+
+
+def downstream_nodes(edges: list[Edge], node_id: str, exclude: set[str] | None = None) -> set[str]:
+    """
+    The set of nodes that through some chain of dependencies depend on the given node_id
+
+    Args:
+        exclude (set[str]): Nodes (and their successors) to exclude from downstream graph
+    """
+    if exclude is None:
+        exclude = set()
+
+    # Build adjacency list: source -> targets
+    adjacency: dict[str, list[str]] = defaultdict(list)
+    for edge in edges:
+        adjacency[edge.source_node].append(edge.target_node)
+
+    # BFS from node_id
+    downstream = {node_id}
+    queue = [node_id]
+    while queue:
+        current = queue.pop(0)
+        for successor in adjacency.get(current, []):
+            if successor not in downstream and successor not in exclude:
+                downstream.add(successor)
+                queue.append(successor)
+    return downstream
 
 
 class TubeClassicEdition:

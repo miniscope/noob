@@ -5,22 +5,23 @@ import builtins
 import pickle
 import re
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, TypedDict, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, Literal, NamedTuple, TypeAlias, TypedDict, TypeVar
 
-from annotated_types import Ge
 from pydantic import (
     AfterValidator,
     BeforeValidator,
     Field,
+    GetCoreSchemaHandler,
     PlainSerializer,
     TypeAdapter,
     WrapSerializer,
 )
-from pydantic_core import PydanticSerializationError
+from pydantic_core import CoreSchema, PydanticSerializationError, core_schema
 from pydantic_core.core_schema import SerializerFunctionWrapHandler
 
 from noob.const import RESERVED_IDS
@@ -32,6 +33,7 @@ else:
 
 if TYPE_CHECKING:
     from noob import Tube
+    from noob.event import Event
     from noob.runner import TubeRunner
 
 CONFIG_ID_PATTERN = r"[\w\-\/#]+"
@@ -154,10 +156,14 @@ Picklable = Annotated[
 
 # type aliases, mostly for documentation's sake
 NodeID: TypeAlias = Annotated[str, AfterValidator(_is_identifier), AfterValidator(_not_reserved)]
-Epoch: TypeAlias = Annotated[int, Ge(0)]
 SignalName: TypeAlias = Annotated[str, AfterValidator(_is_identifier)]
 
 ReturnNodeType: TypeAlias = None | dict[str, Any] | Any
+EventMap: TypeAlias = dict[PythonIdentifier, "Event"]
+"""
+Type that can be requested to get the raw events rather than event values.
+Keys are the slot ids that the events would be transformed and passed to.
+"""
 
 
 @dataclass
@@ -189,3 +195,94 @@ AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)
 class RunnerContext(TypedDict):
     runner: TubeRunner
     tube: Tube
+
+
+class EpochSegment(NamedTuple):
+    node_id: NodeID | Literal["tube"]
+    epoch: int
+
+
+class Epoch(tuple[EpochSegment, ...]):
+    def __new__(cls, epoch: int | Iterable[EpochSegment]):
+        if isinstance(epoch, int):
+            epoch = (EpochSegment("tube", epoch),)
+        return super().__new__(cls, epoch)
+
+    def make_subepochs(self, node_id: NodeID, n: int) -> list[Epoch]:
+        """
+        Make n subepochs for the current epoch.
+        """
+        return [self / EpochSegment(node_id=node_id, epoch=i) for i in range(n)]
+
+    @property
+    def parent(self) -> Epoch | None:
+        """If a subepoch, return the parent epoch. If the root epoch, return None"""
+        return Epoch(self[:-1]) if len(self) > 1 else None
+
+    @property
+    def parents(self) -> tuple[Epoch, ...]:
+        if len(self) == 1:
+            return tuple()
+        return tuple(Epoch(self[:i]) for i in range(-1, len(self) * -1, -1))
+
+    @property
+    def root(self) -> Epoch:
+        """The root epoch - self if epoch is not a subepoch, otherwise top-most parent"""
+        if len(self) == 1:
+            return self
+        else:
+            return self.parents[-1]
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        tuple_schema = core_schema.tuple_variable_schema(handler(EpochSegment))
+
+        def _cast(val: tuple | Epoch) -> Epoch:
+            if not isinstance(val, Epoch):
+                val = Epoch(val)
+            return val
+
+        return core_schema.chain_schema(
+            steps=[tuple_schema, core_schema.no_info_plain_validator_function(_cast)],
+        )
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, int):
+            if len(self) == 1:
+                return self[0].epoch == other
+            else:
+                return False
+        else:
+            return tuple.__eq__(self, other)
+
+    __hash__ = tuple.__hash__
+
+    def __gt__(self, other: Epoch | int) -> bool:  # type: ignore[override]
+        if isinstance(other, Epoch | tuple):
+            return tuple(e.epoch for e in self) > tuple(e.epoch for e in other)
+        elif isinstance(other, int):
+            return self[0].epoch > other
+        else:
+            raise TypeError("Can only compare equality to an int or another epoch")
+
+    def __ge__(self, other: Epoch | int) -> bool:  # type: ignore[override]
+        return self == other or self > other
+
+    def __lt__(self, other: Epoch | int) -> bool:  # type: ignore[override]
+        return not self > other
+
+    def __le__(self, other: Epoch | int) -> bool:  # type: ignore[override]
+        return self == other or self < other
+
+    def __truediv__(self, other: EpochSegment | tuple[str, int]) -> Epoch:
+        segment = EpochSegment(*other) if not isinstance(other, EpochSegment) else other
+
+        return Epoch((*self, segment))
+
+    def __repr__(self) -> str:
+        if len(self) == 1:
+            return str(self[0].epoch)
+        else:
+            return str(tuple(tuple(ep) for ep in self))

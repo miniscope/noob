@@ -1,4 +1,3 @@
-from graphlib import CycleError
 from operator import attrgetter
 from typing import Any
 
@@ -57,6 +56,7 @@ class TopoSorter:
         self._out_nodes: set[NodeID] = set()
         self._done_nodes: set[NodeID] = set()
         self._disabled_nodes: set[NodeID] = set()
+        self._ran_nodes: set[NodeID] = set()
         self._npassedout = 0
         self._nfinished = 0
 
@@ -82,6 +82,10 @@ class TopoSorter:
         return not self.__eq__(other)
 
     @property
+    def node_info(self) -> dict[str, _NodeInfo]:
+        return self._node2info
+
+    @property
     def ready_nodes(self) -> set[NodeID]:
         return self._ready_nodes
 
@@ -92,6 +96,11 @@ class TopoSorter:
     @property
     def done_nodes(self) -> set[NodeID]:
         return self._done_nodes
+
+    @property
+    def ran_nodes(self) -> set[NodeID]:
+        """Nodes that were actually run, marked `done`, rather than expired"""
+        return self._ran_nodes
 
     def mark_ready(self, *nodes: NodeID) -> None:
         """
@@ -115,14 +124,15 @@ class TopoSorter:
         Mark node(s) as having been completed without making its dependent nodes ready -
         used when a node emits ``NoEvent``
         """
-        for node in nodes:
+        expired = set(nodes) - self._done_nodes
+        for node in expired:
             self._ready_nodes.discard(node)
             if node in self._out_nodes:
                 self._out_nodes.discard(node)
             else:
                 self._npassedout += 1
-        self._done_nodes.update(nodes)
-        self._nfinished += len(nodes)
+        self._done_nodes.update(expired)
+        self._nfinished += len(expired)
 
     def add(self, node: NodeID, *predecessors: NodeID) -> None:
         """
@@ -171,7 +181,7 @@ class TopoSorter:
             # in case node is called multiple times
             self._ready_nodes.discard(node)
 
-    def get_ready(self) -> tuple[str, ...]:
+    def get_ready(self, node_id: NodeID | None = None) -> tuple[str, ...]:
         """
         Return a tuple of all the nodes that are ready.
 
@@ -179,9 +189,15 @@ class TopoSorter:
         as processed by calling "done", further calls will return all new nodes that
         have all their predecessors already processed. Once no more progress can be made,
         empty tuples are returned.
+
+        Args:
+            node_id (str | None): If present, only return if the given node is ready
         """
         # Get the nodes that are ready and mark them
-        result = tuple(self.ready_nodes)
+        if node_id is None:
+            result = tuple(self.ready_nodes)
+        else:
+            result = tuple(node for node in self.ready_nodes if node == node_id)
         self.mark_out(*result)
 
         return result
@@ -194,13 +210,6 @@ class TopoSorter:
         number of nodes marked "done" is less than the number that have been returned
         by "get_ready".
         """
-        if self.ready_nodes == set() and (
-            self._nfinished + self._npassedout < len(self._node2info)
-        ):
-            cycle = self.find_cycle()
-            if cycle:
-                raise CycleError(f"cycle detected: {cycle}")
-
         return self._nfinished < self._npassedout or bool(self.ready_nodes)
 
     def done(self, *nodes: str) -> None:
@@ -244,6 +253,27 @@ class TopoSorter:
                         self.mark_expired(successor)
                     else:
                         self.mark_ready(successor)
+
+        self._ran_nodes.update(nodes)
+
+    def resurrect(self, *nodes: str) -> None:
+        """
+        If a node was marked as expired (but not run),
+        returns it to the processing graph -
+        the inverse of :meth:`.mark_expired`
+        """
+        for node in nodes:
+            if node in self._ran_nodes:
+                raise AlreadyDoneError(
+                    f"node {node!r} was marked done, not expired! can only resurrect expired nodes."
+                )
+            if node not in self._done_nodes or node in self._disabled_nodes:
+                continue
+            self._done_nodes.remove(node)
+            self._nfinished -= 1
+            self._npassedout -= 1
+            if self._node2info[node].nqueue == 0:
+                self.mark_ready(node)
 
     def find_cycle(self) -> list[str] | None:
         n2i = self._node2info

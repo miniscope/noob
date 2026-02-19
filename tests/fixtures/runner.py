@@ -40,6 +40,8 @@ def runner(loaded_tube: Tube, sync_runner_cls: type[TubeRunner]) -> TubeRunner:
 async def all_runners(loaded_tube: Tube, all_runner_cls: type[TubeRunner]) -> TubeRunner:
     """all runners including async runners"""
     r = all_runner_cls(loaded_tube)
+    if isinstance(r, ZMQRunner):
+        r.autoclear_store = False
     if iscoroutinefunction_partial(r.init):
         await r.init()
     else:

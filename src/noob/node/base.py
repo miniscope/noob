@@ -2,13 +2,14 @@ import functools
 import inspect
 from collections.abc import Callable, Generator, Mapping
 from types import GeneratorType, GenericAlias, UnionType
-from typing import (
+from typing import (  # type: ignore[attr-defined]
     TYPE_CHECKING,
     Annotated,
     Any,
     Self,
     TypeVar,
     Union,
+    _UnionGenericAlias,
     cast,
     get_args,
     get_origin,
@@ -25,10 +26,20 @@ from pydantic import (
 
 from noob.introspection import is_optional, is_union
 from noob.node.spec import NodeSpecification
-from noob.utils import resolve_python_identifier
+from noob.types import Epoch, EventMap
+from noob.utils import iscoroutinefunction_partial, resolve_python_identifier
 
 if TYPE_CHECKING:
     from noob.input import InputCollection
+
+_INJECTION_MAP = {"epoch": Epoch, "events": EventMap}
+"""
+Mapping between the keys for things that can be injected in a Process method
+to the types that trigger their injection
+
+epoch - the current epoch
+events - see EventMap
+"""
 
 
 class Slot(BaseModel):
@@ -52,7 +63,7 @@ class Slot(BaseModel):
 
 class Signal(BaseModel):
     name: str
-    type_: type | None | UnionType | GenericAlias
+    type_: type | None | UnionType | GenericAlias | _UnionGenericAlias
 
     # Unable to generate pydantic-core schema for <class 'types.UnionType'>
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -185,6 +196,7 @@ class Node(BaseModel):
     _slots: dict[str, Slot] | None = None
     _gen: Generator | None = None
     _edges: list[Edge] | None = None
+    _injections: dict[str, str] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -332,7 +344,8 @@ class Node(BaseModel):
                 required = True
                 if isinstance(arrow, Mapping):  # keyword argument
                     target_slot, source_signal = next(iter(arrow.items()))
-                    required = self.slots[target_slot].required
+                    if target_slot in self.slots:
+                        required = self.slots[target_slot].required
 
                 elif isinstance(arrow, str):  # positional argument
                     target_slot = position_index
@@ -358,6 +371,32 @@ class Node(BaseModel):
 
         self._edges = edges
         return self._edges
+
+    @functools.cached_property
+    def injections(self) -> dict[str, str]:
+        """
+        If a node's process method requests a dependency to be injected,
+        returns a map from the type of inejction to the kwargs to pass them as.
+        """
+        sig = inspect.signature(self.process)
+        injections = {}
+        for injection_key, inj_type in _INJECTION_MAP.items():
+            for param, param_info in sig.parameters.items():
+                if not param_info.annotation:
+                    continue
+                if param_info.annotation is inj_type:
+                    injections[injection_key] = param
+
+        return injections
+
+    @functools.cached_property
+    def is_coroutine(self) -> bool:
+        """
+        is the process method a coroutine?
+
+        (checking this on every call proves to be surprisingly expensive)
+        """
+        return iscoroutinefunction_partial(self.process)
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.process)

@@ -2,6 +2,7 @@ import pytest
 
 from noob import SynchronousRunner, Tube
 from noob.asset import AssetScope
+from noob.types import Epoch
 
 pytestmark = pytest.mark.assets
 
@@ -16,7 +17,7 @@ def test_runner_scoped():
     runner.init()
     for i in range(5):
         runner.process()
-        store = runner.store.events[i]
+        store = runner.store.events[Epoch(i)]
         assert store["increment"]["next"][0]["value"] == 2 ** (i + 1) - 1
         assert store["more_increment"]["next"][0]["value"] == 2 * (2 ** (i + 1) - 1)
 
@@ -32,7 +33,7 @@ def test_process_scoped():
     runner.init()
     for i in range(5):
         runner.process()
-        store = runner.store.events[i]
+        store = runner.store.events[Epoch(i)]
         assert store["increment"]["next"][0]["value"] == 3  # renewed each process call
         assert store["more_increment"]["next"][0]["value"] == 6  # but shared among nodes
 
@@ -47,7 +48,7 @@ def test_node_scoped():
     runner.init()
     for i in range(5):
         runner.process()
-        store = runner.store.events[i]
+        store = runner.store.events[Epoch(i)]
         assert store["increment"]["next"][0]["value"] == 3
         assert store["more_increment"]["next"][0]["value"] == 3
 

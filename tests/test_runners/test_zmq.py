@@ -11,6 +11,7 @@ from noob.input import InputCollection
 from noob.network.message import EventMsg, IdentifyMsg, IdentifyValue, Message, NodeStatus
 from noob.node.spec import NodeSpecification
 from noob.runner.zmq import NodeRunner, ZMQRunner
+from noob.types import Epoch
 
 pytestmark = pytest.mark.zmq_runner
 
@@ -88,46 +89,40 @@ async def test_statefulness():
     with runner:
         runner.command.add_callback("inbox", _event_cb)
         # skip first epoch
-        runner.command.process(1, input={"multiply": 3})
+        runner.command.process(Epoch(1), input={"multiply": 3})
 
         start = time()
         while len(events) < 1 and time() - start < 1:
             await sleep(0.1)
-        # # we should have only received an event from the stateless count source
-        assert len(events) == 1
-        assert events[0]["node_id"] == "c"
-        # since the generator takes no input,
-        # even though we forced the process calls to be out of order,
-        # it should emit an event with epoch 0 because the first thing out of the generator
-        # is, by definition, epoch 0.
-        assert events[0]["epoch"] == 0
+        # we should have received no events, since everything is stateful
+        assert len(events) == 0
 
         # just for good measure, skip another
-        runner.command.process(2, input={"multiply": 7})
+        runner.command.process(Epoch(2), input={"multiply": 7})
         start = time()
         while len(events) < 2 and time() - start < 1:
             await sleep(0.1)
-        assert len(events) == 2
+        assert len(events) == 0
 
         # then when we send epoch 0, we should get all of them
-        runner.command.process(0, input={"multiply": 11})
+        runner.command.process(Epoch(0), input={"multiply": 11})
         start = time()
         while len(events) < 12 and time() - start < 1:
             await sleep(0.1)
 
     # should have gotten 3 events from 4 nodes, so 12 total events
     assert len(events) == 12
-    assert runner.store.events[0]["a"]["value"][0]["value"] == 11
-    assert runner.store.events[0]["b"]["value"][0]["value"] == 11
-    assert runner.store.events[0]["d"]["value"][0]["value"] == 11
+    assert runner.store.events[Epoch(0)]["a"]["value"][0]["value"] == 11
+    assert runner.store.events[Epoch(0)]["b"]["value"][0]["value"] == 11
+    assert runner.store.events[Epoch(0)]["d"]["value"][0]["value"] == 11
 
-    assert runner.store.events[1]["a"]["value"][0]["value"] == 3 * 2
-    assert runner.store.events[1]["b"]["value"][0]["value"] == 3
-    assert runner.store.events[1]["d"]["value"][0]["value"] == 3 * 2 * 2
+    assert runner.store.events[Epoch(1)]["a"]["value"][0]["value"] == 3 * 2
+    assert runner.store.events[Epoch(1)]["b"]["value"][0]["value"] == 3
+    assert runner.store.events[Epoch(1)]["d"]["value"][0]["value"] == 3 * 2 * 2
 
-    assert runner.store.events[2]["a"]["value"][0]["value"] == 7 * 3
-    assert runner.store.events[2]["b"]["value"][0]["value"] == 7
-    assert runner.store.events[2]["d"]["value"][0]["value"] == 7 * 3 * 3
+    assert runner.store.events[Epoch(2)]["a"]["value"][0]["value"] == 7 * 3
+    assert runner.store.events[Epoch(2)]["b"]["value"][0]["value"] == 7
+    assert runner.store.events[Epoch(2)]["d"]["value"][0]["value"] == 7 * 3 * 3
 
 
 @pytest.mark.asyncio
@@ -150,50 +145,48 @@ async def test_statelessness():
     runner = ZMQRunner(tube=tube, autoclear_store=False)
     for i in range(3):
         runner.tube.scheduler.add_epoch(i)
-        runner.tube.scheduler.done(i, "input")
+        runner.tube.scheduler.done(Epoch(i), "input")
     with runner:
         runner.command.add_callback("inbox", _event_cb)
         # skip first epoch
-        runner.command.process(1, input={"multiply": 3})
-        # should have received events from all except d,
-        # which has not yet received the epoch 0 input to match with the epoch 0
-        # event from the count source
+        runner.command.process(Epoch(1), input={"multiply": 3})
+        # should have received events from the stateless chain
+        # a + b, and not from the nodes downstream from the stateful `c` generator
         start = time()
-        while len(events) < 3 and time() - start < 1:
+        while len(events) < 2 and time() - start < 1:
             await sleep(0.1)
-        # assert len(events) == 3
+        assert len(events) == 2
 
-        # here we should get an overlap between the epoch 1 input
-        # and the epoch 1 event from count source
-        # so we get 4 events now
-        runner.command.process(2, input={"multiply": 7})
+        # two more from the stateless chian
+        runner.command.process(Epoch(2), input={"multiply": 7})
         start = time()
-        while len(events) < 7 and time() - start < 1:
+        while len(events) < 4 and time() - start < 1:
             await sleep(0.1)
-        # assert len(events) == 7
+        assert len(events) == 4
 
         # then when we send epoch 0, we should get all of them
-        runner.command.process(0, input={"multiply": 11})
+        runner.command.process(Epoch(0), input={"multiply": 11})
         start = time()
         while len(events) < 12 and time() - start < 5:
             await sleep(0.1)
 
     # should have gotten 3 events from 4 nodes, so 12 total events
     assert len(events) == 12
-    assert runner.store.events[0]["a"]["value"][0]["value"] == 11 * 3
-    assert runner.store.events[0]["b"]["value"][0]["value"] == 11
-    # node d runs epoch 1 first, so here it should be
-    # 1 (from count source) * 2 (from internal state) * 11 (input)
-    assert runner.store.events[0]["d"]["value"][0]["value"] == 11 * 2
+    assert runner.store.events[Epoch(0)]["a"]["value"][0]["value"] == 11 * 3
+    assert runner.store.events[Epoch(0)]["b"]["value"][0]["value"] == 11
+    # node d runs epoch 1 and 2 first, since they were queued first
+    # and we forced a stateful node to be stateless, so
+    # 1 (from count source) * 3 (from internal state) * 11 (input)
+    assert runner.store.events[Epoch(0)]["d"]["value"][0]["value"] == 11 * 3
 
-    assert runner.store.events[1]["a"]["value"][0]["value"] == 3
-    assert runner.store.events[1]["b"]["value"][0]["value"] == 3
+    assert runner.store.events[Epoch(1)]["a"]["value"][0]["value"] == 3
+    assert runner.store.events[Epoch(1)]["b"]["value"][0]["value"] == 3
     # 2 (from count source) * 1 (from internal state) * 3
-    assert runner.store.events[1]["d"]["value"][0]["value"] == 3 * 2 * 1
+    assert runner.store.events[Epoch(1)]["d"]["value"][0]["value"] == 3 * 2 * 1
 
-    assert runner.store.events[2]["a"]["value"][0]["value"] == 7 * 2
-    assert runner.store.events[2]["b"]["value"][0]["value"] == 7
-    assert runner.store.events[2]["d"]["value"][0]["value"] == 7 * 3 * 3
+    assert runner.store.events[Epoch(2)]["a"]["value"][0]["value"] == 7 * 2
+    assert runner.store.events[Epoch(2)]["b"]["value"][0]["value"] == 7
+    assert runner.store.events[Epoch(2)]["d"]["value"][0]["value"] == 7 * 3 * 2
 
 
 @pytest.mark.asyncio
@@ -378,7 +371,7 @@ async def test_noderunner_stores_clear():
                     signal="left",
                     value=i * 2,
                     node_id="other",
-                    epoch=i,
+                    epoch=Epoch(i),
                 ),
                 Event(
                     id=(i * 2) + 1,
@@ -386,7 +379,7 @@ async def test_noderunner_stores_clear():
                     signal="right",
                     value=(i * 2) + 1,
                     node_id="other",
-                    epoch=i,
+                    epoch=Epoch(i),
                 ),
             ],
         )
@@ -395,10 +388,14 @@ async def test_noderunner_stores_clear():
 
     runner._freerun.set()
     assert len(runner.store.events) == 3
-    _, _, epoch = await anext(runner.await_inputs())
+    iterator = runner.await_inputs()
+    _, _, epoch = await anext(iterator)
+    runner.scheduler.end_epoch(Epoch(0))
+    # store clears after the yield
+    _, _, epoch = await anext(iterator)
     assert len(runner.store.events) == 2
-    assert epoch != -1
-    assert epoch not in runner.store.events
+    assert epoch == Epoch(1)
+    assert Epoch(0) not in runner.store.events
 
 
 @pytest.fixture

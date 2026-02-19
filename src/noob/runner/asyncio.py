@@ -8,12 +8,21 @@ from noob.event import MetaEvent
 from noob.node import Node, Return
 from noob.runner.base import TubeRunner
 from noob.scheduler import Scheduler
-from noob.types import ReturnNodeType
-from noob.utils import iscoroutinefunction_partial
+from noob.types import Epoch, ReturnNodeType
 
 
 @dataclass
 class AsyncRunner(TubeRunner):
+    """
+    Run nodes in an asyncio eventloop as soon as they are ready.
+
+    .. important::
+
+        The AsyncIO runner respects stateful nodes across top-level epochs,
+        but currently runs subepochs induced by a `map` operation out of order!
+        Either make your nodes stateless or use another runner until total ordering is implemented!
+
+    """
 
     eventloop: asyncio.AbstractEventLoop = field(default_factory=asyncio.get_running_loop)
     exception_timeout: float = 10
@@ -108,7 +117,7 @@ class AsyncRunner(TubeRunner):
         self.store.clear()
         self.tube.scheduler.add_epoch()
 
-    async def _get_ready(self, epoch: int | None = None) -> list[MetaEvent]:  # type: ignore[override]
+    async def _get_ready(self, epoch: Epoch | None = None) -> list[MetaEvent]:  # type: ignore[override]
         if self._exception:
             await self._raise_exception()
         ready = self.tube.scheduler.get_ready()
@@ -122,15 +131,18 @@ class AsyncRunner(TubeRunner):
 
     def _call_node(self, node: Node, *args: Any, **kwargs: Any) -> Any:
         future: asyncio.Task | asyncio.Future
-        if iscoroutinefunction_partial(node.process):
-            future = self.eventloop.create_task(node.process(*args, **kwargs))
+        if node.is_coroutine:
+            # mypy can't propagate type guard in cached is_coroutine property
+            future = self.eventloop.create_task(node.process(*args, **kwargs))  # type: ignore[arg-type]
         else:
             part = partial(node.process, *args, **kwargs)
             future = self.eventloop.run_in_executor(None, part)
         self._pending_futures.add(future)
         return future
 
-    def _handle_events(self, node: Node, value: asyncio.Future | asyncio.Task, epoch: int) -> None:
+    def _handle_events(
+        self, node: Node, value: asyncio.Future | asyncio.Task, epoch: Epoch
+    ) -> None:
         value.add_done_callback(partial(self._node_complete, node=node, epoch=epoch))
 
     def _filter_ready(self, nodes: list[MetaEvent], scheduler: Scheduler) -> list[MetaEvent]:
@@ -144,7 +156,7 @@ class AsyncRunner(TubeRunner):
                 evts.append(node)
         return evts
 
-    def _node_complete(self, future: asyncio.Future, node: Node, epoch: int) -> None:
+    def _node_complete(self, future: asyncio.Future, node: Node, epoch: Epoch) -> None:
         self._pending_futures.remove(future)
         if future.exception():
             self._logger.debug("Node %s raised exception, re-raising outside of callback")
@@ -196,7 +208,7 @@ class AsyncRunner(TubeRunner):
         self.tube.nodes[node_id].deinit()
         self.tube.disable_node(node_id)
 
-    def collect_return(self, epoch: int | None = None) -> ReturnNodeType:
+    def collect_return(self, epoch: Epoch | None = None) -> ReturnNodeType:
         """The return node holds values from a single epoch, get and transform them"""
         if epoch is not None:
             raise ValueError("Sync runner only stores a single epoch at a time")
