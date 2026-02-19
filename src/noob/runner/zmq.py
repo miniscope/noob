@@ -343,7 +343,7 @@ class NodeRunner(EventloopMixin):
         self._has_input: bool | None = None
         self._nodes: dict[str, IdentifyValue] = {}
         self._counter = count()
-        self._epochs_todo = deque()
+        self._epochs_todo: deque[Epoch] = deque()
         self._freerun = asyncio.Event()
         self._process_one = asyncio.Event()
         self._status: NodeStatus = NodeStatus.stopped
@@ -498,7 +498,7 @@ class NodeRunner(EventloopMixin):
                 else:
                     # infer while freerunning
                     epoch = Epoch(next(self._counter)) if self._node.stateful else None
-
+                epoch = cast(Epoch, epoch)
                 if self._node.stateful:
                     expected_epoch = Epoch(epoch[0].epoch + 1)
             readies = await self.await_node(epoch=epoch)
@@ -728,6 +728,7 @@ class NodeRunner(EventloopMixin):
         """
         Process a single graph iteration
         """
+        self._node = cast(Node, self._node)
         self.logger.debug("Received Process message: %s", msg)
         self._epochs_todo.append(msg.value["epoch"])
         if self._node.stateful:

@@ -344,7 +344,8 @@ class TubeRunner(ABC):
         Subclasses may override to customize behavior
         """
         if node.is_coroutine:
-            return call_async_from_sync(node.process, *args, **kwargs)
+            # mypy can't cross-apply type guard info from cached `is_coroutine` prop
+            return call_async_from_sync(node.process, *args, **kwargs)  # type: ignore[arg-type]
         else:
             return node.process(*args, **kwargs)
 
