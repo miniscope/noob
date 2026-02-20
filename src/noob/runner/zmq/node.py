@@ -15,6 +15,7 @@ import zmq
 from pydantic import ValidationError
 
 from noob import init_logger
+from noob.asset import AssetScope, AssetSpecification
 from noob.config import config
 from noob.event import Event, MetaEvent
 from noob.input import InputCollection
@@ -37,6 +38,7 @@ from noob.network.message import (
 )
 from noob.node import Node, NodeSpecification, Signal
 from noob.scheduler import Scheduler
+from noob.state import State
 from noob.store import EventStore
 from noob.types import Epoch
 from noob.utils import iscoroutinefunction_partial
@@ -58,6 +60,7 @@ class NodeRunner(EventloopMixin):
         command_outbox: str,
         command_router: str,
         input_collection: InputCollection,
+        asset_specs: dict[str, AssetSpecification],
         protocol: str = "ipc",
     ):
         self.spec = spec
@@ -67,6 +70,8 @@ class NodeRunner(EventloopMixin):
         self.command_router = command_router
         self.protocol = protocol
         self.store = EventStore()
+        self.asset_specs = asset_specs
+        self.state: State = None  # type: ignore[assignment]
         self.scheduler: Scheduler = None  # type: ignore[assignment]
         self.logger = init_logger(f"runner.node.{runner_id}.{self.spec.id}")
 
@@ -248,11 +253,17 @@ class NodeRunner(EventloopMixin):
                 )
                 if inputs is None:
                     inputs = {}
+
+                self.state.init(AssetScope.node, self._node.edges)
+                assets = self.state.collect(self._node.edges, ready["epoch"])
+                inputs |= assets if assets else {}
+
                 if self._node.injections.get("epoch"):
                     inputs[self._node.injections["epoch"]] = ready["epoch"]
 
                 args, kwargs = self.store.split_args_kwargs(inputs)
                 yield args, kwargs, ready["epoch"]
+                self.state.deinit(AssetScope.node, self._node.edges)
 
             if self.scheduler.epoch_completed(epoch):
                 self.logger.debug("Epoch completed: %s", epoch)
@@ -329,9 +340,26 @@ class NodeRunner(EventloopMixin):
     async def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
         self._node.init()
+        node_specs = {
+            k: v
+            for k, v in self.asset_specs.items()
+            if v.scope == AssetScope.node
+            and any(
+                edge.source_node == "assets" and edge.source_signal == k
+                for edge in self._node.edges
+            )
+        }
+        self.state = State.from_specification(specs=node_specs, edges=self._node.edges)
         self.scheduler = Scheduler(
             nodes={self.spec.id: self.spec},
-            edges=self._node.edges,
+            edges=[
+                e
+                for e in self._node.edges
+                if not (
+                    e.source_node == "assets"
+                    and self.asset_specs[e.source_signal].scope == AssetScope.node
+                )
+            ],
             logger=init_logger(f"noob.scheduler.{self.spec.id}"),
         )
         async with self._ready_condition:

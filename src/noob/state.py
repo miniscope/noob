@@ -53,6 +53,7 @@ class State(BaseModel):
     Map from :class:`.AssetScope` to :class:`.Asset` to circumvent
     querying scope for each asset in :meth:`.State.init` and :meth:`.State.deinit`
     """
+    specs: dict[str, AssetSpecification] = Field(default_factory=dict)
 
     @classmethod
     def from_specification(
@@ -78,6 +79,7 @@ class State(BaseModel):
             assets=assets,
             dependencies=dependencies,
             scope_to_assets=scope_to_assets,
+            specs=specs,
         )
 
     def init(self, scope: AssetScope, edges: list[Edge] | None = None) -> None:

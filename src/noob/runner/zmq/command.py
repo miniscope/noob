@@ -164,7 +164,7 @@ class CommandNode(EventloopMixin):
         )
         self.logger.debug("Sent start message")
 
-    def process(self, epoch: Epoch, input: dict | None = None) -> None:
+    def process(self, epoch: Epoch, input: dict | None = None, assets: dict | None = None) -> None:
         """Emit a ProcessMsg to process a single round through the graph"""
         # no empty dicts
         input = input if input else None
@@ -172,7 +172,9 @@ class CommandNode(EventloopMixin):
             self.sockets["outbox"].send_multipart,
             [
                 b"process",
-                ProcessMsg(node_id="command", value={"input": input, "epoch": epoch}).to_bytes(),
+                ProcessMsg(
+                    node_id="command", value={"input": input, "epoch": epoch, "assets": assets}
+                ).to_bytes(),
             ],
         )
         self.logger.debug("Sent process message")

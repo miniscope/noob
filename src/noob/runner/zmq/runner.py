@@ -79,6 +79,7 @@ class ZMQRunner(TubeRunner):
                     target=NodeRunner.run,
                     args=(node.spec,),
                     kwargs={
+                        "asset_specs": self.tube.state.specs,
                         "runner_id": self.runner_id,
                         "command_outbox": self.command.pub_address,
                         "command_router": self.command.router_address,
