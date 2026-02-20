@@ -8,14 +8,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from noob import Tube
-from noob.runner import AsyncRunner, SynchronousRunner, TubeRunner
-from noob.runner.zmq import ZMQRunner
-
-_runners: dict[str, type[TubeRunner]] = {
-    "sync": SynchronousRunner,
-    "async": AsyncRunner,
-    "zmq": ZMQRunner,
-}
+from noob.runner import get_runner
 
 
 @click.command("run")
@@ -52,7 +45,7 @@ def run(
 ) -> None:
     tube_id = tube
     tube_ = Tube.from_specification(tube)
-    runner_cls = _runners[runner]
+    runner_cls = get_runner(runner)
     runner_ = runner_cls(tube_)
 
     assert tube_.spec is not None
