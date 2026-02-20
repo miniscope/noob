@@ -3,6 +3,7 @@ import pytest
 from noob import SynchronousRunner, Tube
 from noob.asset import AssetScope
 from noob.types import Epoch
+from noob.utils import iscoroutinefunction_partial
 
 pytestmark = pytest.mark.assets
 
@@ -38,16 +39,18 @@ def test_process_scoped():
         assert store["more_increment"]["next"][0]["value"] == 6  # but shared among nodes
 
 
-def test_node_scoped():
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-node-asset"], indirect=True)
+async def test_node_scoped(all_runners, loaded_tube):
     """
     new object created each time asset is called by a node.
     """
-    tube = Tube.from_specification("testing-node-asset")
-    runner = SynchronousRunner(tube=tube)
-
-    runner.init()
+    runner = all_runners
     for i in range(5):
-        runner.process()
+        if iscoroutinefunction_partial(runner.process):
+            await runner.process()
+        else:
+            runner.process()
         store = runner.store.events[Epoch(i)]
         assert store["increment"]["next"][0]["value"] == 3
         assert store["more_increment"]["next"][0]["value"] == 3

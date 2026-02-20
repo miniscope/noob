@@ -98,6 +98,7 @@ class ErrorValue(TypedDict):
 class ProcessValue(TypedDict):
     epoch: Epoch
     input: dict | None
+    assets: dict | None
 
 
 class AnnounceMsg(Message):
