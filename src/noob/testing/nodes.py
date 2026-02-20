@@ -261,3 +261,8 @@ def inject_epoch(epoch: Epoch) -> Epoch:
 
 def inject_eventmap(special_value: Any, events: EventMap) -> EventMap:
     return events
+
+
+def just_wait(value: Any, wait_for: float = 0.5) -> Any:
+    sleep(wait_for)
+    return value

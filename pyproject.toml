@@ -54,12 +54,15 @@ repository = "https://github.com/miniscope/noob"
 changelog = "https://noob.readthedocs.io/en/latest/changelog.html"
 
 [project.optional-dependencies]
+cli = [
+    "click>=8.3.1",
+]
 zmq = [
     "pyzmq>=27.1.0",
     "tornado>=6.5.2",
 ]
 tests = [
-    "noob[zmq]",
+    "noob[zmq,cli]",
     "pytest>=8.3.5",
     "pytest-cov>=6.0.0",
     "tomli-w>=1.2.0",
@@ -90,6 +93,9 @@ dev = [
     "black>=25.1.0",
     "remote-pdb>=2.1.0",
 ]
+
+[project.scripts]
+noob = "noob.cli.main:main"
 
 [build-system]
 requires = ["pdm-backend"]

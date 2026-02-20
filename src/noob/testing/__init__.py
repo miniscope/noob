@@ -23,6 +23,7 @@ from noob.testing.nodes import (
     inject_eventmap,
     input_party,
     jump,
+    just_wait,
     letter_source,
     long_add,
     multi_concat,
@@ -75,6 +76,7 @@ __all__ = [
     "fast_forward",
     "rewind",
     "jump",
+    "just_wait",
     "zip_iter",
     "Initializer",
 ]

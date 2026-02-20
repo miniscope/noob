@@ -1,0 +1,41 @@
+noob_id: cli-interactive-demo
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  Demonstrating the CLI interactively, 
+  adding a waiter node to make the progress bar visible
+
+input:
+  word:
+    scope: process
+    type: str
+  n:
+    scope: process
+    type: int
+
+nodes:
+  count:
+    type: noob.testing.count_source
+    params:
+      start: 1
+  multiply:
+    type: noob.testing.multiply
+    depends:
+      - left: input.n
+      - right: count.index
+  hyper:
+    type: noob.testing.exclaim
+    depends:
+      - string: input.word
+      - hype: multiply.value
+  waiter:
+    type: noob.testing.just_wait
+    depends:
+      - value: hyper.value
+  return:
+    type: return
+    depends:
+      - hyped: waiter.value
+      - count: count.index
+      - multiplier: multiply.value
+
