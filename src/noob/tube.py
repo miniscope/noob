@@ -150,6 +150,7 @@ class Tube(BaseModel):
     """
     Specifications declared by the tube to be supplied 
     """
+    spec: TubeSpecification | None = None
 
     state: State = Field(default_factory=State)
 
@@ -235,6 +236,7 @@ class Tube(BaseModel):
                 "scheduler": scheduler,
                 "input": input,
                 "input_collection": input_collection,
+                "spec": spec,
             },
             context={"skip_input_presence": True},
         )
