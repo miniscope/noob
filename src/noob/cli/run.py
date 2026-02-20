@@ -1,16 +1,20 @@
-import click
 import json
 import sys
-from noob.runner import SynchronousRunner, AsyncRunner, TubeRunner
-from noob.runner.zmq import ZMQRunner
-from noob import Tube
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, TextColumn
+
+import click
 from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+
+from noob import Tube
+from noob.runner import AsyncRunner, SynchronousRunner, TubeRunner
+from noob.runner.zmq import ZMQRunner
+
 _runners: dict[str, type[TubeRunner]] = {
     "sync": SynchronousRunner,
     "async": AsyncRunner,
     "zmq": ZMQRunner,
 }
+
 
 @click.command("run")
 @click.option("--tube", required=True)
@@ -21,7 +25,7 @@ def run(tube: str, runner: str = "sync", n: int | None = None, format: str | Non
     tube_id = tube
     tube = Tube.from_specification(tube)
     runner_cls = _runners[runner]
-    runner=  runner_cls(tube)
+    runner = runner_cls(tube)
     if n is None:
         raise NotImplementedError("Just a demo!")
     else:
@@ -33,7 +37,7 @@ def run(tube: str, runner: str = "sync", n: int | None = None, format: str | Non
             *Progress.get_default_columns(),
             TimeElapsedColumn(),
             transient=True,
-            console=console
+            console=console,
         )
     results = []
     with runner, progress:
@@ -41,7 +45,6 @@ def run(tube: str, runner: str = "sync", n: int | None = None, format: str | Non
         for result in runner.iter(n=n):
             results.append(result)
             progress.advance(task)
-
 
     if format == "json":
         click.echo(json.dumps(results))

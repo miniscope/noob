@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 environments = [
     "python_version >= \"3.11\"",
 ]
-extras = ["dev", "docs", "mypy", "tests", "zmq"]
+extras = ["cli", "dev", "docs", "mypy", "tests", "zmq"]
 dependency-groups = ["default"]
 default-groups = ["default"]
 created-by = "pdm"
@@ -531,7 +531,7 @@ sdist = {name = "click-8.3.1.tar.gz", url = "https://files.pythonhosted.org/pack
 wheels = [
     {name = "click-8.3.1-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl",hashes = {sha256 = "981153a64e25f12d547d3426c367a4857371575ee7ad18df2a6183ab0545b2a6"}},
 ]
-marker = "\"default\" in dependency_groups or \"dev\" in extras or \"docs\" in extras"
+marker = "\"cli\" in extras or \"dev\" in extras or \"docs\" in extras"
 
 [packages.tool.pdm]
 dependencies = [
@@ -629,11 +629,11 @@ dependencies = [
 
 [[packages]]
 name = "pydantic-settings"
-version = "2.13.0"
+version = "2.13.1"
 requires-python = ">=3.10"
-sdist = {name = "pydantic_settings-2.13.0.tar.gz", url = "https://files.pythonhosted.org/packages/96/a1/ae859ffac5a3338a66b74c5e29e244fd3a3cc483c89feaf9f56c39898d75/pydantic_settings-2.13.0.tar.gz", hashes = {sha256 = "95d875514610e8595672800a5c40b073e99e4aae467fa7c8f9c263061ea2e1fe"}}
+sdist = {name = "pydantic_settings-2.13.1.tar.gz", url = "https://files.pythonhosted.org/packages/52/6d/fffca34caecc4a3f97bda81b2098da5e8ab7efc9a66e819074a11955d87e/pydantic_settings-2.13.1.tar.gz", hashes = {sha256 = "b4c11847b15237fb0171e1462bf540e294affb9b86db4d9aa5c01730bdbe4025"}}
 wheels = [
-    {name = "pydantic_settings-2.13.0-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/b0/1a/dd1b9d7e627486cf8e7523d09b70010e05a4bc41414f4ae6ce184cf0afb6/pydantic_settings-2.13.0-py3-none-any.whl",hashes = {sha256 = "d67b576fff39cd086b595441bf9c75d4193ca9c0ed643b90360694d0f1240246"}},
+    {name = "pydantic_settings-2.13.1-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/00/4b/ccc026168948fec4f7555b9164c724cf4125eac006e176541483d2c959be/pydantic_settings-2.13.1-py3-none-any.whl",hashes = {sha256 = "d56fd801823dbeae7f0975e1f8c8e25c258eb75d278ea7abb5d9cebb01b56237"}},
 ]
 marker = "\"default\" in dependency_groups or \"dev\" in extras or \"docs\" in extras"
 
@@ -770,7 +770,7 @@ sdist = {name = "colorama-0.4.6.tar.gz", url = "https://files.pythonhosted.org/p
 wheels = [
     {name = "colorama-0.4.6-py2.py3-none-any.whl",url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl",hashes = {sha256 = "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"}},
 ]
-marker = "\"default\" in dependency_groups or \"dev\" in extras or \"docs\" in extras or \"tests\" in extras"
+marker = "\"cli\" in extras or \"dev\" in extras or \"docs\" in extras or \"tests\" in extras"
 
 [packages.tool.pdm]
 dependencies = []
@@ -2757,7 +2757,7 @@ marker = "\"dev\" in extras or \"docs\" in extras"
 dependencies = []
 
 [tool.pdm]
-hashes = {sha256 = "ff5ae223fe019cac2c0e3f4d759f94a560d24cce0f9da1e376b86eb7d16fa585"}
+hashes = {sha256 = "ddb9cb1130289dd6d9aa7cca2899c0f755911f05ca4a3c5793ea907322184409"}
 strategy = ["inherit_metadata", "static_urls"]
 
 [[tool.pdm.targets]]
