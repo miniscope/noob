@@ -45,17 +45,18 @@ _runners: dict[str, type[TubeRunner]] = {
 )
 def run(
     tube: str,
-    runner: str = L["sync", "async", "zmq"],
+    runner: L["sync", "async", "zmq"] = "sync",
     n: int | None = None,
     input_format: L["json", "jsonl"] = "json",
     output_format: L["json", "jsonl"] = "json",
 ) -> None:
     tube_id = tube
-    tube = Tube.from_specification(tube)
+    tube_ = Tube.from_specification(tube)
     runner_cls = _runners[runner]
-    runner = runner_cls(tube)
+    runner_ = runner_cls(tube_)
 
-    piped_input = not sys.stdin.isatty() and tube.spec.input
+    assert tube_.spec is not None
+    piped_input = not sys.stdin.isatty() and tube_.spec.input
 
     console = Console(file=sys.stderr)
     progress = Progress(
@@ -68,18 +69,18 @@ def run(
     )
 
     results = []
-    with runner, progress:
+    with runner_, progress:
         task = progress.add_task("Running", total=n)
         if piped_input:
             for input in _iter_stdin(input_format):
-                result = runner.process(**input)
+                result = runner_.process(**input)
                 if output_format == "jsonl":
                     click.echo(json.dumps(result))
                 else:
                     results.append(result)
                 progress.advance(task)
         else:
-            for result in runner.iter(n=n):
+            for result in runner_.iter(n=n):
                 if output_format == "jsonl":
                     click.echo(json.dumps(result))
                 else:
