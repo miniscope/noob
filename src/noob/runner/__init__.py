@@ -39,4 +39,4 @@ def get_runner(runner: Literal["sync", "async", "zmq"] = "sync") -> type[TubeRun
         return ZMQRunner
 
 
-__all__ = ["AsyncRunner", "SynchronousRunner", "TubeRunner"]
+__all__ = ["AsyncRunner", "SynchronousRunner", "TubeRunner", "get_runner"]
