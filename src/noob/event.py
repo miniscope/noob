@@ -1,7 +1,11 @@
 import sys
 from enum import StrEnum
+from typing import Annotated as A
 from typing import Any, Generic, Literal
 
+from pydantic import AfterValidator, Discriminator, Tag, TypeAdapter
+
+from noob.const import META_SIGNAL
 from noob.types import Epoch, Picklable, SerializableDatetime
 
 if sys.version_info < (3, 12):
@@ -81,3 +85,29 @@ class MetaEvent(Event):
 
 class MetaSignal(StrEnum):
     NoEvent = "NoEvent"
+
+
+def _type_discriminator(v: dict | Event | MetaEvent) -> str:
+    if v.get("node_id", None) == "meta":
+        return "meta"
+    else:
+        return "event"
+
+
+def _meta_signals_to_enum(evt: Event) -> Event:
+    """If we are a meta signal, ensure the value is cast to the enum rather than string value"""
+    if evt["signal"] == META_SIGNAL and evt["value"] in MetaSignal.__members__:
+        evt["value"] = MetaSignal.__members__[evt["value"]]
+    return evt
+
+
+EventUnion = A[
+    A[
+        Event,
+        AfterValidator(_meta_signals_to_enum),
+        Tag("event"),
+    ]
+    | A[MetaEvent, Tag("meta")],
+    Discriminator(_type_discriminator),
+]
+EventAdapter = TypeAdapter[EventUnion](EventUnion)
