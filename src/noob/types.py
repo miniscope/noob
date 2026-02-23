@@ -5,7 +5,7 @@ import builtins
 import pickle
 import re
 import sys
-from collections.abc import Iterable
+from collections.abc import AsyncIterator, Iterable, Iterator, Sized
 from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
@@ -101,6 +101,8 @@ def _to_isoformat(val: datetime) -> str:
 
 def _to_jsonable_pickle(val: Any, handler: SerializerFunctionWrapHandler) -> Any:
     try:
+        if isinstance(val, Iterator | AsyncIterator) and not isinstance(val, Sized):
+            raise TypeError("Pickling the generator")
         return handler(val)
     except (TypeError, PydanticSerializationError):
         return "pck__" + base64.b64encode(pickle.dumps(val)).decode("utf-8")

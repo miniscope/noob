@@ -1,11 +1,14 @@
+import json
 from datetime import datetime
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
 
 from noob.event import Event
 from noob.network.message import EventMsg
-from noob.types import Epoch, EpochSegment
+from noob.testing import counter
+from noob.types import Epoch, EpochSegment, Picklable
 
 
 def test_epoch_from_int():
@@ -73,3 +76,30 @@ def test_epoch_truediv(segment):
     assert subepoch == Epoch(
         (EpochSegment(node_id="tube", epoch=0), EpochSegment(node_id="sub", epoch=0))
     )
+
+
+@pytest.mark.timeout(1)
+def test_picklable_generator():
+    """
+    By default, pydantic tries to iterate through iterators and render them literally.
+    We want to pickle them instead
+    """
+
+    class MyModel(BaseModel):
+        generator: Picklable[Any]
+        just_a_list: Picklable[Any]
+
+    count = counter()
+    first_val = next(count)
+
+    inst = MyModel(generator=count, just_a_list=[1, 2, 3])
+    as_json_str = inst.model_dump_json()
+    as_json = json.loads(as_json_str)
+    assert as_json["just_a_list"] == [1, 2, 3]
+    assert as_json["generator"].startswith("pck__")
+
+    roundtrip = MyModel.model_validate_json(as_json_str)
+    second_val = next(roundtrip.generator)
+
+    assert isinstance(roundtrip.generator, counter)
+    assert second_val == first_val + 1
