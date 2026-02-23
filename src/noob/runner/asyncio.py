@@ -58,16 +58,18 @@ class AsyncRunner(TubeRunner):
         (with some timeout)
         """
         input = self._validate_input(**kwargs)
-        await self._before_process()
+        with self._asset_context(AssetScope.process):
+            await self._before_process()
 
-        while self.tube.scheduler.is_active():
-            ready = await self._get_ready()
-            ready = self._filter_ready(ready, self.tube.scheduler)
-            for node_info in ready:
-                self._process_node(node_info=node_info, input=input)
+            while self.tube.scheduler.is_active():
+                ready = await self._get_ready()
+                ready = self._filter_ready(ready, self.tube.scheduler)
+                for node_info in ready:
+                    self._process_node(node_info=node_info, input=input)
 
-        self._after_process()
-        return self.collect_return()
+            self._after_process()
+            result = self.collect_return()
+        return result
 
     async def init(self) -> None:
         """

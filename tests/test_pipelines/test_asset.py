@@ -8,33 +8,35 @@ from noob.utils import iscoroutinefunction_partial
 pytestmark = pytest.mark.assets
 
 
-def test_runner_scoped():
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-runner-asset"], indirect=True)
+async def test_runner_scoped(local_runner, loaded_tube):
     """
     'runner' scoped assets are persistent across process calls
     """
-    tube = Tube.from_specification("testing-runner-asset")
-    runner = SynchronousRunner(tube=tube)
-
-    runner.init()
     for i in range(5):
-        runner.process()
-        store = runner.store.events[Epoch(i)]
+        if iscoroutinefunction_partial(local_runner.process):
+            await local_runner.process()
+        else:
+            local_runner.process()
+        store = local_runner.store.events[Epoch(i)]
         assert store["increment"]["next"][0]["value"] == 2 ** (i + 1) - 1
         assert store["more_increment"]["next"][0]["value"] == 2 * (2 ** (i + 1) - 1)
 
 
-def test_process_scoped():
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-process-asset"], indirect=True)
+async def test_process_scoped(local_runner, loaded_tube):
     """
     'process' scoped assets are recreated every process call.
     However, a given asset is shared by nodes within a single process call.
     """
-    tube = Tube.from_specification("testing-process-asset")
-    runner = SynchronousRunner(tube=tube)
-
-    runner.init()
     for i in range(5):
-        runner.process()
-        store = runner.store.events[Epoch(i)]
+        if iscoroutinefunction_partial(local_runner.process):
+            await local_runner.process()
+        else:
+            local_runner.process()
+        store = local_runner.store.events[Epoch(i)]
         assert store["increment"]["next"][0]["value"] == 3  # renewed each process call
         assert store["more_increment"]["next"][0]["value"] == 6  # but shared among nodes
 
@@ -66,7 +68,9 @@ def test_asset_depends_ooo():
     raise NotImplementedError()
 
 
-def test_asset_copy_post_depends():
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-depends-asset"], indirect=True)
+async def test_asset_copy_post_depends(loaded_tube, all_runners):
     """
     make sure the asset is copied when injected to nodes
     that are of later generations than the asset's dependency
@@ -79,15 +83,15 @@ def test_asset_copy_post_depends():
     should have no effect on the pre-asset-depends nodes
     (`increment` and `more_increment`) of the following epoch.
     """
-    tube = Tube.from_specification("testing-depends-asset")
-    runner = SynchronousRunner(tube=tube)
-
-    runner.init()
+    runner = all_runners
 
     assert set(runner.tube.state.dependencies.keys()) == {"b"}
     last_asset_id = id(runner.tube.state.assets["counter"].obj)
     for i in range(5):
-        result = runner.process()
+        if iscoroutinefunction_partial(runner.process):
+            result = await runner.process()
+        else:
+            result = runner.process()
 
         # we should have deepcopied the asset and made a new one
         this_asset_id = id(runner.tube.state.assets["counter"].obj)
