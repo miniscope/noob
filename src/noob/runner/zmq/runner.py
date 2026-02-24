@@ -341,12 +341,6 @@ class ZMQRunner(TubeRunner):
                         epoch=root,
                     )
                 )
-            else:
-                self._logger.debug(
-                    "EPOCH %s NOT COMPLETE: %s",
-                    root,
-                    set(self.tube.scheduler[root].node_info) - self.tube.scheduler[root].done_nodes,
-                )
 
         for e in events:
             if (

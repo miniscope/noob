@@ -164,10 +164,6 @@ class NodeRunner(EventloopMixin):
         The map of assets that we must receive from other nodes
         (since we are not in the first topo generation that uses them)
         to the set of nodes that we may receive them from.
-
-        Note that this does not include runner-scoped assets with a dependency,
-        as we update that using a different mechanism (:meth:`.State.update` ),
-        the assets received here are stored
         """
         asset_sources = {}
         for asset, generations in self.asset_generations.items():
@@ -315,9 +311,7 @@ class NodeRunner(EventloopMixin):
                 if self._node.stateful:
                     expected_epoch = Epoch(epoch[0].epoch + 1)
 
-            self.logger.debug("AWAITING %s", epoch)
             readies = await self.await_node(epoch=epoch)
-            self.logger.debug("READY IN %s", readies)
 
             if epoch is None:
                 # stateless nodes - run the given epoch to completion
@@ -370,11 +364,7 @@ class NodeRunner(EventloopMixin):
             events.append(asset_evt)
 
         msg = EventMsg(node_id=self.spec.id, value=events)
-        self.logger.debug("EVENTS TO PUBLISH: %s", msg)
-        serialized = msg.to_bytes()
-        self.logger.debug("SERIALIZED")
-        await self.sockets["outbox"].send_multipart([b"event", serialized])
-        self.logger.debug("PUBLISHED EVENTS: %s", msg)
+        await self.sockets["outbox"].send_multipart([b"event", msg.to_bytes()])
 
     async def init(self) -> None:
         self.logger.debug("Initializing")
@@ -449,15 +439,14 @@ class NodeRunner(EventloopMixin):
         self.state = State.from_specification(
             specs={asset: self.asset_specs[asset] for asset in self.inits_assets}
         )
-        scheduler_edges = [
-            e
-            for e in self._node.edges
-            if e.source_node != "assets" or e.source_signal in self.receives_assets_from
-        ]
-        self.logger.debug("SCHEDULER EDGES: %s", scheduler_edges)
+
         self.scheduler = Scheduler(
             nodes={self.spec.id: self.spec},
-            edges=scheduler_edges,
+            edges=[
+                e
+                for e in self._node.edges
+                if e.source_node != "assets" or e.source_signal in self.receives_assets_from
+            ],
             logger=init_logger(f"noob.scheduler.{self.spec.id}"),
         )
         self.state.init(AssetScope.runner, self._node.edges)
@@ -466,7 +455,6 @@ class NodeRunner(EventloopMixin):
             if self.state.dependencies and len(self.state.dependencies) == len(
                 self.receives_assets_from
             ):
-                self.logger.debug("MARKING ASSETS READY AT EPOCH 0")
                 self.scheduler.done(ep, "assets")
             self._ready_condition.notify_all()
 
@@ -510,7 +498,6 @@ class NodeRunner(EventloopMixin):
     async def on_inbox(self, message: Message) -> None:
         # FIXME: all this switching sux,
         # just have a decorator to register a handler for a given message type
-        self.logger.debug("INBOX!")
         if message.type_ == MessageType.announce:
             message = cast(AnnounceMsg, message)
             await self.on_announce(message)
@@ -575,14 +562,12 @@ class NodeRunner(EventloopMixin):
             for e in events
             if e["node_id"] != "assets" and e["node_id"] in set(d[0] for d in self.depends)
         ]
-        self.logger.debug("TO UPDATE: %s", to_update)
         for event in events:
             self.store.add(event)
 
         async with self._ready_condition:
             self.scheduler.update(to_update)
             self._handle_assets(msg)
-
             self._ready_condition.notify_all()
 
     async def on_start(self, msg: StartMsg) -> None:

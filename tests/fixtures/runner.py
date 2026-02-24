@@ -20,16 +20,6 @@ def sync_runner_cls(request: pytest.FixtureRequest) -> type[TubeRunner]:
 @pytest.fixture(
     params=[
         pytest.param(SynchronousRunner, marks=[pytest.mark.sync_runner]),
-        pytest.param(AsyncRunner, marks=[pytest.mark.async_runner]),
-    ]
-)
-def local_runner_cls(request: pytest.FixtureRequest) -> type[TubeRunner]:
-    return request.param
-
-
-@pytest.fixture(
-    params=[
-        pytest.param(SynchronousRunner, marks=[pytest.mark.sync_runner]),
         pytest.param(ZMQRunner, marks=[pytest.mark.zmq_runner]),
         pytest.param(AsyncRunner, marks=[pytest.mark.async_runner]),
     ]
@@ -44,20 +34,6 @@ def runner(loaded_tube: Tube, sync_runner_cls: type[TubeRunner]) -> TubeRunner:
     r.init()
     yield r
     r.deinit()
-
-
-@pytest_asyncio.fixture
-async def local_runner(loaded_tube: Tube, local_runner_cls: type[TubeRunner]) -> TubeRunner:
-    r = local_runner_cls(loaded_tube)
-    if iscoroutinefunction_partial(r.init):
-        await r.init()
-    else:
-        r.init()
-    yield r
-    if iscoroutinefunction_partial(r.deinit):
-        await r.deinit()
-    else:
-        r.deinit()
 
 
 @pytest_asyncio.fixture

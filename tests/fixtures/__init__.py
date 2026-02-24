@@ -10,14 +10,7 @@ from .config import (
 )
 from .meta import monkeypatch_session
 from .paths import CONFIG_DIR, DATA_DIR, PIPELINE_DIR
-from .runner import (
-    all_runner_cls,
-    all_runners,
-    local_runner,
-    local_runner_cls,
-    runner,
-    sync_runner_cls,
-)
+from .runner import all_runner_cls, all_runners, runner, sync_runner_cls
 from .tubes import basic_tubes, loaded_tube
 
 __all__ = [
@@ -27,8 +20,6 @@ __all__ = [
     "all_runners",
     "all_runner_cls",
     "loaded_tube",
-    "local_runner",
-    "local_runner_cls",
     "monkeypatch_session",
     "basic_tubes",
     "runner",
