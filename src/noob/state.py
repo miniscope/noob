@@ -149,6 +149,8 @@ class State(BaseModel):
                     "Must set signal name when depending on an asset "
                     "(assets have no generic 'value' signal)"
                 )
+                if edge.source_signal not in self.assets:
+                    continue
                 asset = self.assets[edge.source_signal]
                 if (
                     not asset.depends
