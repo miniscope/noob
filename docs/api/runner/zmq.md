@@ -1,6 +1,6 @@
 # `zmq`
 
-```{eval-rst}              
+```{eval-rst}
 .. automodule:: noob.runner.zmq
 ```
 
