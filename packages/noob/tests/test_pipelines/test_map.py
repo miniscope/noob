@@ -1,9 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from noob import SynchronousRunner, Tube
+from noob import Tube
 from noob.runner import TubeRunner
-from noob.runner.zmq import ZMQRunner
 from noob.types import Epoch
 from noob.utils import iscoroutinefunction_partial
 

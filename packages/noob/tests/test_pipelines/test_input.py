@@ -1,6 +1,6 @@
 import pytest
 
-from noob import SynchronousRunner, Tube
+from noob import Tube
 from noob.exceptions import ExtraInputWarning, InputMissingError
 from noob.runner.base import TubeRunner
 
