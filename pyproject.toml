@@ -4,7 +4,7 @@ requires-python = ">=3.11"
 
 [tool.pdm.dev-dependencies]
 dev = [
-    "-e file:///${PROJECT_ROOT}/packages/noob",
+    "-e file:///${PROJECT_ROOT}/packages/noob[dev]",
 ]
 
 [tool.pdm.scripts]
