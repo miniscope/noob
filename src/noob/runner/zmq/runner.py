@@ -25,7 +25,21 @@ from noob.types import Epoch, NodeID, ReturnNodeType
 @dataclass
 class ZMQRunner(TubeRunner):
     """
-    A concurrent runner that uses zmq to broker events between nodes running in separate processes
+    A concurrent runner that uses zmq to broker events between nodes running in separate processes.
+
+    On :meth:`~.ZMQRunner.init`, creates a :class:`.CommandNode` in a thread in the main process,
+    and spawn a set of :class:`.NodeRunner` s for the nodes in a :class:`.Tube` .
+
+    The Command node is the broker between the ZMQRunner and node runners,
+    sending command messages and receiving events from each of the nodes
+    (see :mod:`.network.message` ).
+    Each Node runner subscribes directly to its dependent nodes to receive events,
+    and the commmand node subscribes to every node to make them available to the ZMQRunner,
+    but events do not need to pass through the command node before being processed.
+
+    .. note:: Asset Handling
+
+        See :class:`.NodeRunner` for documentation about how Assets are handled in the ZMQRunner
     """
 
     node_procs: dict[NodeID, mp.Process] = field(default_factory=dict)

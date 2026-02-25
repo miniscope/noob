@@ -55,6 +55,53 @@ class NodeRunner(EventloopMixin):
     - DEALER to communicate with command inbox
     - PUB (outbox) to publish events
     - SUB (inbox) to subscribe to events from other nodes.
+
+    .. admonition:: Assets & Mutation.
+        :class: important
+
+        Assets behave slightly differently in the ZMQRunner and NodeRunner
+        than they do in the other, local runners.
+        :ref:`assets` are objects that are shraed within some :class:`.AssetScope` -
+        in turn implying that mutations of that object will also be shared.
+        However since each Node runner runs in a separate process,
+        shared asset state must work differently.
+
+        * :attr:`~.AssetScope.node` -scoped assets work the same as other runners.
+        * :attr:`~.AssetScope.process` -scoped assets are instantiated
+          **for every root** :class:`.Epoch` by the nodes
+          in the first topological generation that depends on the asset,
+          and then the asset is forwarded on as an :class:`.Event` to subsequent generations.
+          The asset **will** be initialized multiple times if there are multiple
+          nodes in the same topological epoch that depend on the asset.
+          The only guarantee **which** version of the asset downstream nodes
+          will receive is the topology of the graph:
+          e.g. if nodes ``a, b, c, d`` all depend on an asset,
+          and ``a, b`` run in the first generation and ``c, d`` run in the second,
+          ``c, d`` could receive the version of the asset emitted by **either**
+          ``a, b``.
+        * :attr:`~.AssetScope.runner` -scoped assets are instantiated
+          **once per runner initialization** by the nodes in the first topological epoch
+          that depends on the asset. The same caveats as ``process``-scoped assets apply.
+          Additionally, unless an asset uses :attr:`~.Asset.depends` ,
+          mutations in later topo generations are not propagated to subsequent epochs.
+          e.g. if nodes ``a, b`` depend on an asset and run in the first and second
+          generation, and they both increment the asset by 1, the values will be
+
+          * Epoch 0: ``{a: 1, b: 2}``;
+          * Epoch 1: ``{a: 2, b: 3}``;
+
+          Rather than ``a`` receiving ``2`` after the mutation from ``b``.
+
+        As is the case with all runners,
+        if you want to mutate an asset with multiple nodes in a tube,
+        the safest and most predictable way to do that is to put the mutation order
+        in the topology of the graph:
+        only depend on an asset directly with the first node that mutates it,
+        and pass the asset through the graph by emitting it as an event.
+        To persist data between epochs,
+        use :attr:`~.Asset.depends` to store the value after the last desired mutation.
+        See :ref:`persisting-data`
+
     """
 
     def __init__(
@@ -182,6 +229,7 @@ class NodeRunner(EventloopMixin):
                 if self._node.id in generation:
                     in_generation = i
                     break
+
             if in_generation > 0:
                 # subscribe to all the nodes that mutate the asset before us
                 asset_sources[asset] = set(generations[in_generation - 1])
@@ -706,7 +754,11 @@ class NodeRunner(EventloopMixin):
         return ready
 
     def _handle_assets(self, msg: EventMsg) -> None:
-        # FIXME: Dependencies in the topo graph should really be node.signal pairs
+        """
+        Mark assets as done in the scheduler (according to _assets_done)
+        and update the assets stored in the `state` collection from asset dependencies.
+        """
+
         if not self.receives_assets_from:
             return
         epochs = set(e["epoch"] for e in msg.value)
@@ -725,6 +777,8 @@ class NodeRunner(EventloopMixin):
 
     def _assets_done(self, epoch: Epoch) -> bool:
         """Whether we've received all the events we expect to have received for the given epoch"""
+        # FIXME: Dependencies in the topo graph should really be node.signal pairs
+        # See issue #152
         if not self.receives_assets_from:
             # we don't need to wait on any assets, so they're not in our topo sorter at all.
             return False
