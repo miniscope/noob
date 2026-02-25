@@ -4,6 +4,7 @@ from time import time
 from typing import cast
 
 import pytest
+import pytest_asyncio
 
 from noob import Tube
 from noob.event import Event
@@ -436,3 +437,155 @@ async def test_zmqrunner_stores_clear_freerun(_zmq_runner_basic):
     runner.run()
     await sleep(0.1)
     assert len(runner.store.events) == 0
+
+
+# --------------------------------------------------
+# Noderunner asset handling special methods
+# --------------------------------------------------
+
+
+@pytest_asyncio.fixture(scope="module")
+async def asset_noderunners() -> tuple[Tube, dict[str, NodeRunner]]:
+    """
+    Instantiated (but not initialized) NodeRunners for the asset handling tube
+    """
+    tube = Tube.from_specification("testing-asset-generations")
+    runners = {}
+    for node in tube.nodes:
+        runners[node] = NodeRunner(
+            spec=tube.spec.nodes[node],
+            runner_id="test",
+            command_outbox="/notreal/unused",
+            command_router="/notreal/unused",
+            input_collection=InputCollection(),
+            asset_specs=tube.spec.assets,
+            asset_generations=tube.scheduler.asset_generations(),
+        )
+        await runners[node].init_node()
+    return tube, runners
+
+
+@pytest.mark.assets
+def test_assets_subscribes_to(asset_noderunners):
+    """
+    We should subscribe to all our depended on nodes,
+    and any nodes that should be emitting mutated assets to us.
+    """
+    tube, runners = asset_noderunners
+    assert runners["a1"].subscribes_to == {"d1"}
+    assert runners["a2"].subscribes_to == {"d1"}
+    assert runners["a3"].subscribes_to == set()
+    assert runners["b1"].subscribes_to == {"a1", "a2"}
+    assert runners["b2"].subscribes_to == {"a1", "a2"}
+    assert runners["b3"].subscribes_to == {"a3"}
+    assert runners["c1"].subscribes_to == {"b1", "b2", "b3"}
+    assert runners["c2"].subscribes_to == {"b1", "b2", "b3"}
+    assert runners["c3"].subscribes_to == {"b3"}
+    assert runners["d1"].subscribes_to == {"c1", "c2", "c3"}
+
+
+@pytest.mark.assets
+def test_assets_inits_assets(asset_noderunners):
+    """
+    We initialize assets if we are in the 0th topo generation or they are node-scoped
+    that uses them
+    """
+    tube, runners = asset_noderunners
+    assert runners["a1"].inits_assets == {
+        "count_node",
+        "count_process",
+        "count_runner",
+        "count_runner_depends",
+    }
+    assert runners["a2"].inits_assets == {
+        "count_node",
+        "count_process",
+        "count_runner",
+        "count_runner_depends",
+    }
+    assert runners["a3"].inits_assets == {"count_node"}
+    assert runners["b1"].inits_assets == {"count_node"}
+    assert runners["b2"].inits_assets == {"count_node"}
+    assert runners["b3"].inits_assets == set()
+    assert runners["c1"].inits_assets == {"count_node"}
+    assert runners["c2"].inits_assets == {"count_node"}
+    assert runners["c3"].inits_assets == set()
+    assert runners["d1"].inits_assets == set()
+
+
+@pytest.mark.assets
+def test_assets_publishes_assets(asset_noderunners):
+    """
+    We publish assets if there are nodes in the graph that depend on them after us
+    Args:
+        asset_noderunners:
+
+    Returns:
+
+    """
+    tube, runners = asset_noderunners
+    assert runners["a1"].publishes_assets == {
+        "count_process",
+        "count_runner",
+        "count_runner_depends",
+    }
+    assert runners["a2"].publishes_assets == {
+        "count_process",
+        "count_runner",
+        "count_runner_depends",
+    }
+    assert runners["a3"].publishes_assets == set()
+    assert runners["b1"].publishes_assets == {
+        "count_process",
+        "count_runner",
+        "count_runner_depends",
+    }
+    assert runners["b2"].publishes_assets == {
+        "count_process",
+        "count_runner",
+        "count_runner_depends",
+    }
+    assert runners["b3"].publishes_assets == set()
+    assert runners["c1"].publishes_assets == {"count_runner_depends"}
+    assert runners["c2"].publishes_assets == {"count_runner_depends"}
+    assert runners["c3"].publishes_assets == set()
+    assert runners["d1"].publishes_assets == set()
+
+
+@pytest.mark.assets
+def test_assets_receives_assets_from(asset_noderunners):
+    """
+    We publish assets if there are nodes in the graph that depend on them after us
+    Args:
+        asset_noderunners:
+
+    Returns:
+
+    """
+    tube, runners = asset_noderunners
+    assert runners["a1"].receives_assets_from == {"count_runner_depends": {"d1"}}
+    assert runners["a2"].receives_assets_from == {"count_runner_depends": {"d1"}}
+    assert runners["a3"].receives_assets_from == {}
+    assert runners["b1"].receives_assets_from == {
+        "count_runner": {"a1", "a2"},
+        "count_runner_depends": {"a1", "a2"},
+        "count_process": {"a1", "a2"},
+    }
+    assert runners["b2"].receives_assets_from == {
+        "count_runner": {"a1", "a2"},
+        "count_runner_depends": {"a1", "a2"},
+        "count_process": {"a1", "a2"},
+    }
+    assert runners["b3"].receives_assets_from == {}
+    assert runners["c1"].receives_assets_from == {
+        "count_runner": {"b2", "b1"},
+        "count_runner_depends": {"b2", "b1"},
+        "count_process": {"b2", "b1"},
+    }
+    assert runners["c2"].receives_assets_from == {
+        "count_runner": {"b2", "b1"},
+        "count_runner_depends": {"b2", "b1"},
+        "count_process": {"b2", "b1"},
+    }
+    assert runners["c3"].receives_assets_from == {}
+    assert runners["d1"].receives_assets_from == {"count_runner_depends": {"c2", "c1"}}

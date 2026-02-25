@@ -431,7 +431,7 @@ class Scheduler(BaseModel):
         asset_ids = set(e.source_signal for e in self.edges if e.source_node == "assets")
         for gen in self.generations():
             for asset in asset_ids:
-                gen = tuple(
+                gen_deps = tuple(
                     [
                         g
                         for g in gen
@@ -443,8 +443,8 @@ class Scheduler(BaseModel):
                         )
                     ]
                 )
-                if gen:
-                    generations[asset].append(gen)
+                if gen_deps:
+                    generations[asset].append(gen_deps)
         return generations
 
     def _subgraph(self, node_id: str) -> tuple[dict[str, NodeSpecification], list[Edge]]:

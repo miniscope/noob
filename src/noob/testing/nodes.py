@@ -231,8 +231,8 @@ def increment(
     return iterator, value
 
 
-def passthrough(value: Any) -> Any:
-    return value
+def passthrough(value: Any, *args: Any, **kwargs: Any) -> Any:
+    return value, args, kwargs
 
 
 class InitCounter(Node):

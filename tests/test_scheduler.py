@@ -330,3 +330,19 @@ def _make_event(epoch: Epoch, node_id: str) -> Event:
     return Event(
         id=0, epoch=epoch, node_id=node_id, timestamp=datetime.now(), signal="zzz", value=0
     )
+
+
+def test_asset_generations():
+    """Topological generations with respect to an asset"""
+    tube = Tube.from_specification("testing-asset-generations")
+    scheduler = tube.scheduler
+    generations = scheduler.asset_generations()
+    for asset in ("count_process", "count_runner_depends", "count_runner"):
+        if asset == "count_runner_depends":
+            assert len(generations[asset]) == 4
+            assert set(generations[asset][3]) == {"d1"}
+        else:
+            assert len(generations[asset]) == 3
+        assert set(generations[asset][0]) == {"a1", "a2"}
+        assert set(generations[asset][1]) == {"b1", "b2"}
+        assert set(generations[asset][2]) == {"c1", "c2"}
