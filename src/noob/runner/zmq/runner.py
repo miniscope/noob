@@ -313,6 +313,7 @@ class ZMQRunner(TubeRunner):
         # store events (if we are not in freerun mode, where we don't want to store infinite events)
         if not self._ignore_events:
             for event in msg.value:
+                event = cast(Event, event)
                 self.store.add(event)
         events = self.tube.scheduler.update([e for e in msg.value if e["node_id"] != "assets"])
         events = cast(MutableSequence[Event | MetaEvent], events)

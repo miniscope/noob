@@ -123,6 +123,8 @@ class NodeRunner(EventloopMixin):
         All the nodes we depend on,
         and all those that we listen for mutated assets from
         """
+        if self.depends is None:
+            return set()
         subscribes = set(d[0] for d in self.depends) - {"assets", "input"}
         for senders in self.receives_assets_from.values():
             subscribes.update(senders)
@@ -135,7 +137,10 @@ class NodeRunner(EventloopMixin):
         * They are node scoped and we depend on them, or
         * We are in the first topo generation that uses them
         """
-        inits = set()
+        self._node = cast(Node, self._node)
+        inits: set[str] = set()
+        if not self.depends:
+            return inits
         for asset, generations in self.asset_generations.items():
             if (
                 self.asset_specs[asset].scope == AssetScope.node
@@ -149,6 +154,7 @@ class NodeRunner(EventloopMixin):
         """
         The set of assets that we publish for downstream nodes to consume
         """
+        self._node = cast(Node, self._node)
         publishes = set()
         for asset, generations in self.asset_generations.items():
             spec = self.asset_specs[asset]
@@ -165,6 +171,7 @@ class NodeRunner(EventloopMixin):
         (since we are not in the first topo generation that uses them)
         to the set of nodes that we may receive them from.
         """
+        self._node = cast(Node, self._node)
         asset_sources = {}
         for asset, generations in self.asset_generations.items():
             spec = self.asset_specs[asset]
@@ -563,6 +570,9 @@ class NodeRunner(EventloopMixin):
             if e["node_id"] != "assets" and e["node_id"] in set(d[0] for d in self.depends)
         ]
         for event in events:
+            if event["node_id"] == "meta":
+                continue
+            event = cast(Event, event)
             self.store.add(event)
 
         async with self._ready_condition:
@@ -723,8 +733,9 @@ class NodeRunner(EventloopMixin):
             try:
                 self.store.get("assets", asset, epoch)
             except KeyError:
-                if self.asset_specs[asset].depends:
-                    node_id, signal = self.asset_specs[asset].depends.split(".")
+                if self.asset_specs[asset].depends is not None:
+                    # no idea why mypy can't tell `depends` is a string here
+                    node_id, signal = self.asset_specs[asset].depends.split(".")  # type: ignore[union-attr]
                     try:
                         self.store.get(node_id, signal, epoch - 1)
                     except KeyError:

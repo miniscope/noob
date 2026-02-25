@@ -7,7 +7,7 @@ from typing import Self, TypeAlias
 from pydantic import BaseModel, Field
 
 from noob.asset import Asset, AssetScope, AssetSpecification
-from noob.event import Event
+from noob.event import Event, MetaEvent
 from noob.node.base import Edge
 from noob.types import Epoch, NodeID, PythonIdentifier
 
@@ -166,7 +166,7 @@ class State(BaseModel):
 
         return None if not args or all(val is None for val in args.values()) else args
 
-    def update(self, events: list[Event]) -> None:
+    def update(self, events: list[Event] | list[Event | MetaEvent]) -> None:
         """Update asset if asset depends on a node signal"""
         for event in events:
             if (dep := self.dependencies.get(event["node_id"])) and dep["signal"] == event[

@@ -283,13 +283,14 @@ class Epoch(tuple[EpochSegment, ...]):
 
         return Epoch((*self, segment))
 
-    def __add__(self, other: int) -> Epoch:
+    def __add__(self, other: int) -> Epoch:  # type: ignore[override]
+
         if not isinstance(other, int):
             raise TypeError("Epoch addition is only defined with integers for now! PRs welcome!")
         if len(self) == 1:
             return Epoch(self[0].epoch + other)
         else:
-            return Epoch((*self[:-1], (self[-1].node_id, self[-1].epoch + other)))
+            return Epoch((*self[:-1], EpochSegment(self[-1].node_id, self[-1].epoch + other)))
 
     def __sub__(self, other: int) -> Epoch:
         if not isinstance(other, int):
@@ -297,7 +298,7 @@ class Epoch(tuple[EpochSegment, ...]):
         if len(self) == 1:
             return Epoch(self[0].epoch - other)
         else:
-            return Epoch((*self[:-1], (self[-1].node_id, self[-1].epoch - other)))
+            return Epoch((*self[:-1], EpochSegment(self[-1].node_id, self[-1].epoch - other)))
 
     def __repr__(self) -> str:
         if len(self) == 1:
