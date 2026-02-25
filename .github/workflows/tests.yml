@@ -36,6 +36,7 @@ jobs:
 
       - name: Coveralls Parallel
         uses: coverallsapp/github-action@v2
+        continue-on-error: true
         with:
           flag-name: run-${{ join(matrix.*, '-') }}
           parallel: true

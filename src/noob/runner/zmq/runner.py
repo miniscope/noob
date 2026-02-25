@@ -25,7 +25,21 @@ from noob.types import Epoch, NodeID, ReturnNodeType
 @dataclass
 class ZMQRunner(TubeRunner):
     """
-    A concurrent runner that uses zmq to broker events between nodes running in separate processes
+    A concurrent runner that uses zmq to broker events between nodes running in separate processes.
+
+    On :meth:`~.ZMQRunner.init`, creates a :class:`.CommandNode` in a thread in the main process,
+    and spawn a set of :class:`.NodeRunner` s for the nodes in a :class:`.Tube` .
+
+    The Command node is the broker between the ZMQRunner and node runners,
+    sending command messages and receiving events from each of the nodes
+    (see :mod:`.network.message` ).
+    Each Node runner subscribes directly to its dependent nodes to receive events,
+    and the commmand node subscribes to every node to make them available to the ZMQRunner,
+    but events do not need to pass through the command node before being processed.
+
+    .. note:: Asset Handling
+
+        See :class:`.NodeRunner` for documentation about how Assets are handled in the ZMQRunner
     """
 
     node_procs: dict[NodeID, mp.Process] = field(default_factory=dict)
@@ -79,6 +93,8 @@ class ZMQRunner(TubeRunner):
                     target=NodeRunner.run,
                     args=(node.spec,),
                     kwargs={
+                        "asset_specs": self.tube.state.specs,
+                        "asset_generations": self.tube.scheduler.asset_generations(),
                         "runner_id": self.runner_id,
                         "command_outbox": self.command.pub_address,
                         "command_router": self.command.router_address,
@@ -155,6 +171,8 @@ class ZMQRunner(TubeRunner):
             # so we can't check presence of inputs in the input collection
             if "input" in self.tube.scheduler._epochs[self._current_epoch].ready_nodes:
                 self.tube.scheduler.done(self._current_epoch, "input")
+            if "assets" in self.tube.scheduler._epochs[self._current_epoch].ready_nodes:
+                self.tube.scheduler.done(self._current_epoch, "assets")
             self.command = cast(CommandNode, self.command)
             self.command.process(self._current_epoch, input)
             self._logger.debug("awaiting epoch %s", self._current_epoch)
@@ -309,14 +327,15 @@ class ZMQRunner(TubeRunner):
         # store events (if we are not in freerun mode, where we don't want to store infinite events)
         if not self._ignore_events:
             for event in msg.value:
+                event = cast(Event, event)
                 self.store.add(event)
-        events = self.tube.scheduler.update(msg.value)
+        events = self.tube.scheduler.update([e for e in msg.value if e["node_id"] != "assets"])
         events = cast(MutableSequence[Event | MetaEvent], events)
+        epochs = set(e["epoch"] for e in msg.value)
         if self._return_node is not None:
             # mark the return node done if we've received the expected events for an epoch
             # do it here since we don't really run the return node like a real node
             # to avoid an unnecessary pickling/unpickling across the network
-            epochs = set(e["epoch"] for e in msg.value)
             for epoch in epochs:
                 ready_epochs = self.tube.scheduler.get_ready(epoch, self._return_node.id)
                 for ready in ready_epochs:
@@ -324,19 +343,20 @@ class ZMQRunner(TubeRunner):
                     ep_ended = self.tube.scheduler.expire(ready["epoch"], self._return_node.id)
                     if ep_ended is not None:
                         events.append(ep_ended)
-            roots = set(e.root for e in epochs)
-            for root in roots:
-                if self.tube.scheduler.epoch_completed(root):
-                    events.append(
-                        MetaEvent(
-                            id=uuid4().int,
-                            timestamp=datetime.now(UTC),
-                            node_id="meta",
-                            signal=MetaEventType.EpochEnded,
-                            value=root,
-                            epoch=root,
-                        )
+        roots = set(e.root for e in epochs)
+        for root in roots:
+            if self.tube.scheduler.epoch_completed(root):
+                events.append(
+                    MetaEvent(
+                        id=uuid4().int,
+                        timestamp=datetime.now(UTC),
+                        node_id="meta",
+                        signal=MetaEventType.EpochEnded,
+                        value=root,
+                        epoch=root,
                     )
+                )
+
         for e in events:
             if (
                 e["node_id"] == "meta"

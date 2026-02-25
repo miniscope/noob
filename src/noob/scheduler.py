@@ -419,6 +419,34 @@ class Scheduler(BaseModel):
             sorter.done(*ready)
         return generations
 
+    def asset_generations(self) -> dict[NodeID, list[tuple[str, ...]]]:
+        """
+        :meth:`.generations` except only including nodes with direct dependencies on assets,
+        to determine when the asset should be initialized vs. received in the ZMQ Runner.
+
+        Packed in a dictionary with the asset ID as the key,
+        and the value as the generations for that asset.
+        """
+        generations = defaultdict(list)
+        asset_ids = set(e.source_signal for e in self.edges if e.source_node == "assets")
+        for gen in self.generations():
+            for asset in asset_ids:
+                gen_deps = tuple(
+                    [
+                        g
+                        for g in gen
+                        if any(
+                            e.source_node == "assets"
+                            and e.source_signal == asset
+                            and e.target_node == g
+                            for e in self.edges
+                        )
+                    ]
+                )
+                if gen_deps:
+                    generations[asset].append(gen_deps)
+        return generations
+
     def _subgraph(self, node_id: str) -> tuple[dict[str, NodeSpecification], list[Edge]]:
         """
         Subgraph that is downstream of a given node (including the node itself).

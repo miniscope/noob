@@ -1,12 +1,15 @@
 import asyncio
 import concurrent.futures
+import contextlib
 import multiprocessing as mp
 import os
 import signal
 import traceback
+import uuid
 from collections import deque
 from collections.abc import AsyncGenerator
-from functools import partial
+from datetime import UTC, datetime
+from functools import cached_property, partial
 from itertools import count
 from types import FrameType
 from typing import Any, cast
@@ -15,8 +18,10 @@ import zmq
 from pydantic import ValidationError
 
 from noob import init_logger
+from noob.asset import AssetScope, AssetSpecification
 from noob.config import config
 from noob.event import Event, MetaEvent
+from noob.exceptions import AlreadyDoneError
 from noob.input import InputCollection
 from noob.network.loop import EventloopMixin
 from noob.network.message import (
@@ -37,6 +42,7 @@ from noob.network.message import (
 )
 from noob.node import Node, NodeSpecification, Signal
 from noob.scheduler import Scheduler
+from noob.state import State
 from noob.store import EventStore
 from noob.types import Epoch
 from noob.utils import iscoroutinefunction_partial
@@ -49,6 +55,53 @@ class NodeRunner(EventloopMixin):
     - DEALER to communicate with command inbox
     - PUB (outbox) to publish events
     - SUB (inbox) to subscribe to events from other nodes.
+
+    .. admonition:: Assets & Mutation.
+        :class: important
+
+        Assets behave slightly differently in the ZMQRunner and NodeRunner
+        than they do in the other, local runners.
+        :ref:`assets` are objects that are shraed within some :class:`.AssetScope` -
+        in turn implying that mutations of that object will also be shared.
+        However since each Node runner runs in a separate process,
+        shared asset state must work differently.
+
+        * :attr:`~.AssetScope.node` -scoped assets work the same as other runners.
+        * :attr:`~.AssetScope.process` -scoped assets are instantiated
+          **for every root** :class:`.Epoch` by the nodes
+          in the first topological generation that depends on the asset,
+          and then the asset is forwarded on as an :class:`.Event` to subsequent generations.
+          The asset **will** be initialized multiple times if there are multiple
+          nodes in the same topological epoch that depend on the asset.
+          The only guarantee **which** version of the asset downstream nodes
+          will receive is the topology of the graph:
+          e.g. if nodes ``a, b, c, d`` all depend on an asset,
+          and ``a, b`` run in the first generation and ``c, d`` run in the second,
+          ``c, d`` could receive the version of the asset emitted by **either**
+          ``a, b``.
+        * :attr:`~.AssetScope.runner` -scoped assets are instantiated
+          **once per runner initialization** by the nodes in the first topological epoch
+          that depends on the asset. The same caveats as ``process``-scoped assets apply.
+          Additionally, unless an asset uses :attr:`~.Asset.depends` ,
+          mutations in later topo generations are not propagated to subsequent epochs.
+          e.g. if nodes ``a, b`` depend on an asset and run in the first and second
+          generation, and they both increment the asset by 1, the values will be
+
+          * Epoch 0: ``{a: 1, b: 2}``;
+          * Epoch 1: ``{a: 2, b: 3}``;
+
+          Rather than ``a`` receiving ``2`` after the mutation from ``b``.
+
+        As is the case with all runners,
+        if you want to mutate an asset with multiple nodes in a tube,
+        the safest and most predictable way to do that is to put the mutation order
+        in the topology of the graph:
+        only depend on an asset directly with the first node that mutates it,
+        and pass the asset through the graph by emitting it as an event.
+        To persist data between epochs,
+        use :attr:`~.Asset.depends` to store the value after the last desired mutation.
+        See :ref:`persisting-data`
+
     """
 
     def __init__(
@@ -58,6 +111,8 @@ class NodeRunner(EventloopMixin):
         command_outbox: str,
         command_router: str,
         input_collection: InputCollection,
+        asset_specs: dict[str, AssetSpecification] | None = None,
+        asset_generations: dict[str, list[tuple[str, ...]]] | None = None,
         protocol: str = "ipc",
     ):
         self.spec = spec
@@ -67,6 +122,9 @@ class NodeRunner(EventloopMixin):
         self.command_router = command_router
         self.protocol = protocol
         self.store = EventStore()
+        self.asset_specs = asset_specs or {}
+        self.asset_generations = asset_generations or {}
+        self.state: State = None  # type: ignore[assignment]
         self.scheduler: Scheduler = None  # type: ignore[assignment]
         self.logger = init_logger(f"runner.node.{runner_id}.{self.spec.id}")
 
@@ -104,6 +162,80 @@ class NodeRunner(EventloopMixin):
             )
             self.logger.debug("Depends on: %s", self._depends)
         return self._depends
+
+    @cached_property
+    def subscribes_to(self) -> set[str]:
+        """
+        The set of node IDs that we should subscribe to.
+        All the nodes we depend on,
+        and all those that we listen for mutated assets from
+        """
+        if self.depends is None:
+            return set()
+        subscribes = set(d[0] for d in self.depends) - {"assets", "input"}
+        for senders in self.receives_assets_from.values():
+            subscribes.update(senders)
+        return subscribes
+
+    @cached_property
+    def inits_assets(self) -> set[str]:
+        """
+        The set of assets that we should initialize since
+        * They are node scoped and we depend on them, or
+        * We are in the first topo generation that uses them
+        """
+        self._node = cast(Node, self._node)
+        inits: set[str] = set()
+        if not self.depends:
+            return inits
+        for asset, generations in self.asset_generations.items():
+            if (
+                self.asset_specs[asset].scope == AssetScope.node
+                and ("assets", asset) in self.depends
+            ) or (generations and self._node.id in generations[0]):
+                inits.add(asset)
+        return inits
+
+    @cached_property
+    def publishes_assets(self) -> set[str]:
+        """
+        The set of assets that we publish for downstream nodes to consume
+        """
+        self._node = cast(Node, self._node)
+        publishes = set()
+        for asset, generations in self.asset_generations.items():
+            spec = self.asset_specs[asset]
+            if spec.scope == AssetScope.node:
+                continue
+            if len(generations) > 1 and any(self._node.id in gen for gen in generations[:-1]):
+                publishes.add(asset)
+        return publishes
+
+    @cached_property
+    def receives_assets_from(self) -> dict[str, set[str]]:
+        """
+        The map of assets that we must receive from other nodes
+        (since we are not in the first topo generation that uses them)
+        to the set of nodes that we may receive them from.
+        """
+        self._node = cast(Node, self._node)
+        asset_sources = {}
+        for asset, generations in self.asset_generations.items():
+            spec = self.asset_specs[asset]
+            if spec.scope == AssetScope.node:
+                continue
+            in_generation = -1
+            for i, generation in enumerate(generations):
+                if self._node.id in generation:
+                    in_generation = i
+                    break
+
+            if in_generation > 0:
+                # subscribe to all the nodes that mutate the asset before us
+                asset_sources[asset] = set(generations[in_generation - 1])
+            elif in_generation == 0 and spec.scope == AssetScope.runner and spec.depends:
+                asset_sources[asset] = {spec.depends.split(".")[0]}
+        return asset_sources
 
     @property
     def has_input(self) -> bool:
@@ -179,7 +311,7 @@ class NodeRunner(EventloopMixin):
                     events = [e for e in events if e["node_id"] != "meta"]
                     if events:
                         self.scheduler.update(events)
-                        await self.publish_events(events)
+                        await self.publish_events(events, epoch)
                     self._ready_condition.notify_all()
 
     async def await_inputs(self) -> AsyncGenerator[tuple[tuple[Any], dict[str, Any], Epoch]]:
@@ -233,6 +365,7 @@ class NodeRunner(EventloopMixin):
                 epoch = cast(Epoch, epoch)
                 if self._node.stateful:
                     expected_epoch = Epoch(epoch[0].epoch + 1)
+
             readies = await self.await_node(epoch=epoch)
 
             if epoch is None:
@@ -248,18 +381,43 @@ class NodeRunner(EventloopMixin):
                 )
                 if inputs is None:
                     inputs = {}
+
+                self.state.init(AssetScope.node, self._node.edges)
+                self.state.init(AssetScope.process, self._node.edges)
+                assets = self.state.collect(self._node.edges, ready["epoch"])
+                inputs |= assets if assets else {}
+
                 if self._node.injections.get("epoch"):
                     inputs[self._node.injections["epoch"]] = ready["epoch"]
 
                 args, kwargs = self.store.split_args_kwargs(inputs)
                 yield args, kwargs, ready["epoch"]
+                self.state.deinit(AssetScope.node, self._node.edges)
 
             if self.scheduler.epoch_completed(epoch):
                 self.logger.debug("Epoch completed: %s", epoch)
+                self.state.deinit(AssetScope.process, self._node.edges)
                 self.store.clear(epoch)
                 epoch = None
 
-    async def publish_events(self, events: list[Event]) -> None:
+    async def publish_events(self, events: list[Event], epoch: Epoch) -> None:
+        # re-emit any events that we initialized or received:
+        for asset in self.publishes_assets:
+            if asset in self.state.specs:
+                asset_val = self.state.assets[asset].obj
+                asset_evt = Event(
+                    node_id="assets",
+                    signal=asset,
+                    epoch=epoch,
+                    id=uuid.uuid4().int,
+                    timestamp=datetime.now(UTC),
+                    value=asset_val,
+                )
+
+            else:
+                asset_evt = self.store.get("assets", asset, epoch)
+            events.append(asset_evt)
+
         msg = EventMsg(node_id=self.spec.id, value=events)
         await self.sockets["outbox"].send_multipart([b"event", msg.to_bytes()])
 
@@ -284,6 +442,10 @@ class NodeRunner(EventloopMixin):
         self.logger.debug("Deinitializing")
         if self._node is not None:
             self._node.deinit()
+
+        if self.state is not None:
+            self.state.deinit(AssetScope.runner)
+            self.state.deinit(AssetScope.process)
 
         # should have already been called in on_deinit, but just to make sure we're killed dead...
         self._quitting.set()
@@ -329,13 +491,26 @@ class NodeRunner(EventloopMixin):
     async def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
         self._node.init()
+        self.state = State.from_specification(
+            specs={asset: self.asset_specs[asset] for asset in self.inits_assets}
+        )
+
         self.scheduler = Scheduler(
             nodes={self.spec.id: self.spec},
-            edges=self._node.edges,
+            edges=[
+                e
+                for e in self._node.edges
+                if e.source_node != "assets" or e.source_signal in self.receives_assets_from
+            ],
             logger=init_logger(f"noob.scheduler.{self.spec.id}"),
         )
+        self.state.init(AssetScope.runner, self._node.edges)
         async with self._ready_condition:
-            self.scheduler.add_epoch()
+            ep = self.scheduler.add_epoch()
+            if self.state.dependencies and len(self.state.dependencies) == len(
+                self.receives_assets_from
+            ):
+                self.scheduler.done(ep, "assets")
             self._ready_condition.notify_all()
 
     def _init_sockets(self) -> None:
@@ -410,18 +585,17 @@ class NodeRunner(EventloopMixin):
         self._node = cast(Node, self._node)
         self.logger.debug("Processing announce")
 
-        depended_nodes = {edge.source_node for edge in self._node.edges}
-        if depended_nodes:
-            self.logger.debug("Should subscribe to %s", depended_nodes)
+        if self.subscribes_to:
+            self.logger.debug("Should subscribe to %s", self.subscribes_to)
         for node_id in msg.value["nodes"]:
-            if node_id in depended_nodes and node_id not in self._nodes:
+            if node_id in self.subscribes_to and node_id not in self._nodes:
                 # TODO: a way to check if we're already connected, without storing it locally?
                 outbox = msg.value["nodes"][node_id]["outbox"]
                 self.logger.debug("Subscribing to %s at %s", node_id, outbox)
                 self.sockets["inbox"].connect(outbox)
                 self.logger.debug("Subscribed to %s at %s", node_id, outbox)
         self._nodes = msg.value["nodes"]
-        if set(self._nodes) >= depended_nodes - {"input"} and self.status == NodeStatus.waiting:
+        if set(self._nodes) >= self.subscribes_to and self.status == NodeStatus.waiting:
             await self.update_status(NodeStatus.ready)
         # status and announce messages can be received out of order,
         # so if we observe the command node being out of sync, we update it.
@@ -438,11 +612,20 @@ class NodeRunner(EventloopMixin):
             self.logger.debug("No dependencies, not storing events")
             return
 
-        to_add = [e for e in events if (e["node_id"], e["signal"]) in self.depends]
-        for event in to_add:
+        to_update = [
+            e
+            for e in events
+            if e["node_id"] != "assets" and e["node_id"] in set(d[0] for d in self.depends)
+        ]
+        for event in events:
+            if event["node_id"] == "meta":
+                continue
+            event = cast(Event, event)
             self.store.add(event)
+
         async with self._ready_condition:
-            self.scheduler.update(events)
+            self.scheduler.update(to_update)
+            self._handle_assets(msg)
             self._ready_condition.notify_all()
 
     async def on_start(self, msg: StartMsg) -> None:
@@ -569,3 +752,48 @@ class NodeRunner(EventloopMixin):
             ready = [r for r in ready if r["value"] == self.spec.id]
 
         return ready
+
+    def _handle_assets(self, msg: EventMsg) -> None:
+        """
+        Mark assets as done in the scheduler (according to _assets_done)
+        and update the assets stored in the `state` collection from asset dependencies.
+        """
+
+        if not self.receives_assets_from:
+            return
+        epochs = set(e["epoch"] for e in msg.value)
+        if len(epochs) > 1:
+            self.logger.warning(
+                "Received multiple epochs in a single event message, asset logic may be inaccurate"
+            )
+        epoch = epochs.pop()
+        if self._assets_done(epoch):
+            with contextlib.suppress(AlreadyDoneError):
+                self.scheduler.done(epoch, "assets")
+        if msg.node_id in self.state.dependencies:
+            self.state.update(msg.value)
+            if self._assets_done(epoch + 1):
+                self.scheduler.done(epoch + 1, "assets")
+
+    def _assets_done(self, epoch: Epoch) -> bool:
+        """Whether we've received all the events we expect to have received for the given epoch"""
+        # FIXME: Dependencies in the topo graph should really be node.signal pairs
+        # See issue #152
+        if not self.receives_assets_from:
+            # we don't need to wait on any assets, so they're not in our topo sorter at all.
+            return False
+
+        for asset in self.receives_assets_from:
+            try:
+                self.store.get("assets", asset, epoch)
+            except KeyError:
+                if self.asset_specs[asset].depends is not None:
+                    # no idea why mypy can't tell `depends` is a string here
+                    node_id, signal = self.asset_specs[asset].depends.split(".")  # type: ignore[union-attr]
+                    try:
+                        self.store.get(node_id, signal, epoch - 1)
+                    except KeyError:
+                        return False
+                else:
+                    return False
+        return True

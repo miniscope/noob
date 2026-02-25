@@ -3,7 +3,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from noob.event import Event
+from noob.const import META_SIGNAL
+from noob.event import Event, MetaSignal
 from noob.network.message import EventMsg
 from noob.types import Epoch
 
@@ -53,7 +54,6 @@ def test_jsonable_event():
 def test_pickleable_event():
     """Events that can't be dumped to JSON have their value field pickled"""
     msg = EventMsg(
-        type_="event",
         node_id="example",
         value=[
             Event(
@@ -75,7 +75,26 @@ def test_pickleable_event():
     assert isinstance(z.value[0]["value"], PickleClass)
 
 
-@pytest.mark.xfail(raises=NotImplementedError)
 def test_roundtrip_noevent():
     """NoEvents should roundtrip to and from a string"""
-    raise NotImplementedError("Implement this test!")
+    msg = EventMsg(
+        node_id="example",
+        value=[
+            Event(
+                id=0,
+                timestamp=datetime.now(UTC),
+                node_id="example",
+                signal=META_SIGNAL,
+                epoch=Epoch(0),
+                value=MetaSignal.NoEvent,
+            ),
+        ],
+    )
+    dumped = msg.model_dump_json()
+    as_json = json.loads(dumped)
+    assert as_json["value"][0]["value"] == "NoEvent"
+
+    z = EventMsg.model_validate_json(dumped)
+    assert msg == z
+    assert isinstance(z.value[0]["value"], MetaSignal)
+    assert z.value[0]["value"] is MetaSignal.NoEvent

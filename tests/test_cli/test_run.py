@@ -1,24 +1,28 @@
 from click.testing import CliRunner
 
+from noob import logging
 from noob.cli.run import run as cli_run
 
 
 def test_cli_run_n(monkeypatch):
     """Run n iterations of a tube, default output to json"""
+    monkeypatch.setattr(logging.config.logs, "level", "WARNING")
     runner = CliRunner()
     result = runner.invoke(cli_run, ["testing-basic", "-n", "5", "--output-format", "json"])
     assert result.output.strip() == "[0, 2, 4, 6, 8]"
 
 
-def test_cli_run_jsonl_output():
+def test_cli_run_jsonl_output(monkeypatch):
     """Output to json lines"""
+    monkeypatch.setattr(logging.config.logs, "level", "WARNING")
     runner = CliRunner()
     result = runner.invoke(cli_run, ["testing-basic", "-n", "5", "--output-format", "jsonl"])
     assert result.output.strip() == "0\n2\n4\n6\n8"
 
 
-def test_cli_run_json_input():
+def test_cli_run_json_input(monkeypatch):
     """Stdin input to run command"""
+    monkeypatch.setattr(logging.config.logs, "level", "WARNING")
     runner = CliRunner()
     result = runner.invoke(
         cli_run,
@@ -28,8 +32,9 @@ def test_cli_run_json_input():
     assert result.output.strip() == "[0, 10]"
 
 
-def test_cli_run_jsonl_input():
+def test_cli_run_jsonl_input(monkeypatch):
     """Stdin input to run command as jsonl"""
+    monkeypatch.setattr(logging.config.logs, "level", "WARNING")
     runner = CliRunner()
     result = runner.invoke(
         cli_run,

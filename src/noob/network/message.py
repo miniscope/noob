@@ -1,6 +1,3 @@
-import base64
-import json
-import pickle
 import sys
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -9,18 +6,14 @@ from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
-    BeforeValidator,
     ConfigDict,
     Discriminator,
     Field,
     Tag,
     TypeAdapter,
-    WrapSerializer,
 )
-from pydantic_core.core_schema import SerializerFunctionWrapHandler
 
-from noob.const import META_SIGNAL
-from noob.event import Event, MetaSignal
+from noob.event import EventUnion
 from noob.types import Epoch, Picklable
 
 if sys.version_info < (3, 12):
@@ -182,38 +175,9 @@ class ErrorMsg(Message):
         return err
 
 
-def _to_json(val: Event, handler: SerializerFunctionWrapHandler) -> Any:
-    if val["signal"] == META_SIGNAL and val["value"] is MetaSignal.NoEvent:
-        val["value"] = MetaSignal.NoEvent.value
-
-    try:
-        return handler(val)
-    except TypeError:
-        # pickle and b64encode
-        return "pck__" + base64.b64encode(pickle.dumps(val)).decode("utf-8")
-
-
-def _from_json(val: Any) -> Event:
-    if isinstance(val, str):
-        if val.startswith("pck__"):
-            evt = pickle.loads(base64.b64decode(val[5:]))
-        else:
-            evt = Event(**json.loads(val))  # type: ignore[typeddict-item]
-        if evt["signal"] == META_SIGNAL and evt["value"] == MetaSignal.NoEvent.value:
-            evt["value"] = MetaSignal.NoEvent
-        return evt
-    else:
-        return val
-
-
-SerializableEvent = A[
-    Event, WrapSerializer(_to_json, when_used="json"), BeforeValidator(_from_json)
-]
-
-
 class EventMsg(Message):
     type_: Literal[MessageType.event] = Field(MessageType.event, alias="type")
-    value: list[SerializableEvent]
+    value: list[EventUnion]
 
 
 def _type_discriminator(v: dict | Message) -> str:

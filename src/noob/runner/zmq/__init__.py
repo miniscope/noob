@@ -1,8 +1,4 @@
 """
-- Central command pub/sub
-- each sub-runner has its own set of sockets for publishing and consuming events
-- use the `node_id.signal` etc. as basically a feed address
-
 .. todo::
 
     Currently only IPC is supported, and thus the zmq runner can't run across machines.

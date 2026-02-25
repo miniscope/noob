@@ -1,3 +1,4 @@
+(assets)=
 # Assets
 
 ## What it is
@@ -277,3 +278,10 @@ nodes:
 ```
 
 Here, node `b` will output an an instance of an `AssetCls` with an updated attribute `x` value `2 -> (2 + 1 * 5 = 9)`
+
+(persisting-data)=
+## Persisting Data Between Epochs
+
+```{todo}
+Document the use of {attr}`.Asset.depends` in runner-scoped assets.
+```

@@ -2,52 +2,69 @@ import pytest
 
 from noob import SynchronousRunner, Tube
 from noob.asset import AssetScope
+from noob.runner.zmq import ZMQRunner
 from noob.types import Epoch
+from noob.utils import iscoroutinefunction_partial
 
 pytestmark = pytest.mark.assets
 
 
-def test_runner_scoped():
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-runner-asset"], indirect=True)
+async def test_runner_scoped(all_runners, loaded_tube):
     """
     'runner' scoped assets are persistent across process calls
     """
-    tube = Tube.from_specification("testing-runner-asset")
-    runner = SynchronousRunner(tube=tube)
-
-    runner.init()
+    runner = all_runners
     for i in range(5):
-        runner.process()
+        if iscoroutinefunction_partial(runner.process):
+            await runner.process()
+        else:
+            runner.process()
         store = runner.store.events[Epoch(i)]
-        assert store["increment"]["next"][0]["value"] == 2 ** (i + 1) - 1
-        assert store["more_increment"]["next"][0]["value"] == 2 * (2 ** (i + 1) - 1)
+        if isinstance(runner, ZMQRunner):
+            # ZMQRunner doesn't automatically propagate assets between epochs,
+            # this is what asset dependencies are for.
+            # We allow this divergence in behavior between the runners pending a better solution
+            # However it *should* persist across epochs *from the nodes that create it*
+            # and it *should* be propagated within an epoch
+            assert store["increment"]["next"][0]["value"] == i + 1
+            assert store["more_increment"]["next"][0]["value"] == (2 * i) + 2
+        else:
+            assert store["increment"]["next"][0]["value"] == 2 ** (i + 1) - 1
+            assert store["more_increment"]["next"][0]["value"] == 2 * (2 ** (i + 1) - 1)
 
 
-def test_process_scoped():
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-process-asset"], indirect=True)
+async def test_process_scoped(all_runners, loaded_tube):
     """
     'process' scoped assets are recreated every process call.
     However, a given asset is shared by nodes within a single process call.
     """
-    tube = Tube.from_specification("testing-process-asset")
-    runner = SynchronousRunner(tube=tube)
-
-    runner.init()
+    runner = all_runners
     for i in range(5):
-        runner.process()
+        if iscoroutinefunction_partial(runner.process):
+            await runner.process()
+        else:
+            runner.process()
         store = runner.store.events[Epoch(i)]
         assert store["increment"]["next"][0]["value"] == 3  # renewed each process call
         assert store["more_increment"]["next"][0]["value"] == 6  # but shared among nodes
 
 
-def test_node_scoped():
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-node-asset"], indirect=True)
+async def test_node_scoped(all_runners, loaded_tube):
     """
     new object created each time asset is called by a node.
     """
-    tube = Tube.from_specification("testing-node-asset")
-    runner = SynchronousRunner(tube=tube)
-
-    runner.init()
+    runner = all_runners
     for i in range(5):
-        runner.process()
+        if iscoroutinefunction_partial(runner.process):
+            await runner.process()
+        else:
+            runner.process()
         store = runner.store.events[Epoch(i)]
         assert store["increment"]["next"][0]["value"] == 3
         assert store["more_increment"]["next"][0]["value"] == 3
@@ -63,7 +80,9 @@ def test_asset_depends_ooo():
     raise NotImplementedError()
 
 
-def test_asset_copy_post_depends():
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-depends-asset"], indirect=True)
+async def test_asset_copy_post_depends(loaded_tube, all_runners):
     """
     make sure the asset is copied when injected to nodes
     that are of later generations than the asset's dependency
@@ -76,20 +95,15 @@ def test_asset_copy_post_depends():
     should have no effect on the pre-asset-depends nodes
     (`increment` and `more_increment`) of the following epoch.
     """
-    tube = Tube.from_specification("testing-depends-asset")
-    runner = SynchronousRunner(tube=tube)
-
-    runner.init()
+    runner = all_runners
 
     assert set(runner.tube.state.dependencies.keys()) == {"b"}
     last_asset_id = id(runner.tube.state.assets["counter"].obj)
     for i in range(5):
-        result = runner.process()
-
-        # we should have deepcopied the asset and made a new one
-        this_asset_id = id(runner.tube.state.assets["counter"].obj)
-        assert this_asset_id != last_asset_id
-        last_asset_id = this_asset_id
+        if iscoroutinefunction_partial(runner.process):
+            result = await runner.process()
+        else:
+            result = runner.process()
 
         # within the epoch, all values are computed normally
         # between epochs, we should only advance by **2** rather than **3**
@@ -100,7 +114,15 @@ def test_asset_copy_post_depends():
         assert result["post_value"] == start + 2
 
         # within the epoch, the generator should be unchanged and passed between nodes
-        assert id(result["a_iterator"]) == id(result["b_iterator"]) == id(result["post_iterator"])
+        if not isinstance(runner, ZMQRunner):
+            # we should have deepcopied the asset and made a new one
+            this_asset_id = id(runner.tube.state.assets["counter"].obj)
+            assert this_asset_id != last_asset_id
+            last_asset_id = this_asset_id
+
+            assert (
+                id(result["a_iterator"]) == id(result["b_iterator"]) == id(result["post_iterator"])
+            )
 
 
 def test_asset_nocopy_when_unused():

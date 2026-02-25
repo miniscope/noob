@@ -363,8 +363,10 @@ class Tube(BaseModel):
                 ), (
                     "Nodes that run at the same time or after a node that an asset depends on "
                     "to update its value cannot depend on the asset directly. "
-                    "Access it by emitting it from another node and depending on that signal. "
-                    f"Node {successor} cannot depend on assets.{asset.id}."
+                    "Access it by emitting it from another node and depending on that signal.\n"
+                    f"Node {successor} cannot depend on assets.{asset.id}, "
+                    f"because {asset.id} depends on {depended_node}, and tube has topo generations:"
+                    f"\n{generations}"
                 )
 
         return self

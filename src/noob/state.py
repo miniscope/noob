@@ -7,7 +7,7 @@ from typing import Self, TypeAlias
 from pydantic import BaseModel, Field
 
 from noob.asset import Asset, AssetScope, AssetSpecification
-from noob.event import Event
+from noob.event import Event, MetaEvent
 from noob.node.base import Edge
 from noob.types import Epoch, NodeID, PythonIdentifier
 
@@ -53,6 +53,7 @@ class State(BaseModel):
     Map from :class:`.AssetScope` to :class:`.Asset` to circumvent
     querying scope for each asset in :meth:`.State.init` and :meth:`.State.deinit`
     """
+    specs: dict[str, AssetSpecification] = Field(default_factory=dict)
 
     @classmethod
     def from_specification(
@@ -78,6 +79,7 @@ class State(BaseModel):
             assets=assets,
             dependencies=dependencies,
             scope_to_assets=scope_to_assets,
+            specs=specs,
         )
 
     def init(self, scope: AssetScope, edges: list[Edge] | None = None) -> None:
@@ -147,6 +149,8 @@ class State(BaseModel):
                     "Must set signal name when depending on an asset "
                     "(assets have no generic 'value' signal)"
                 )
+                if edge.source_signal not in self.assets:
+                    continue
                 asset = self.assets[edge.source_signal]
                 if (
                     not asset.depends
@@ -162,7 +166,7 @@ class State(BaseModel):
 
         return None if not args or all(val is None for val in args.values()) else args
 
-    def update(self, events: list[Event]) -> None:
+    def update(self, events: list[Event] | list[Event | MetaEvent]) -> None:
         """Update asset if asset depends on a node signal"""
         for event in events:
             if (dep := self.dependencies.get(event["node_id"])) and dep["signal"] == event[

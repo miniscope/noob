@@ -1,0 +1,85 @@
+noob_id: testing-asset-generations
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1
+description: |
+  (non-running) tube to test how zmqrunner handles propagating assets between nodes
+
+assets:
+  count_node:
+    type: noob.testing.counter
+    scope: node
+  count_process:
+    type: noob.testing.counter
+    scope: process
+  count_runner:
+    type: noob.testing.counter
+    scope: runner
+  count_runner_depends:
+    type: noob.testing.counter
+    scope: runner
+    depends: d1.value
+
+nodes:
+  a1:
+    type: noob.testing.passthrough
+    depends:
+      - node: assets.count_node
+      - process: assets.count_process
+      - runner: assets.count_runner
+      - runner_depends: assets.count_runner_depends
+  a2:
+    type: noob.testing.passthrough
+    depends:
+      - node: assets.count_node
+      - process: assets.count_process
+      - runner: assets.count_runner
+      - runner_depends: assets.count_runner_depends
+  a3:
+    type: noob.testing.passthrough
+    depends:
+      - value: assets.count_node
+  b1:
+    type: noob.testing.passthrough
+    depends:
+      - value: a1.value
+      - node: assets.count_node
+      - process: assets.count_process
+      - runner: assets.count_runner
+      - runner_depends: assets.count_runner_depends
+  b2:
+    type: noob.testing.passthrough
+    depends:
+      - value: a2.value
+      - node: assets.count_node
+      - process: assets.count_process
+      - runner: assets.count_runner
+      - runner_depends: assets.count_runner_depends
+  b3:
+    type: noob.testing.passthrough
+    depends:
+      - value: a3.value
+  c1:
+    type: noob.testing.passthrough
+    depends:
+      - value: b3.value
+      - node: assets.count_node
+      - process: assets.count_process
+      - runner: assets.count_runner
+      - runner_depends: assets.count_runner_depends
+  c2:
+    type: noob.testing.passthrough
+    depends:
+      - value: b3.value
+      - node: assets.count_node
+      - process: assets.count_process
+      - runner: assets.count_runner
+      - runner_depends: assets.count_runner_depends
+  c3:
+    type: noob.testing.passthrough
+    depends:
+      - value: b3.value
+  d1:
+    type: noob.testing.passthrough
+    depends:
+      - value: c3.value
+      - runner_depends: assets.count_runner_depends

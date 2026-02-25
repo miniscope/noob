@@ -62,7 +62,7 @@ class TubeRunner(ABC):
         if self._runner_id is None:
             hasher = hashlib.blake2b(digest_size=4)
             hasher.update(str(datetime.now(UTC).timestamp()).encode("utf-8"))
-            self._runner_id = f"{hasher.hexdigest()}.{self.tube.tube_id}"
+            self._runner_id = f"{hasher.hexdigest()}"
         return self._runner_id
 
     def process(self, **kwargs: Any) -> ReturnNodeType:
