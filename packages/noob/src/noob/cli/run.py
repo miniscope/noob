@@ -1,3 +1,4 @@
+import ast
 import json
 import sys
 from collections.abc import Generator
@@ -27,6 +28,14 @@ from noob.runner import get_runner
               """,
 )
 @click.option(
+    "--input",
+    "-i",
+    "inparams",
+    multiple=True,
+    type=(str, str),
+    help="Tube-scoped inputs specified as key value pairs (e.g. `-i akey 1`)",
+)
+@click.option(
     "--output-format",
     "-of",
     type=click.Choice(("json", "jsonl")),
@@ -41,10 +50,13 @@ def run(
     runner: L["sync", "async", "zmq"] = "sync",
     n: int | None = None,
     input_format: L["json", "jsonl"] = "json",
+    inparams: tuple[str, str] = None,
     output_format: L["json", "jsonl"] = "json",
 ) -> None:
+    input_dict = {key: ast.literal_eval(val) for key, val in inparams} if inparams else {}
+
     tube_id = tube
-    tube_ = Tube.from_specification(tube)
+    tube_ = Tube.from_specification(tube, input=input_dict)
     runner_cls = get_runner(runner)
     runner_ = runner_cls(tube_)
 

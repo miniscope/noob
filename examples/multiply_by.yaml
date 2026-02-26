@@ -1,0 +1,33 @@
+noob_id: multiply-by
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  One of the simplest possible tubes, given some input, multiply it by two, return the number
+  
+  Meant to demonstrate piping on the command line,
+  e.g.
+  
+  echo '{"value": 1}\n{"value": 2}' | \
+    noob run multiply-by -if jsonl -of jsonl | \
+    tee >(noob run multiply-by -if jsonl -of jsonl -i by 8 | jq) | \
+    noob run multiply-by -if jsonl -of jsonl -i by 9 | jq
+
+input:
+  value:
+    scope: process
+    type: float
+  by:
+    scope: tube
+    type: float
+    default: 2
+
+nodes:
+  multiply:
+    type: operator.mul
+    depends:
+      - input.value
+      - input.by
+  return:
+    type: return
+    depends:
+      - value: multiply.value

@@ -1,0 +1,6 @@
+# Changes here will be overwritten by Copier
+_src_path: templates/nobes
+author_email: sneakers-the-rat@protonmail.com
+author_name: sneakers-the-rat
+description: Video i/o and encoding
+package_name: video

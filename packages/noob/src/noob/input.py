@@ -2,6 +2,7 @@ import re
 import warnings
 from collections import ChainMap, defaultdict
 from enum import StrEnum
+from functools import cached_property
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field, PrivateAttr
@@ -39,6 +40,7 @@ class InputSpecification(BaseModel):
     id: PythonIdentifier
     type_: AbsoluteIdentifier = Field(..., alias="type")
     scope: InputScope = InputScope.tube
+    default: Any | None = None
     description: str | None = None
     """An optional description of the input value"""
 
@@ -67,8 +69,18 @@ class InputCollection(BaseModel):
         (for possible expansion of number of scopes, to e.g. a runner scope)
         """
         if self._chain is None:
-            self._chain = ChainMap(self._input[InputScope.tube])
+            self._chain = ChainMap(self._input[InputScope.tube], self.defaults)
         return self._chain
+
+    @cached_property
+    def defaults(self) -> dict:
+        """A dict of any of the defaults set in tube specs"""
+        defaults = {}
+        for specs in self.specs.values():
+            # dump to distinguish between explicit nones and unset defaults
+            dumped = {key: spec.model_dump(exclude_unset=True) for key, spec in specs.items()}
+            defaults |= {key: spec["default"] for key, spec in dumped.items() if "default" in spec}
+        return defaults
 
     def get(self, key: str, input: dict | None = None) -> Any:
         """Get a value from the inputs at any scope, if present"""

@@ -1,0 +1,49 @@
+[project]
+name = "nobes-core"
+description = """Basic graph operations"""
+authors = [
+  {name = "sneakers-the-rat", email = "sneakers-the-rat@protonmail.com"},
+]
+dynamic=["version"]
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "EUPL-1.2"}
+keywords = [
+  "noob",
+  "noob-nodes",
+  "nobes",
+]
+dependencies = [
+  "noob",
+]
+
+[project.optional-dependencies]
+tests = [
+    "pytest",
+]
+dev = [
+    "nobes-core[tests]",
+]
+
+[project.urls]
+homepage = "https://noob.readthedocs.io"
+documentation = "https://noob.readthedocs.io"
+repository = "https://github.com/miniscope/noob"
+changelog = "https://noob.readthedocs.io/en/latest/changelog.html"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.build]
+includes = ["nobes"]
+
+[tool.pdm.version]
+# versions from tags like "v0.1.2"
+fallback_version = "0.0.0"
+source = "scm"
+tag_filter="nobes-core-v*"
+tag_regex = '^nobes-core-v(?:\D*)?(?P<version>([1-9][0-9]*!)?(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*((a|b|c|rc)(0|[1-9][0-9]*))?(\.post(0|[1-9][0-9]*))?(\.dev(0|[1-9][0-9]*))?$)$'

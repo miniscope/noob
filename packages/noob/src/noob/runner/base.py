@@ -20,7 +20,7 @@ from noob.asset import AssetScope
 from noob.event import Event, MetaEvent
 from noob.exceptions import InputMissingError
 from noob.input import InputScope
-from noob.node import Edge, Node
+from noob.node import Edge, Node, Return
 from noob.store import EventStore
 from noob.types import Epoch, PythonIdentifier, ReturnNodeType, RunnerContext
 from noob.utils import iscoroutinefunction_partial
@@ -165,6 +165,7 @@ class TubeRunner(ABC):
 
         self.init()
         current_iter = 0
+        has_return = any(isinstance(node, Return) for node in self.tube.nodes.values())
         try:
             while n is None or current_iter < n:
                 ret = None
@@ -172,7 +173,7 @@ class TubeRunner(ABC):
                 while ret is None:
                     ret = self.process()
                     loop += 1
-                    if loop > self.max_iter_loops:
+                    if has_return and loop > self.max_iter_loops:
                         raise RuntimeError("Reached maximum process calls per iteration")
 
                 yield ret
