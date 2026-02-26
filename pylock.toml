@@ -39,36 +39,6 @@ dependencies = [
 ]
 
 [[packages]]
-name = "nobes"
-version = "0.0.1.dev573+g3f2c050.d20260226"
-requires-python = ">=3.11"
-marker = "\"dev\" in dependency_groups"
-
-[packages.directory]
-path = "./packages/nobes"
-editable = true
-
-[[packages]]
-name = "noob"
-version = "0.1.2.dev290+g3f2c050.d20260226"
-requires-python = ">=3.11"
-marker = "\"dev\" in dependency_groups"
-
-[packages.directory]
-path = "./packages/noob"
-editable = true
-
-[[packages]]
-name = "nobes-test"
-version = "0.0.1.dev573+g3f2c050.d20260226"
-requires-python = ">=3.11"
-marker = "\"dev\" in dependency_groups"
-
-[packages.directory]
-path = "./packages/nobes-test"
-editable = false
-
-[[packages]]
 name = "platformdirs"
 version = "4.5.1"
 requires-python = ">=3.10"
@@ -1011,6 +981,26 @@ marker = "\"dev\" in dependency_groups"
 
 [packages.tool.pdm]
 dependencies = []
+
+[[packages]]
+name = "nobes"
+version = "0.0.1.dev577+g983be53"
+requires-python = ">=3.11"
+marker = "\"dev\" in dependency_groups"
+
+[packages.directory]
+path = "./packages/nobes"
+editable = true
+
+[[packages]]
+name = "noob"
+version = "0.1.2.dev294+g983be53"
+requires-python = ">=3.11"
+marker = "\"dev\" in dependency_groups"
+
+[packages.directory]
+path = "./packages/noob"
+editable = true
 
 [[packages]]
 name = "faker"
