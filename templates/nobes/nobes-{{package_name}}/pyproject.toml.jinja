@@ -1,0 +1,49 @@
+[project]
+name = "nobes-{{ package_name }}"
+description = """{{ description }}"""
+authors = [
+  {name = "{{ author_name }}", email = "{{ author_email }}"},
+]
+dynamic=["version"]
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "EUPL-1.2"}
+keywords = [
+  "noob",
+  "noob-nodes",
+  "nobes",
+]
+dependencies = [
+  "noob",
+]
+
+[project.optional-dependencies]
+tests = [
+    "pytest",
+]
+dev = [
+    "nobes-{{ package_name }}[tests]",
+]
+
+[project.urls]
+homepage = "https://noob.readthedocs.io"
+documentation = "https://noob.readthedocs.io"
+repository = "https://github.com/miniscope/noob"
+changelog = "https://noob.readthedocs.io/en/latest/changelog.html"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.build]
+includes = ["nobes"]
+
+[tool.pdm.version]
+# versions from tags like "v0.1.2"
+fallback_version = "0.0.0"
+source = "scm"
+tag_filter="nobes-{{ package_name }}-v*"
+tag_regex = '^nobes-{{ package_name }}-v(?:\D*)?(?P<version>([1-9][0-9]*!)?(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*((a|b|c|rc)(0|[1-9][0-9]*))?(\.post(0|[1-9][0-9]*))?(\.dev(0|[1-9][0-9]*))?$)$'
