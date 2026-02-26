@@ -4,9 +4,7 @@ requires-python = ">=3.11"
 
 [tool.pdm.dev-dependencies]
 dev = [
-    "copier>=9.12.0",
     "-e file:///${PROJECT_ROOT}/packages/noob[dev]",
-    "-e file:///${PROJECT_ROOT}/packages/nobes[dev]",
 ]
 
 [tool.pdm.scripts]
@@ -42,7 +40,6 @@ docs-test.env = {SPHINXOPTS = "-W --keep-going"}
 mypy = "mypy"
 benchmark.cmd = "pytest tests/bench.py --codspeed --timeout=15"
 benchmark.working_dir = "packages/noob"
-new_nobes = "copier copy templates/nobes packages"
 
 [tool.black]
 target-version = ["py311", "py312", "py313"]
@@ -51,7 +48,7 @@ line-length = 100
 [tool.ruff]
 target-version = "py311"
 include = ["packages/**/*.py", "tests/**/*.py", "docs/_ext/**/*.py", "**/pyproject.toml"]
-exclude = ["docs", "templates"]
+exclude = ["docs"]
 line-length = 100
 
 [tool.ruff.lint]
@@ -115,11 +112,11 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["noob", "nobes"]
+known-first-party = ["noob"]
 
 [tool.mypy]
 mypy_path = "$MYPY_CONFIG_FILE_DIR/packages"
-packages = ["noob", "nobes"]
+packages = ["noob"]
 warn_redundant_casts = true
 warn_unused_ignores = true
 check_untyped_defs = true
