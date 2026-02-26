@@ -26,10 +26,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: pip install -e ".[tests]"
+        run: |
+          python -m pip install pdm
+          pdm install
 
       - name: Run Tests
-        run: pytest
+        run: pdm run test
         timeout-minutes: 5
         env:
           NOOB_LOGS__WIDTH: 140

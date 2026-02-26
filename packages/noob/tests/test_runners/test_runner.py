@@ -1,7 +1,6 @@
 from unittest.mock import patch
 
 from noob import SynchronousRunner, Tube
-from noob.node import Return
 
 
 def test_process_callback() -> None:

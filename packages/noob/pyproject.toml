@@ -1,0 +1,131 @@
+[project]
+name = "noob"
+description = "A graph processing library for processing graphs"
+authors = [
+    {name = "raymondwjang", email = "ray0815@ucla.edu"},
+    {name= "sneakers-the-rat", email = "sneakers-the-rat@protonmail.com"}
+]
+dynamic=["version"]
+dependencies = [
+    "rich>=13.9.4",
+    "pydantic>=2.10.6",
+    "pydantic-settings[yaml]>=2.8.1",
+    "platformdirs>=4.3.7",
+    'typing-extensions>=4.15.0;python_version<"3.13"',
+    "ruamel-yaml>=0.18.16",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+repository = "https://github.com/miniscope/noob"
+license = {text = "MIT"}
+keywords = [
+    "pipeline",
+    "pipelines",
+    "data-processing",
+    "tube-related-content",
+    "miniscope",
+    "pydantic",
+]
+classifiers = [
+    "Framework :: Pydantic",
+    "Framework :: Pydantic :: 2",
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Utilities",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Typing :: Typed"
+]
+
+[project.urls]
+homepage = "https://noob.readthedocs.io"
+documentation = "https://noob.readthedocs.io"
+repository = "https://github.com/miniscope/noob"
+changelog = "https://noob.readthedocs.io/en/latest/changelog.html"
+
+[project.optional-dependencies]
+cli = [
+    "click>=8.3.1",
+]
+zmq = [
+    "pyzmq>=27.1.0",
+    "tornado>=6.5.2",
+]
+tests = [
+    "noob[zmq,cli]",
+    "pytest>=8.3.5",
+    "pytest-cov>=6.0.0",
+    "tomli-w>=1.2.0",
+    "faker>=37.3.0",
+    "pytest-timeout>=2.4.0",
+    "pytest-asyncio>=1.3.0",
+    "pytest-codspeed>=4.2.0",
+    "pytest-mock>=3.15.1",
+]
+docs = [
+    "sphinx>=8.2.3,<9.0.0", # until myst parser catches up and stops emitting invalid references
+    "furo>=2024.8.6",
+    "myst-parser>=5.0.0",
+    "autodoc-pydantic>=2.2.0",
+    "sphinx-design>=0.6.1",
+    "sphinxcontrib-mermaid>=1.0.0",
+    "myst-nb>=1.2.0",
+    "faker>=37.3.0",
+]
+mypy = [
+    "mypy>=1.18.2",
+    "types-PyYAML>=6.0.12.20250915",
+]
+dev = [
+    "noob[tests,docs,mypy]",
+    "sphinx-autobuild>=2024.10.3",
+    "ruff>=0.11.0",
+    "black>=25.1.0",
+    "remote-pdb>=2.1.0",
+]
+
+[project.scripts]
+noob = "noob.cli.main:main"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.version]
+# versions from tags like "v0.1.2"
+fallback_version = "0.0.0"
+source = "scm"
+tag_filter="v*"
+tag_regex = '^v(?:\D*)?(?P<version>([1-9][0-9]*!)?(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*((a|b|c|rc)(0|[1-9][0-9]*))?(\.post(0|[1-9][0-9]*))?(\.dev(0|[1-9][0-9]*))?$)$'
+
+[tool.pytest.ini_options]
+addopts = [
+    "--cov=noob",
+    "--cov-append",
+    "--timeout=10",
+]
+markers = [
+    "async_runner: uses the async runner",
+    "sync_runner: uses the sync runner",
+    "zmq_runner: uses the zmq runner",
+    "input: tube and process inputs",
+    "assets: tubes that use assets",
+    "map: i'm the map i'm the map i'm the map",
+]
+
+
+[tool.coverage.run]
+parallel=true

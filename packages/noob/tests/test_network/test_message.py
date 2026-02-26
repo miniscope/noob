@@ -1,8 +1,6 @@
 import json
 from datetime import UTC, datetime
 
-import pytest
-
 from noob.const import META_SIGNAL
 from noob.event import Event, MetaSignal
 from noob.network.message import EventMsg
