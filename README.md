@@ -1,6 +1,7 @@
 # noob
 
 ![PyPI - Version](https://img.shields.io/pypi/v/noob)
+![No AI - Organic Human Labor](./assets/img/ai_badge.svg)
 
 (beginning active development March 2025, public release soon <3)
 
