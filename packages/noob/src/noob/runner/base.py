@@ -382,7 +382,6 @@ class TubeRunner(ABC):
             self.tube.state.update(events)
         events_and_metaevents = self.tube.scheduler.update(events)
         self._call_callbacks(events_and_metaevents)
-        self._logger.debug("Node %s emitted %s in epoch %s", node.id, value, epoch)
 
     @contextmanager
     def _asset_context(self, scope: AssetScope, edges: list[Edge] | None = None) -> Iterator[None]:

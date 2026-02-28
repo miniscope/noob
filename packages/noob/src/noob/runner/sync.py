@@ -7,9 +7,10 @@ from typing import Any
 from noob.asset import AssetScope
 from noob.event import MetaEvent
 from noob.node import Return
-from noob.runner.base import TubeRunner
+from noob.runner.base import TubeRunner, call_async_from_sync
 from noob.scheduler import Scheduler
 from noob.types import Epoch, ReturnNodeType
+from noob.utils import iscoroutinefunction_partial
 
 
 @dataclass
@@ -35,7 +36,11 @@ class SynchronousRunner(TubeRunner):
 
         self._running.set()
         for node in self.tube.enabled_nodes.values():
-            self.inject_context(node.init)()
+            node_init = self.inject_context(node.init)
+            if iscoroutinefunction_partial(node_init):
+                call_async_from_sync(node_init)
+            else:
+                node_init()
 
         self.inject_context(self.tube.state.init)(AssetScope.runner)
 
@@ -43,7 +48,11 @@ class SynchronousRunner(TubeRunner):
         """Stop all nodes processing"""
         # TODO: lock to ensure we've been started
         for node in self.tube.enabled_nodes.values():
-            self.inject_context(node.deinit)()
+            node_deinit = self.inject_context(node.deinit)
+            if iscoroutinefunction_partial(node_deinit):
+                call_async_from_sync(node_deinit)
+            else:
+                node_deinit()
 
         self.inject_context(self.tube.state.deinit)(AssetScope.runner)
 

@@ -75,7 +75,7 @@ class InputCollection(BaseModel):
     @cached_property
     def defaults(self) -> dict:
         """A dict of any of the defaults set in tube specs"""
-        defaults = {}
+        defaults: dict[str, str] = {}
         for specs in self.specs.values():
             # dump to distinguish between explicit nones and unset defaults
             dumped = {key: spec.model_dump(exclude_unset=True) for key, spec in specs.items()}

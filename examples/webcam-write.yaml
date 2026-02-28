@@ -1,0 +1,26 @@
+noob_id: webcam-display
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  Display a frame from the webcam and write it to a file.
+  Demonstrates using tube-scoped inputs as params, branching events.
+
+input:
+  output:
+    type: pathlib.Path
+    scope: tube
+
+nodes:
+  webcam:
+    type: nobes.video.webcam
+  display:
+    type: nobes.video.display
+    depends:
+      - frame: webcam.frame
+  writer:
+    type: nobes.video.FFMpegWriter
+    params:
+      fs: 30
+      output_path: input.output
+    depends:
+      - frame: webcam.frame

@@ -50,10 +50,16 @@ def run(
     runner: L["sync", "async", "zmq"] = "sync",
     n: int | None = None,
     input_format: L["json", "jsonl"] = "json",
-    inparams: tuple[str, str] = None,
+    inparams: tuple[tuple[str, str]] | None = None,
     output_format: L["json", "jsonl"] = "json",
 ) -> None:
-    input_dict = {key: ast.literal_eval(val) for key, val in inparams} if inparams else {}
+    input_dict = {}
+    if inparams:
+        for key, val in inparams:
+            try:
+                input_dict[key] = ast.literal_eval(val)
+            except ValueError:
+                input_dict[key] = val
 
     tube_id = tube
     tube_ = Tube.from_specification(tube, input=input_dict)
