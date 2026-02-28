@@ -170,11 +170,14 @@ class TubeRunner(ABC):
             while n is None or current_iter < n:
                 ret = None
                 loop = 0
-                while ret is None:
+                if not has_return:
                     ret = self.process()
-                    loop += 1
-                    if has_return and loop > self.max_iter_loops:
-                        raise RuntimeError("Reached maximum process calls per iteration")
+                else:
+                    while ret is None:
+                        ret = self.process()
+                        loop += 1
+                        if loop > self.max_iter_loops:
+                            raise RuntimeError("Reached maximum process calls per iteration")
 
                 yield ret
                 current_iter += 1

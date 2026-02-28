@@ -1,6 +1,8 @@
 from unittest.mock import patch
 
 from noob import SynchronousRunner, Tube
+from noob.node import NodeSpecification
+from noob.tube import TubeSpecification
 
 
 def test_process_callback() -> None:
@@ -114,3 +116,24 @@ def test_synch_unready_end_epoch():
             pass
 
         assert end_epoch.call_count == n_iters * tube.nodes["b"].n
+
+
+def test_max_iters_doesnt_apply_without_return():
+    """
+    When there is no return node, max_iter_loops doesn't do anything
+    """
+    spec = TubeSpecification(
+        noob_id="testing-no-return",
+        nodes={
+            "counter": NodeSpecification(
+                id="counter",
+                type="noob.testing.count_source",
+            )
+        },
+    )
+    tube = Tube.from_specification(spec)
+    runner = SynchronousRunner(tube, max_iter_loops=1)
+    # should be able to iter for more than max_iter_loops just fine
+    with runner:
+        for _ in runner.iter(5):
+            pass
