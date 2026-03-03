@@ -21,7 +21,7 @@ from noob import init_logger
 from noob.asset import AssetScope, AssetSpecification
 from noob.config import config
 from noob.event import Event, MetaEvent
-from noob.exceptions import AlreadyDoneError
+from noob.exceptions import AlreadyDoneError, EpochCompletedError
 from noob.input import InputCollection
 from noob.network.loop import EventloopMixin
 from noob.network.message import (
@@ -628,7 +628,10 @@ class NodeRunner(EventloopMixin):
             self.store.add(event)
 
         async with self._ready_condition:
-            self.scheduler.update(to_update)
+            # we might have already been told the epoch was completed,
+            # so this information is redundant.
+            with contextlib.suppress(EpochCompletedError):
+                self.scheduler.update(to_update)
             self._handle_assets(msg)
             self._ready_condition.notify_all()
 
@@ -729,14 +732,10 @@ class NodeRunner(EventloopMixin):
         but when we are a node that stores an asset from a later node,
         we need to mark the asset as done manually.
         """
-        # one might suspect that we might want to do something like this here
-        # if not self.scheduler.epoch_completed(msg.value):
-        #     async with self._ready_condition:
-        #         self.scheduler.end_epoch(msg.value)
-        #         self._ready_condition.notify_all()
-        # and that suspicion might be correct, but we also might get messages out of order
-        # and get an EpochCompletedError if we get an event from that epoch after the EpochCompleted
-        # message. so until this is a problem in some real tube, we let events drive scheduling.
+        if not self.scheduler.epoch_completed(msg.value):
+            async with self._ready_condition:
+                self.scheduler.end_epoch(msg.value)
+                self._ready_condition.notify_all()
 
         if self.state.dependencies and not self._assets_done(msg.value + 1):
             with contextlib.suppress(AlreadyDoneError):
