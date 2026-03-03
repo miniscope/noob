@@ -24,6 +24,14 @@ TubeClassicEdition()
 usage/index
 examples/index
 api/index
+
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Meta:
+
+contributing
 related_projects
 changelog
 ```
