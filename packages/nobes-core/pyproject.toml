@@ -15,6 +15,7 @@ keywords = [
 ]
 dependencies = [
   "noob",
+  "numpy>=2",
 ]
 
 [project.optional-dependencies]

@@ -6,6 +6,10 @@ on:
       - main
   pull_request:
 
+# restrict GITHUB_ACTIONS token (implicitly sets all other permissions to none)
+permissions:
+  contents: read
+
 jobs:
   list-nobes:
     runs-on: ubuntu-latest

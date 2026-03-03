@@ -16,7 +16,7 @@ keywords = [
 dependencies = [
   "noob",
   "opencv-python>=4.13.0.92",
-  "numpy>=2.4.2",
+  "numpy>=2",
   "numpydantic>=1.8.0",
 ]
 

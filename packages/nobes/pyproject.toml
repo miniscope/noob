@@ -18,7 +18,7 @@ keywords = [
 dependencies = [
   "noob",
   "nobes-core",
-  "nobed-input",
+  "nobes-input",
   "nobes-video",
 ]
 

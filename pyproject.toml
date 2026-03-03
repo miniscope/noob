@@ -9,6 +9,11 @@ dev = [
     "-e file:///${PROJECT_ROOT}/packages/nobes[dev]",
 ]
 
+[tool.pdm.resolution.overrides]
+nobes-core = "file:///${PROJECT_ROOT}/packages/nobes-core"
+nobes-input = "file:///${PROJECT_ROOT}/packages/nobes-input"
+nobes-video = "file:///${PROJECT_ROOT}/packages/nobes-video"
+
 [tool.pdm.scripts]
 test-noob.cmd = "pytest"
 test-noob.working_dir = "packages/noob"
