@@ -17,14 +17,22 @@ keywords = [
 # add every nobes subpackage here!
 dependencies = [
   "noob",
+  "nobes-core",
+  "nobes-input",
+  "nobes-video",
+]
+
+# use the local versions rather than the pypi versions when developing locally!
+[tool.pdm.dev-dependencies]
+dev = [
+  "-e file:///${PROJECT_ROOT}/../nobes-core",
+  "-e file:///${PROJECT_ROOT}/../nobes-input",
+  "-e file:///${PROJECT_ROOT}/../nobes-video",
 ]
 
 [project.optional-dependencies]
 tests = [
-    "pytest",
-]
-dev = [
-    "nobes[tests]",
+  "pytest",
 ]
 
 [project.urls]

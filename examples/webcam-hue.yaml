@@ -1,0 +1,44 @@
+noob_id: webcam-hue
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  Rotate the hue of a webcam stream according the angle of the mouse relative to the center of the monitor.
+  Demonstration of multiple interactivity and using functions that are completely unaware of noob,
+  e.g. the builtin `math` module.
+
+nodes:
+  webcam:
+    type: nobes.video.webcam
+  mouse:
+    type: nobes.input.mouse_position
+    params:
+      scale: relative
+  scale_x:
+    type: nobes.core.rescale
+    params:
+      input_range: [0, 1]
+      output_range: [-1, 1]
+    depends:
+      - value: mouse.x
+  scale_y:
+    type: nobes.core.rescale
+    params:
+      input_range: [0, 1]
+      output_range: [-1, 1]
+    depends:
+      - value: mouse.y
+  angle_re_center:
+    type: math.atan2
+    depends:
+      - scale_x.value
+      - scale_y.value
+  rotate:
+    type: nobes.video.rotate_hue
+    params:
+    depends:
+      - frame: webcam.frame
+      - rotate: angle_re_center.value
+  display:
+    type: nobes.video.display
+    depends:
+      - frame: rotate.frame

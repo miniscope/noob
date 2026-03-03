@@ -1,0 +1,11 @@
+noob_id: webcam-display
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+
+nodes:
+  webcam:
+    type: nobes.video.webcam
+  display:
+    type: nobes.video.display
+    depends:
+      - frame: webcam.frame

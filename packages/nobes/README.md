@@ -11,7 +11,8 @@ or install each separately.
 
 Nobe collections:
 
-- (make a list here once we add one)
+- [`nobes-core`](https://pypi.org/project/nobes-core) - Basic graph operations
+- [`nobes-video`](https://pypi.org/project/nobes-video) - Video I/O and encoding
 
 ## Versioning
 
