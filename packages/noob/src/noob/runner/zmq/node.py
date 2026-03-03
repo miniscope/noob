@@ -729,10 +729,15 @@ class NodeRunner(EventloopMixin):
         but when we are a node that stores an asset from a later node,
         we need to mark the asset as done manually.
         """
-        if not self.scheduler.epoch_completed(msg.value):
-            async with self._ready_condition:
-                self.scheduler.end_epoch(msg.value)
-                self._ready_condition.notify_all()
+        # one might suspect that we might want to do something like this here
+        # if not self.scheduler.epoch_completed(msg.value):
+        #     async with self._ready_condition:
+        #         self.scheduler.end_epoch(msg.value)
+        #         self._ready_condition.notify_all()
+        # and that suspicion might be correct, but we also might get messages out of order
+        # and get an EpochCompletedError if we get an event from that epoch after the EpochCompleted
+        # message. so until this is a problem in some real tube, we let events drive scheduling.
+
         if self.state.dependencies and not self._assets_done(msg.value + 1):
             with contextlib.suppress(AlreadyDoneError):
                 async with self._ready_condition:
