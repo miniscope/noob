@@ -1,7 +1,5 @@
 from typing import Any, TypeVar
 
-from pydantic import PrivateAttr
-
 from noob.node import Node
 
 _TStatic = TypeVar("_TStatic", bound=Any)
@@ -21,7 +19,7 @@ class static(Node):
     set `params.stored` in the node specification
     """
 
-    stored: _TStatic = PrivateAttr(default=None)
+    stored: _TStatic = None
 
     def process(self, value: _TStatic | None = None) -> _TStatic:
         if value is not None:
