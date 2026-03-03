@@ -327,7 +327,9 @@ class ZMQRunner(TubeRunner):
             self._logger.debug(f"Ignoring message type {msg.type_}")
             return
 
+        self.command = cast(CommandNode, self.command)
         msg = cast(EventMsg, msg)
+
         # store events (if we are not in freerun mode, where we don't want to store infinite events)
         if not self._ignore_events:
             for event in msg.value:

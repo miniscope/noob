@@ -575,6 +575,7 @@ class NodeRunner(EventloopMixin):
         elif message.type_ == MessageType.ping:
             await self.identify()
         elif message.type_ == MessageType.epoch_ended:
+            message = cast(EpochEndedMsg, message)
             await self.on_epoch_ended(message)
         else:
             # log but don't throw - other nodes shouldn't be able to crash us
