@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 
 from noob.event import Event
+from noob.node import Signal
 from noob.store import EventStore
 from noob.types import Epoch
 
@@ -54,3 +55,18 @@ def test_store_get_collapses_subepochs():
     evt = store.get(node_id="a", signal="b", epoch=parent / ("something", 0))
     assert evt
     assert evt["epoch"] == parent
+
+
+def test_store_handles_empty_sequences():
+    """
+    Regression (#165) - store can handle values that are empty sequences
+    """
+    store = EventStore()
+    e = store.add_value(
+        [Signal(name="something", type_=str), Signal(name="something_else", type_=str)],
+        value=[[], []],
+        node_id="a",
+        epoch=Epoch(0),
+    )
+    assert isinstance(e[0]["value"], list)
+    assert e[0]["value"] == []
