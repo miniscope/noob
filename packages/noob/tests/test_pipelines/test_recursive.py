@@ -23,3 +23,16 @@ def test_recursive_pipeline():
         assert res["index"] == parent_start + i
         assert res["child"] == expected_child
         assert res["parent"] == expected_parent
+
+
+def test_recursive_signals():
+    """
+    A parent tube can depend on the return values child tube when
+    it has a dict-like return node
+    """
+    tube = Tube.from_specification("testing-recursive-signals")
+    runner = SynchronousRunner(tube)
+    for i in range(5):
+        res = runner.process()
+        assert res["multiply"] == i * 2 * 2
+        assert res["divide"] == i / 5 / 5

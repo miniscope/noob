@@ -1,0 +1,24 @@
+noob_id: testing-recursive-signals
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  A parent tube can have nodes that depend on the signals emitted by the return node in the child tube
+
+nodes:
+  child:
+    type: tube
+    params:
+      tube: testing-branch
+  multiply:
+    type: noob.testing.multiply
+    depends:
+      - left: child.multiply
+  divide:
+    type: noob.testing.divide
+    depends:
+      - numerator: child.divide
+  return:
+    type: return
+    depends:
+      - multiply: multiply.value
+      - divide: divide.ratio

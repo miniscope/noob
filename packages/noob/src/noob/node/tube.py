@@ -1,9 +1,12 @@
+import uuid
 import warnings
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Union
 
+from noob.event import Event
 from noob.exceptions import ExtraInputWarning
 from noob.node.base import Node, Slot
-from noob.types import ConfigSource, RunnerContext
+from noob.types import ConfigSource, Epoch, RunnerContext
 
 if TYPE_CHECKING:
     from noob.runner import TubeRunner
@@ -44,14 +47,29 @@ class TubeNode(Node):
         if self._runner is not None:
             self._runner.deinit()
 
-    def process(self, **kwargs: Any) -> Any:
+    def process(self, epoch: Epoch, **kwargs: Any) -> Any:
         if self._runner is None:
             raise RuntimeError(
                 "TubeNode must be initialized within a Runner "
                 "to receive the outer runner's context. "
                 "It doesn't make sense to run a TubeNode on its own."
             )
-        return self._runner.process(**kwargs)
+        res = self._runner.process(**kwargs)
+        if isinstance(res, dict):
+            now = datetime.now(UTC)
+            return [
+                Event(
+                    id=uuid.uuid4().int,
+                    timestamp=now,
+                    node_id=self.id,
+                    signal=key,
+                    epoch=epoch,
+                    value=value,
+                )
+                for key, value in res.items()
+            ]
+        else:
+            return res
 
     def _collect_slots(self) -> dict[str, Slot]:
         from noob.input import InputScope
