@@ -225,9 +225,10 @@ def zip_iter(*args: Iterator) -> tuple[Any, ...]:
 
 
 def increment(
-    iterator: Iterator[int],
+    iterator: Iterator[int], increment: int = 1
 ) -> tuple[A[Iterator[int], Name("iterator")], A[int, Name("value")]]:
-    value = next(iterator)
+    for _ in range(increment):
+        value = next(iterator)
     return iterator, value
 
 

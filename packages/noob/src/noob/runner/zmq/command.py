@@ -12,6 +12,7 @@ from noob.network.message import (
     AnnounceMsg,
     AnnounceValue,
     DeinitMsg,
+    EpochEndedMsg,
     IdentifyMsg,
     IdentifyValue,
     Message,
@@ -176,6 +177,11 @@ class CommandNode(EventloopMixin):
             ],
         )
         self.logger.debug("Sent process message")
+
+    async def epoch_ended(self, epoch: Epoch) -> None:
+        await self.sockets["outbox"].send_multipart(
+            [b"epoch_ended", EpochEndedMsg(node_id="command", value=epoch).to_bytes()]
+        )
 
     def await_ready(self, node_ids: list[NodeID], timeout: float = 10) -> None:
         """

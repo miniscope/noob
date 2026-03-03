@@ -362,14 +362,12 @@ class ZMQRunner(TubeRunner):
                 )
 
         for e in events:
-            if (
-                e["node_id"] == "meta"
-                and e["signal"] == MetaEventType.EpochEnded
-                and e["value"] in self._epoch_futures
-            ):
-                if not self._epoch_futures[e["value"]].done():
-                    self._epoch_futures[e["value"]].set_result(e["value"])
-                del self._epoch_futures[e["value"]]
+            if e["node_id"] == "meta" and e["signal"] == MetaEventType.EpochEnded:
+                await self.command.epoch_ended(e["value"])
+                if e["value"] in self._epoch_futures:
+                    if not self._epoch_futures[e["value"]].done():
+                        self._epoch_futures[e["value"]].set_result(e["value"])
+                    del self._epoch_futures[e["value"]]
 
     def on_router(self, msg: Message) -> None:
         if isinstance(msg, ErrorMsg):

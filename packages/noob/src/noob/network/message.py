@@ -34,6 +34,7 @@ class MessageType(StrEnum):
     stop = "stop"
     event = "event"
     error = "error"
+    epoch_ended = "epoch_ended"
 
 
 class NodeStatus(StrEnum):
@@ -175,6 +176,16 @@ class ErrorMsg(Message):
         return err
 
 
+class EpochEndedMsg(Message):
+    """
+    Command node is signaling that an epoch has been completed to all nodes,
+    which don't have a complete picture of the tube's state.
+    """
+
+    type_: Literal[MessageType.epoch_ended] = Field(MessageType.epoch_ended, alias="type")
+    value: Epoch
+
+
 class EventMsg(Message):
     type_: Literal[MessageType.event] = Field(MessageType.event, alias="type")
     value: list[EventUnion]
@@ -201,6 +212,7 @@ MessageUnion = A[
     | A[StopMsg, Tag("stop")]
     | A[EventMsg, Tag("event")]
     | A[ErrorMsg, Tag("error")]
+    | A[EpochEndedMsg, Tag("epoch_ended")]
     | A[Message, Tag("any")],
     Discriminator(_type_discriminator),
 ]
