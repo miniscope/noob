@@ -729,13 +729,14 @@ class NodeRunner(EventloopMixin):
         we need to mark the asset as done manually.
         """
         if not self.scheduler.epoch_completed(msg.value):
-            with self._ready_condition:
+            async with self._ready_condition:
                 self.scheduler.end_epoch(msg.value)
                 self._ready_condition.notify_all()
         if self.state.dependencies and not self._assets_done(msg.value + 1):
-            with contextlib.suppress(AlreadyDoneError), self._ready_condition:
-                self.scheduler.done(epoch=msg.value + 1, node_id="assets")
-                self._ready_condition.notify_all()
+            with contextlib.suppress(AlreadyDoneError):
+                async with self._ready_condition:
+                    self.scheduler.done(epoch=msg.value + 1, node_id="assets")
+                    self._ready_condition.notify_all()
 
     async def await_node(self, epoch: Epoch | None = None) -> list[MetaEvent]:
         """
