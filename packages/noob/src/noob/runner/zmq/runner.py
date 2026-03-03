@@ -170,9 +170,9 @@ class ZMQRunner(TubeRunner):
             # but input can be present and only used as a param,
             # so we can't check presence of inputs in the input collection
             if "input" in self.tube.scheduler._epochs[self._current_epoch].ready_nodes:
-                self.tube.scheduler.done(self._current_epoch, "input")
+                self.tube.scheduler.done(self._current_epoch, "input", with_signals=True)
             if "assets" in self.tube.scheduler._epochs[self._current_epoch].ready_nodes:
-                self.tube.scheduler.done(self._current_epoch, "assets")
+                self.tube.scheduler.done(self._current_epoch, "assets", with_signals=True)
             self.command = cast(CommandNode, self.command)
             self.command.process(self._current_epoch, input)
             self._logger.debug("awaiting epoch %s", self._current_epoch)

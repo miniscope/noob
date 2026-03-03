@@ -1,9 +1,9 @@
 from operator import attrgetter
-from typing import Any
+from typing import Any, cast
 
 from noob.exceptions import AlreadyDoneError, NotAddedError, NotOutYetError
 from noob.node import Edge, NodeSpecification
-from noob.types import NodeID
+from noob.types import NodeID, SignalName
 
 
 class _NodeInfo:
@@ -67,7 +67,7 @@ class TopoSorter:
         for e in edges:
             if e.target_node in self._disabled_nodes:
                 continue
-            self.add(e.target_node, e.source_node)
+            self.add(e.target_node, (e.source_node, e.source_signal))
         # add enabled nodes that have no edges
         for node_id, node in nodes.items():
             if node.enabled and node_id not in self._node2info:
@@ -82,7 +82,7 @@ class TopoSorter:
         return not self.__eq__(other)
 
     @property
-    def node_info(self) -> dict[str, _NodeInfo]:
+    def node_info(self) -> dict[str | tuple[NodeID, SignalName], _NodeInfo]:
         return self._node2info
 
     @property
@@ -134,7 +134,11 @@ class TopoSorter:
         self._done_nodes.update(expired)
         self._nfinished += len(expired)
 
-    def add(self, node: NodeID, *predecessors: NodeID) -> None:
+    def add(
+        self,
+        node: NodeID | tuple[NodeID, SignalName],
+        *predecessors: NodeID | tuple[NodeID, SignalName],
+    ) -> None:
         """
         Add a new node and its predecessors to the graph.
 
@@ -147,6 +151,16 @@ class TopoSorter:
         as well as provide a dependency twice. If a node that has not been provided before
         is included among *predecessors* it will be automatically added to the graph with
         no predecessors of its own.
+
+        Generally, the structure of the topo graph that should be constructed is
+        ``source_node <-- (source_node, signal) <- target_node`` ,
+        where a given target node depends on a specific signal emitted by the
+
+        Args:
+            node (NodeID): The ID of the depending/downstream node
+            *predecessors (NodeID | tuple[NodeID, SignalName]): If a string,
+                another node ID that the node depends on (any event).
+                If a tuple of two strings, the (node, signal) that the node depends on.
         """
         # Refuse to add nodes that are out / done
         reject = [(self.out_nodes, "already out"), (self.done_nodes, "already done")]
@@ -163,6 +177,11 @@ class TopoSorter:
                 continue
             new_predecessors.append(pred)
             pred_info.successors.append(node)
+            if isinstance(pred, tuple):
+                # (node, signal) predecessors must always depend on the node
+                pred = cast(tuple[str, str], pred)
+                self.add(pred, pred[0])
+
             if (
                 pred_info.nqueue == 0
                 and pred not in self.out_nodes

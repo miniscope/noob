@@ -153,7 +153,7 @@ class AsyncRunner(TubeRunner):
         evts = []
         for node in nodes:
             if node["value"] in ("assets", "input"):
-                scheduler.done(node["epoch"], node["value"])
+                scheduler.done(node["epoch"], node["value"], with_signals=True)
             else:
                 evts.append(node)
         return evts

@@ -11,8 +11,7 @@ from itertools import count
 from threading import Condition
 from typing import Any, Literal, TypeAlias, overload
 
-from noob.const import META_SIGNAL
-from noob.event import Event, MetaSignal, is_event
+from noob.event import Event, is_event
 from noob.node import Edge
 from noob.node.base import Signal
 from noob.types import Epoch, EventMap, NodeID, SignalName
@@ -96,8 +95,6 @@ class EventStore:
             epoch (Epoch): Epoch count that the signal was emitted in
         """
         timestamp = datetime.now(UTC)
-        if value is MetaSignal.NoEvent or (isinstance(value, str) and value == MetaSignal.NoEvent):
-            signals = [Signal(name=META_SIGNAL, type_=MetaSignal)]
 
         with self._event_condition:
             values = [value] if len(signals) == 1 else value
