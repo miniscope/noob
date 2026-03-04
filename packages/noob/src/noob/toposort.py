@@ -1,15 +1,19 @@
+from collections import defaultdict
 from operator import attrgetter
-from typing import Any, cast
+from typing import Any, TypeAlias, cast
 
-from noob.exceptions import AlreadyDoneError, NotAddedError, NotOutYetError
+from noob.exceptions import AlreadyDoneError, NotAddedError
 from noob.node import Edge, NodeSpecification
 from noob.types import NodeID, SignalName
+
+NodeSignal: TypeAlias = tuple[NodeID, SignalName]
+GraphItem: TypeAlias = NodeID | NodeSignal
 
 
 class _NodeInfo:
     __slots__ = "node", "nqueue", "successors"
 
-    def __init__(self, node: str) -> None:
+    def __init__(self, node: GraphItem) -> None:
         # The node this class is augmenting.
         self.node = node
 
@@ -20,7 +24,7 @@ class _NodeInfo:
 
         # List of successor nodes. The list can contain duplicated elements as
         # long as they're all reflected in the successor's npredecessors attribute.
-        self.successors: list[NodeID] = []
+        self.successors: set[GraphItem] = set()
 
     def __eq__(self, other: Any) -> bool:
         """https://stackoverflow.com/a/4522896/14537948"""
@@ -32,6 +36,9 @@ class _NodeInfo:
 
     def __ne__(self, other: Any) -> bool:
         return not self.__eq__(other)
+
+    def __repr__(self) -> str:
+        return str((self.node, self.nqueue, self.successors))
 
 
 class TopoSorter:
@@ -51,12 +58,13 @@ class TopoSorter:
         if edges is None:
             edges = []
 
-        self._node2info: dict[str, _NodeInfo] = dict()
-        self._ready_nodes: set[NodeID] = set()
-        self._out_nodes: set[NodeID] = set()
-        self._done_nodes: set[NodeID] = set()
-        self._disabled_nodes: set[NodeID] = set()
-        self._ran_nodes: set[NodeID] = set()
+        self._node2info: dict[GraphItem, _NodeInfo] = dict()
+        self._ready_nodes: set[GraphItem] = set()
+        self._out_nodes: set[GraphItem] = set()
+        self._done_nodes: set[GraphItem] = set()
+        self._disabled_nodes: set[GraphItem] = set()
+        self._ran_nodes: set[GraphItem] = set()
+        self._signals: dict[NodeID, set[NodeSignal]] = defaultdict(set)
         self._npassedout = 0
         self._nfinished = 0
 
@@ -82,27 +90,27 @@ class TopoSorter:
         return not self.__eq__(other)
 
     @property
-    def node_info(self) -> dict[str | tuple[NodeID, SignalName], _NodeInfo]:
+    def node_info(self) -> dict[GraphItem, _NodeInfo]:
         return self._node2info
 
     @property
-    def ready_nodes(self) -> set[NodeID]:
+    def ready_nodes(self) -> set[GraphItem]:
         return self._ready_nodes
 
     @property
-    def out_nodes(self) -> set[NodeID]:
+    def out_nodes(self) -> set[GraphItem]:
         return self._out_nodes
 
     @property
-    def done_nodes(self) -> set[NodeID]:
+    def done_nodes(self) -> set[GraphItem]:
         return self._done_nodes
 
     @property
-    def ran_nodes(self) -> set[NodeID]:
+    def ran_nodes(self) -> set[GraphItem]:
         """Nodes that were actually run, marked `done`, rather than expired"""
         return self._ran_nodes
 
-    def mark_ready(self, *nodes: NodeID) -> None:
+    def mark_ready(self, *nodes: GraphItem) -> None:
         """
         Manually mark a node as ready.
 
@@ -111,7 +119,7 @@ class TopoSorter:
         """
         self._ready_nodes.update(nodes)
 
-    def mark_out(self, *nodes: NodeID) -> None:
+    def mark_out(self, *nodes: GraphItem) -> None:
         """
         Mark a node as being out for processing
         """
@@ -119,7 +127,7 @@ class TopoSorter:
         self._out_nodes.update(nodes)
         self._npassedout += len(nodes)
 
-    def mark_expired(self, *nodes: NodeID) -> None:
+    def mark_expired(self, *nodes: GraphItem) -> None:
         """
         Mark node(s) as having been completed without making its dependent nodes ready -
         used when a node emits ``NoEvent``
@@ -136,8 +144,8 @@ class TopoSorter:
 
     def add(
         self,
-        node: NodeID | tuple[NodeID, SignalName],
-        *predecessors: NodeID | tuple[NodeID, SignalName],
+        node: GraphItem,
+        *predecessors: GraphItem,
     ) -> None:
         """
         Add a new node and its predecessors to the graph.
@@ -176,10 +184,11 @@ class TopoSorter:
             if node in pred_info.successors:
                 continue
             new_predecessors.append(pred)
-            pred_info.successors.append(node)
+            pred_info.successors.add(node)
             if isinstance(pred, tuple):
                 # (node, signal) predecessors must always depend on the node
-                pred = cast(tuple[str, str], pred)
+                pred = cast(NodeSignal, pred)
+                self._signals[pred[0]].add(pred)
                 self.add(pred, pred[0])
 
             if (
@@ -200,7 +209,7 @@ class TopoSorter:
             # in case node is called multiple times
             self._ready_nodes.discard(node)
 
-    def get_ready(self, node_id: NodeID | None = None) -> tuple[str, ...]:
+    def get_ready(self, node_id: NodeID | None = None) -> tuple[GraphItem, ...]:
         """
         Return a tuple of all the nodes that are ready.
 
@@ -231,7 +240,7 @@ class TopoSorter:
         """
         return self._nfinished < self._npassedout or bool(self.ready_nodes)
 
-    def done(self, *nodes: str) -> None:
+    def done(self, *nodes: GraphItem) -> None:
         """Marks a set of nodes returned by "get_ready" as processed.
 
         This method unblocks any successor of each node in *nodes* for being returned
@@ -255,7 +264,8 @@ class TopoSorter:
                 if node in self.done_nodes:
                     raise AlreadyDoneError(f"node {node!r} was already marked done")
                 else:
-                    raise NotOutYetError(f"node {node!r} was not passed out")
+                    # we do lots of forward-looking cancellation - if we say it's done, it's done.
+                    self.mark_out(node)
 
             # Mark the node as processed
             self.mark_expired(node)

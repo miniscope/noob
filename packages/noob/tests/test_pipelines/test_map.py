@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from noob import Tube
+from noob.event import MetaSignal
 from noob.runner import TubeRunner
 from noob.types import Epoch
 from noob.utils import iscoroutinefunction_partial
@@ -67,7 +68,8 @@ async def test_map_gather(loaded_tube: Tube, all_runners: TubeRunner):
         assert not runner.store.events[Epoch(i)]["c"]["value"]
         assert runner.store.events[Epoch(i)]["d"]["value"][0]["value"] == val["letter"]
         assert runner.store.events[Epoch(i)]["e"]["value"][0]["value"] == val["reconstructed"]
-        assert not runner.store.events[Epoch(i) / ("b", 0)]["d"]["value"]
+        gather_events = runner.store.events[Epoch(i) / ("b", 0)]["d"]["value"]
+        assert not gather_events or gather_events[0]["value"] == MetaSignal.NoEvent
         assert not runner.store.events[Epoch(i) / ("b", 0)]["e"]["value"]
 
 

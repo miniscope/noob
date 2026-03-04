@@ -55,11 +55,11 @@ def test_dynamic_add(ts: TopoSorter) -> None:
     ts.done(*ready_nodes)
     ts.add("d", "b")
     assert ts._node2info["d"].nqueue == 1
-    assert ts._node2info["b"].successors == ["c", "d"]
+    assert ts._node2info["b"].successors == {"c", "d"}
 
     ts.add("e", "a")
     assert ts._node2info["e"].nqueue == 0
-    assert ts._node2info["a"].successors == ["b", "e"]
+    assert ts._node2info["a"].successors == {"b", "e"}
     assert "e" in ts.ready_nodes
 
 
@@ -254,13 +254,15 @@ def test_the_node_multiple_times():
 def test_add_dependencies_for_same_node_incrementally():
     # Test same node multiple times
     ts = TopoSorter()
-    ts.add("1", "2")
-    ts.add("1", "3")
-    ts.add("1", "4")
-    ts.add("1", "5")
+    ts.add("1", ("2", "value"))
+    ts.add("1", ("3", "value"))
+    ts.add("1", ("4", "value"))
+    ts.add("1", ("5", "value"))
 
     ts2 = TopoSorter(edges=_graphlib_init_to_noob({"1": {"2", "3", "4", "5"}}))
-    assert [*_static_order_with_groups(ts)] == [*_static_order_with_groups(ts2)]
+    ts_groups = [*_static_order_with_groups(ts)]
+    ts2_groups = [*_static_order_with_groups(ts2)]
+    assert ts_groups == ts2_groups
 
 
 def test_empty():
@@ -292,8 +294,6 @@ def test_invalid_nodes_in_done():
     ts.add("2", "3", "4")
     ts.get_ready()
 
-    with pytest.raises(ValueError, match="node '2' was not passed out"):
-        ts.done("2")
     with pytest.raises(ValueError, match=r"node '24' was not added using add\(\)"):
         ts.done("24")
 

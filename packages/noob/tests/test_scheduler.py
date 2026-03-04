@@ -112,8 +112,8 @@ def test_scheduler_disable_node():
     scheduler.disable_node("c")
     scheduler.add_epoch()
     assert list(scheduler.nodes.keys()) == ["a", "b", "c"]
-    assert list(scheduler[0]._node2info.keys()) == ["a", "b", "c"]
-    assert list(scheduler[1]._node2info.keys()) == ["a", "b"]
+    assert list(scheduler[0]._node2info.keys()) == [("a", "index"), "a", "b", ("b", "value"), "c"]
+    assert list(scheduler[1]._node2info.keys()) == [("a", "index"), "a", "b"]
 
 
 @pytest.mark.parametrize(
@@ -287,7 +287,7 @@ def test_map_gather_only_parent_epoch():
 def test_map_gather_mixed_epochs():
     """
     When a gather node collapses subepochs,
-    it yields nodes that are exlusively downstream of the gather node in the parent epoch,
+    it yields nodes that are exclusively downstream of the gather node in the parent epoch,
     and nodes that are in the mapped subepoch in the subepochs.
     """
     tube = Tube.from_specification("testing-map-gather")
@@ -296,10 +296,10 @@ def test_map_gather_mixed_epochs():
     scheduler.done(ep, node_id="a")
     scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
     for i in range(3):
-        scheduler.done(ep / ("b", i), node_id="c")
+        scheduler.done(ep / ("b", i), node_id="c", signal="value")
     for i in range(3):
-        scheduler.expire(ep / ("b", i), node_id="d")
-    scheduler.done(ep, node_id="d")
+        scheduler.expire(ep / ("b", i), node_id="d", signal="value")
+    scheduler.done(ep, node_id="d", signal="value")
     scheduler.done(ep, node_id="e")
     ready = scheduler.get_ready(ep)
     assert len(ready) == 3
@@ -326,9 +326,9 @@ def test_is_active_when_subepochs_active():
     assert not scheduler.is_active(ep)
 
 
-def _make_event(epoch: Epoch, node_id: str) -> Event:
+def _make_event(epoch: Epoch, node_id: str, signal: str = "value") -> Event:
     return Event(
-        id=0, epoch=epoch, node_id=node_id, timestamp=datetime.now(), signal="zzz", value=0
+        id=0, epoch=epoch, node_id=node_id, timestamp=datetime.now(), signal=signal, value=0
     )
 
 

@@ -96,12 +96,6 @@ class EpochExistsError(SchedulerError, ValueError):
     """
 
 
-class NotOutYetError(SchedulerError, ValueError):
-    """
-    Node was marked done but wasn't passed out yet!
-    """
-
-
 class NotAddedError(SchedulerError, ValueError):
     """
     Node was marked done but wasn't added!
