@@ -367,10 +367,14 @@ class TopoSorter:
                 new_node2info = {}
                 for node, info in self._node2info.items():
                     new_info = _NodeInfo(node)
-                    for nodeslot in _NodeInfo.__slots__:
-                        setattr(new_info, nodeslot, copy(getattr(info, nodeslot)))
+                    new_info.nqueue = info.nqueue
+                    new_info.successors = set(info.successors)
                     new_node2info[node] = new_info
                 sorter._node2info = new_node2info
+            elif isinstance((val := getattr(self, slot)), dict | defaultdict | set):
+                getattr(sorter, slot).update(val)
+            elif isinstance(val, int | float):
+                setattr(sorter, slot, getattr(self, slot))
             else:
                 setattr(sorter, slot, copy(getattr(self, slot)))
         return sorter
