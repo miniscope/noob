@@ -1,4 +1,5 @@
 from collections import defaultdict
+from copy import copy
 from operator import attrgetter
 from typing import Any, TypeAlias
 
@@ -363,12 +364,13 @@ class TopoSorter:
         sorter = TopoSorter()
         for slot in self.__slots__:
             if slot == "_node2info":
-                sorter._node2info = {
-                    key: _NodeInfo(
-                        *{nodeslot: getattr(val, nodeslot) for nodeslot in val.__slots__}
-                    )
-                    for key, val in self._node2info.items()
-                }
+                new_node2info = {}
+                for node, info in self._node2info.items():
+                    new_info = _NodeInfo(node)
+                    for nodeslot in _NodeInfo.__slots__:
+                        setattr(new_info, nodeslot, copy(getattr(info, nodeslot)))
+                    new_node2info[node] = new_info
+                sorter._node2info = new_node2info
             else:
-                setattr(sorter, slot, getattr(sorter, slot))
+                setattr(sorter, slot, copy(getattr(sorter, slot)))
         return sorter
