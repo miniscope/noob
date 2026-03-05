@@ -1,12 +1,11 @@
 from collections import defaultdict
 from operator import attrgetter
-from typing import Any, TypeAlias, cast
+from typing import Any, TypeAlias
 
 from noob.exceptions import AlreadyDoneError, NotAddedError
 from noob.node import Edge, NodeSpecification
-from noob.types import NodeID, SignalName
+from noob.types import NodeID, NodeSignal
 
-NodeSignal: TypeAlias = tuple[NodeID, SignalName]
 GraphItem: TypeAlias = NodeID | NodeSignal
 
 
@@ -58,13 +57,13 @@ class TopoSorter:
         if edges is None:
             edges = []
 
+        self.signals: dict[NodeID, set[NodeSignal]] = defaultdict(set)
         self._node2info: dict[GraphItem, _NodeInfo] = dict()
         self._ready_nodes: set[GraphItem] = set()
         self._out_nodes: set[GraphItem] = set()
         self._done_nodes: set[GraphItem] = set()
         self._disabled_nodes: set[GraphItem] = set()
         self._ran_nodes: set[GraphItem] = set()
-        self._signals: dict[NodeID, set[NodeSignal]] = defaultdict(set)
         self._npassedout = 0
         self._nfinished = 0
 
@@ -75,7 +74,7 @@ class TopoSorter:
         for e in edges:
             if e.target_node in self._disabled_nodes:
                 continue
-            self.add(e.target_node, (e.source_node, e.source_signal))
+            self.add(e.target_node, NodeSignal(e.source_node, e.source_signal))
         # add enabled nodes that have no edges
         for node_id, node in nodes.items():
             if node.enabled and node_id not in self._node2info:
@@ -186,9 +185,11 @@ class TopoSorter:
             new_predecessors.append(pred)
             pred_info.successors.add(node)
             if isinstance(pred, tuple):
+                assert len(pred) == 2, "Only NodeSignal (node_id, signal) tuples allowed"
                 # (node, signal) predecessors must always depend on the node
-                pred = cast(NodeSignal, pred)
-                self._signals[pred[0]].add(pred)
+                if not isinstance(pred, NodeSignal):
+                    pred = NodeSignal(*pred)
+                self.signals[pred[0]].add(pred)
                 self.add(pred, pred[0])
 
             if (
@@ -285,7 +286,7 @@ class TopoSorter:
 
         self._ran_nodes.update(nodes)
 
-    def resurrect(self, *nodes: str) -> None:
+    def resurrect(self, *nodes: GraphItem) -> None:
         """
         If a node was marked as expired (but not run),
         returns it to the processing graph -
@@ -304,12 +305,12 @@ class TopoSorter:
             if self._node2info[node].nqueue == 0:
                 self.mark_ready(node)
 
-    def find_cycle(self) -> list[str] | None:
+    def find_cycle(self) -> list[GraphItem] | None:
         n2i = self._node2info
-        stack: list[str] = []
+        stack: list[GraphItem] = []
         itstack = []
         seen = set()
-        node2stacki: dict[str, int] = {}
+        node2stacki: dict[GraphItem, int] = {}
 
         for node in n2i:
             if node in seen:
@@ -341,7 +342,7 @@ class TopoSorter:
                     break
         return None
 
-    def _get_nodeinfo(self, node: str) -> _NodeInfo:
+    def _get_nodeinfo(self, node: GraphItem) -> _NodeInfo:
         if (result := self._node2info.get(node)) is None:
             self._node2info[node] = result = _NodeInfo(node)
         return result

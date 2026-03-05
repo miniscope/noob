@@ -160,6 +160,14 @@ Picklable = Annotated[
 NodeID: TypeAlias = Annotated[str, AfterValidator(_is_identifier), AfterValidator(_not_reserved)]
 SignalName: TypeAlias = Annotated[str, AfterValidator(_is_identifier)]
 
+
+class NodeSignal(NamedTuple):
+    """Hashable representation of a (node_id, signal_name) pair"""
+
+    node_id: NodeID
+    signal: SignalName
+
+
 ReturnNodeType: TypeAlias = None | dict[str, Any] | Any
 EventMap: TypeAlias = dict[PythonIdentifier, "Event"]
 """

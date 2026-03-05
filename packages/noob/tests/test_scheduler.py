@@ -238,6 +238,7 @@ def test_disable_nodes():
     assert not scheduler.get_ready()
 
 
+@pytest.mark.map
 def test_map_creating_subepochs_expires_parent_epoch():
     """
     When a node induces a map by creating subepochs,
@@ -252,6 +253,7 @@ def test_map_creating_subepochs_expires_parent_epoch():
     assert "b" not in scheduler._epochs[ep].ran_nodes
 
 
+@pytest.mark.map
 def test_get_ready_yields_all_mapped_subepochs():
     """
     get_ready should yield all mapped subepochs at once when accessed with the parent epoch
@@ -266,6 +268,7 @@ def test_get_ready_yields_all_mapped_subepochs():
     assert {r["epoch"] for r in ready} == {ep / ("b", i) for i in range(3)}
 
 
+@pytest.mark.map
 def test_map_gather_only_parent_epoch():
     """
     When a gather node collapses subepochs, nodes that are exclusively downstream of the gather node
@@ -284,6 +287,7 @@ def test_map_gather_only_parent_epoch():
     assert ready[0]["epoch"] == ep
 
 
+@pytest.mark.map
 def test_map_gather_mixed_epochs():
     """
     When a gather node collapses subepochs,
@@ -306,6 +310,7 @@ def test_map_gather_mixed_epochs():
     assert {r["epoch"] for r in ready} == {ep / ("b", i) for i in range(3)}
 
 
+@pytest.mark.map
 def test_is_active_when_subepochs_active():
     """Scheduler stays active for an epoch as long as there are active subepochs"""
     tube = Tube.from_specification("testing-map-basic")
