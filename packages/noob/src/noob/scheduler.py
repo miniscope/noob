@@ -283,7 +283,8 @@ class Scheduler(BaseModel):
 
         end_events: MutableSequence[MetaEvent] = []
         nodes_done = set()
-        events = sorted(events, key=lambda ee: len(ee["epoch"]))
+        # process subepochs first so they're created when we handle parent epochs
+        events = sorted(events, key=lambda ee: len(ee["epoch"]), reverse=True)
         for e in events:
             if e["node_id"] == "meta":
                 continue
@@ -334,7 +335,6 @@ class Scheduler(BaseModel):
             return None
 
         to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
-
         try:
             self[epoch].done(to_mark)
         except AlreadyDoneError as e:
@@ -549,7 +549,6 @@ class Scheduler(BaseModel):
             if (
                 to_mark in self._epochs[subepoch].ran_nodes
                 or to_mark not in self._epochs[subepoch].node_info
-                or subepoch[-1].node_id == node_id
             ):
                 # fine
                 continue
