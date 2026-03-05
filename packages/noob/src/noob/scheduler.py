@@ -111,11 +111,6 @@ class Scheduler:
         graph = self._init_graph(epoch=this_epoch)
         self._epochs[this_epoch] = graph
 
-        # handle subepochs
-        if this_epoch.parent is not None:
-            for parent in this_epoch.parents:
-                self._subepochs[parent].add(this_epoch)
-
         return this_epoch
 
     def add_subepoch(self, epoch: Epoch) -> Epoch:
@@ -130,7 +125,6 @@ class Scheduler:
 
         parent_epoch = self[epoch.parent]
         sorter = self._init_graph(epoch)
-        nodes, edges = self._subgraph(epoch[-1].node_id)
 
         # mark any nodes that are completed in the parent as completed in the subepoch
         # EXCEPT don't expire the node that induced the subepoch or its signals -
@@ -292,6 +286,9 @@ class Scheduler:
                 continue
             elif (node_done := (e["epoch"], e["node_id"])) not in nodes_done:
                 nodes_done.add(node_done)
+                # FIXME: This exception suppression is a *bit* broad - fix underlying issue
+                # The zmq runner has an incomplete graph, and so sometimes we don't have
+                # all the nodes in the graph when we go to mark the node done.
                 with contextlib.suppress(AlreadyDoneError, NotAddedError):
                     epoch_ended = self.done(e["epoch"], e["node_id"], with_signals=False)
                     if epoch_ended:
