@@ -95,7 +95,7 @@ class TopoSorter:
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, self.__class__):
-            return self.__dict__ == other.__dict__
+            return all(getattr(self, slot) == getattr(other, slot) for slot in self.__slots__)
         return False
 
     def __ne__(self, other: Any) -> bool:
