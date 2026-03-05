@@ -372,5 +372,5 @@ class TopoSorter:
                     new_node2info[node] = new_info
                 sorter._node2info = new_node2info
             else:
-                setattr(sorter, slot, copy(getattr(sorter, slot)))
+                setattr(sorter, slot, copy(getattr(self, slot)))
         return sorter

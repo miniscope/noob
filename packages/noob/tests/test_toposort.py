@@ -6,6 +6,7 @@ import pytest
 
 from noob.node import Edge
 from noob.toposort import TopoSorter
+from noob.types import NodeSignal
 
 
 @pytest.fixture
@@ -367,3 +368,29 @@ def test_order_of_insertion_does_not_matter_between_groups():
     ts2.add("4", "5")
 
     assert list(get_groups(ts)) == list(get_groups(ts2))
+
+
+def test_deepcopy():
+    """Deepcopying topo sorter actually deepcopies"""
+    ts = TopoSorter()
+    ts.add("1", "2")
+    ts.add("1", "3")
+    ts.add("2", NodeSignal("4", "value"))
+    ts.add("3", "5")
+    ts.add("6", "3", "4", "5")
+
+    copied = deepcopy(ts)
+    third = deepcopy(ts)
+    for slot in ts.__slots__:
+        assert getattr(ts, slot) == getattr(copied, slot) == getattr(third, slot)
+
+    while ts.is_active():
+        ready = ts.get_ready()
+        for r in ready:
+            ts.done(r)
+
+    for slot in ts.__slots__:
+        assert getattr(copied, slot) == getattr(third, slot)
+        if slot not in ("signals", "_out_nodes", "_disabled_nodes"):
+            # everything changes except for the things that... don't change...
+            assert getattr(ts, slot) != getattr(copied, slot)
