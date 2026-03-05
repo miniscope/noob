@@ -6,6 +6,7 @@ import pytest
 
 from noob.node import Edge
 from noob.toposort import TopoSorter
+from noob.types import NodeSignal
 
 
 @pytest.fixture
@@ -55,11 +56,11 @@ def test_dynamic_add(ts: TopoSorter) -> None:
     ts.done(*ready_nodes)
     ts.add("d", "b")
     assert ts._node2info["d"].nqueue == 1
-    assert ts._node2info["b"].successors == ["c", "d"]
+    assert ts._node2info["b"].successors == {"c", "d"}
 
     ts.add("e", "a")
     assert ts._node2info["e"].nqueue == 0
-    assert ts._node2info["a"].successors == ["b", "e"]
+    assert ts._node2info["a"].successors == {"b", "e"}
     assert "e" in ts.ready_nodes
 
 
@@ -254,13 +255,15 @@ def test_the_node_multiple_times():
 def test_add_dependencies_for_same_node_incrementally():
     # Test same node multiple times
     ts = TopoSorter()
-    ts.add("1", "2")
-    ts.add("1", "3")
-    ts.add("1", "4")
-    ts.add("1", "5")
+    ts.add("1", ("2", "value"))
+    ts.add("1", ("3", "value"))
+    ts.add("1", ("4", "value"))
+    ts.add("1", ("5", "value"))
 
     ts2 = TopoSorter(edges=_graphlib_init_to_noob({"1": {"2", "3", "4", "5"}}))
-    assert [*_static_order_with_groups(ts)] == [*_static_order_with_groups(ts2)]
+    ts_groups = [*_static_order_with_groups(ts)]
+    ts2_groups = [*_static_order_with_groups(ts2)]
+    assert ts_groups == ts2_groups
 
 
 def test_empty():
@@ -292,8 +295,6 @@ def test_invalid_nodes_in_done():
     ts.add("2", "3", "4")
     ts.get_ready()
 
-    with pytest.raises(ValueError, match="node '2' was not passed out"):
-        ts.done("2")
     with pytest.raises(ValueError, match=r"node '24' was not added using add\(\)"):
         ts.done("24")
 
@@ -367,3 +368,29 @@ def test_order_of_insertion_does_not_matter_between_groups():
     ts2.add("4", "5")
 
     assert list(get_groups(ts)) == list(get_groups(ts2))
+
+
+def test_deepcopy():
+    """Deepcopying topo sorter actually deepcopies"""
+    ts = TopoSorter()
+    ts.add("1", "2")
+    ts.add("1", "3")
+    ts.add("2", NodeSignal("4", "value"))
+    ts.add("3", "5")
+    ts.add("6", "3", "4", "5")
+
+    copied = deepcopy(ts)
+    third = deepcopy(ts)
+    for slot in ts.__slots__:
+        assert getattr(ts, slot) == getattr(copied, slot) == getattr(third, slot)
+
+    while ts.is_active():
+        ready = ts.get_ready()
+        for r in ready:
+            ts.done(r)
+
+    for slot in ts.__slots__:
+        assert getattr(copied, slot) == getattr(third, slot)
+        if slot not in ("signals", "_out_nodes", "_disabled_nodes"):
+            # everything changes except for the things that... don't change...
+            assert getattr(ts, slot) != getattr(copied, slot)

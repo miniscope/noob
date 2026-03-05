@@ -1,15 +1,19 @@
+from collections import defaultdict
+from copy import copy
 from operator import attrgetter
-from typing import Any
+from typing import Any, TypeAlias
 
-from noob.exceptions import AlreadyDoneError, NotAddedError, NotOutYetError
+from noob.exceptions import AlreadyDoneError, NotAddedError
 from noob.node import Edge, NodeSpecification
-from noob.types import NodeID
+from noob.types import NodeID, NodeSignal
+
+GraphItem: TypeAlias = NodeID | NodeSignal
 
 
 class _NodeInfo:
     __slots__ = "node", "nqueue", "successors"
 
-    def __init__(self, node: str) -> None:
+    def __init__(self, node: GraphItem) -> None:
         # The node this class is augmenting.
         self.node = node
 
@@ -20,7 +24,7 @@ class _NodeInfo:
 
         # List of successor nodes. The list can contain duplicated elements as
         # long as they're all reflected in the successor's npredecessors attribute.
-        self.successors: list[NodeID] = []
+        self.successors: set[GraphItem] = set()
 
     def __eq__(self, other: Any) -> bool:
         """https://stackoverflow.com/a/4522896/14537948"""
@@ -33,6 +37,9 @@ class _NodeInfo:
     def __ne__(self, other: Any) -> bool:
         return not self.__eq__(other)
 
+    def __repr__(self) -> str:
+        return str((self.node, self.nqueue, self.successors))
+
 
 class TopoSorter:
     """
@@ -43,6 +50,18 @@ class TopoSorter:
     and modifying graph mid-iteration.
     """
 
+    __slots__ = (
+        "signals",
+        "_node2info",
+        "_ready_nodes",
+        "_out_nodes",
+        "_done_nodes",
+        "_disabled_nodes",
+        "_ran_nodes",
+        "_npassedout",
+        "_nfinished",
+    )
+
     def __init__(
         self, nodes: dict[str, NodeSpecification] | None = None, edges: list[Edge] | None = None
     ) -> None:
@@ -51,12 +70,13 @@ class TopoSorter:
         if edges is None:
             edges = []
 
-        self._node2info: dict[str, _NodeInfo] = dict()
-        self._ready_nodes: set[NodeID] = set()
-        self._out_nodes: set[NodeID] = set()
-        self._done_nodes: set[NodeID] = set()
-        self._disabled_nodes: set[NodeID] = set()
-        self._ran_nodes: set[NodeID] = set()
+        self.signals: dict[NodeID, set[NodeSignal]] = defaultdict(set)
+        self._node2info: dict[GraphItem, _NodeInfo] = dict()
+        self._ready_nodes: set[GraphItem] = set()
+        self._out_nodes: set[GraphItem] = set()
+        self._done_nodes: set[GraphItem] = set()
+        self._disabled_nodes: set[GraphItem] = set()
+        self._ran_nodes: set[GraphItem] = set()
         self._npassedout = 0
         self._nfinished = 0
 
@@ -67,7 +87,7 @@ class TopoSorter:
         for e in edges:
             if e.target_node in self._disabled_nodes:
                 continue
-            self.add(e.target_node, e.source_node)
+            self.add(e.target_node, NodeSignal(e.source_node, e.source_signal))
         # add enabled nodes that have no edges
         for node_id, node in nodes.items():
             if node.enabled and node_id not in self._node2info:
@@ -75,34 +95,34 @@ class TopoSorter:
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, self.__class__):
-            return self.__dict__ == other.__dict__
+            return all(getattr(self, slot) == getattr(other, slot) for slot in self.__slots__)
         return False
 
     def __ne__(self, other: Any) -> bool:
         return not self.__eq__(other)
 
     @property
-    def node_info(self) -> dict[str, _NodeInfo]:
+    def node_info(self) -> dict[GraphItem, _NodeInfo]:
         return self._node2info
 
     @property
-    def ready_nodes(self) -> set[NodeID]:
+    def ready_nodes(self) -> set[GraphItem]:
         return self._ready_nodes
 
     @property
-    def out_nodes(self) -> set[NodeID]:
+    def out_nodes(self) -> set[GraphItem]:
         return self._out_nodes
 
     @property
-    def done_nodes(self) -> set[NodeID]:
+    def done_nodes(self) -> set[GraphItem]:
         return self._done_nodes
 
     @property
-    def ran_nodes(self) -> set[NodeID]:
+    def ran_nodes(self) -> set[GraphItem]:
         """Nodes that were actually run, marked `done`, rather than expired"""
         return self._ran_nodes
 
-    def mark_ready(self, *nodes: NodeID) -> None:
+    def mark_ready(self, *nodes: GraphItem) -> None:
         """
         Manually mark a node as ready.
 
@@ -111,7 +131,7 @@ class TopoSorter:
         """
         self._ready_nodes.update(nodes)
 
-    def mark_out(self, *nodes: NodeID) -> None:
+    def mark_out(self, *nodes: GraphItem) -> None:
         """
         Mark a node as being out for processing
         """
@@ -119,7 +139,7 @@ class TopoSorter:
         self._out_nodes.update(nodes)
         self._npassedout += len(nodes)
 
-    def mark_expired(self, *nodes: NodeID) -> None:
+    def mark_expired(self, *nodes: GraphItem) -> None:
         """
         Mark node(s) as having been completed without making its dependent nodes ready -
         used when a node emits ``NoEvent``
@@ -134,7 +154,11 @@ class TopoSorter:
         self._done_nodes.update(expired)
         self._nfinished += len(expired)
 
-    def add(self, node: NodeID, *predecessors: NodeID) -> None:
+    def add(
+        self,
+        node: GraphItem,
+        *predecessors: GraphItem,
+    ) -> None:
         """
         Add a new node and its predecessors to the graph.
 
@@ -147,6 +171,16 @@ class TopoSorter:
         as well as provide a dependency twice. If a node that has not been provided before
         is included among *predecessors* it will be automatically added to the graph with
         no predecessors of its own.
+
+        Generally, the structure of the topo graph that should be constructed is
+        ``source_node <-- (source_node, signal) <- target_node`` ,
+        where a given target node depends on a specific signal emitted by the
+
+        Args:
+            node (NodeID): The ID of the depending/downstream node
+            *predecessors (NodeID | tuple[NodeID, SignalName]): If a string,
+                another node ID that the node depends on (any event).
+                If a tuple of two strings, the (node, signal) that the node depends on.
         """
         # Refuse to add nodes that are out / done
         reject = [(self.out_nodes, "already out"), (self.done_nodes, "already done")]
@@ -162,7 +196,15 @@ class TopoSorter:
             if node in pred_info.successors:
                 continue
             new_predecessors.append(pred)
-            pred_info.successors.append(node)
+            pred_info.successors.add(node)
+            if isinstance(pred, tuple):
+                assert len(pred) == 2, "Only NodeSignal (node_id, signal) tuples allowed"
+                # (node, signal) predecessors must always depend on the node
+                if not isinstance(pred, NodeSignal):
+                    pred = NodeSignal(*pred)
+                self.signals[pred[0]].add(pred)
+                self.add(pred, pred[0])
+
             if (
                 pred_info.nqueue == 0
                 and pred not in self.out_nodes
@@ -181,7 +223,7 @@ class TopoSorter:
             # in case node is called multiple times
             self._ready_nodes.discard(node)
 
-    def get_ready(self, node_id: NodeID | None = None) -> tuple[str, ...]:
+    def get_ready(self, node_id: NodeID | None = None) -> tuple[GraphItem, ...]:
         """
         Return a tuple of all the nodes that are ready.
 
@@ -212,7 +254,7 @@ class TopoSorter:
         """
         return self._nfinished < self._npassedout or bool(self.ready_nodes)
 
-    def done(self, *nodes: str) -> None:
+    def done(self, *nodes: GraphItem) -> None:
         """Marks a set of nodes returned by "get_ready" as processed.
 
         This method unblocks any successor of each node in *nodes* for being returned
@@ -236,7 +278,8 @@ class TopoSorter:
                 if node in self.done_nodes:
                     raise AlreadyDoneError(f"node {node!r} was already marked done")
                 else:
-                    raise NotOutYetError(f"node {node!r} was not passed out")
+                    # we do lots of forward-looking cancellation - if we say it's done, it's done.
+                    self.mark_out(node)
 
             # Mark the node as processed
             self.mark_expired(node)
@@ -256,7 +299,7 @@ class TopoSorter:
 
         self._ran_nodes.update(nodes)
 
-    def resurrect(self, *nodes: str) -> None:
+    def resurrect(self, *nodes: GraphItem) -> None:
         """
         If a node was marked as expired (but not run),
         returns it to the processing graph -
@@ -275,12 +318,12 @@ class TopoSorter:
             if self._node2info[node].nqueue == 0:
                 self.mark_ready(node)
 
-    def find_cycle(self) -> list[str] | None:
+    def find_cycle(self) -> list[GraphItem] | None:
         n2i = self._node2info
-        stack: list[str] = []
+        stack: list[GraphItem] = []
         itstack = []
         seen = set()
-        node2stacki: dict[str, int] = {}
+        node2stacki: dict[GraphItem, int] = {}
 
         for node in n2i:
             if node in seen:
@@ -312,7 +355,26 @@ class TopoSorter:
                     break
         return None
 
-    def _get_nodeinfo(self, node: str) -> _NodeInfo:
+    def _get_nodeinfo(self, node: GraphItem) -> _NodeInfo:
         if (result := self._node2info.get(node)) is None:
             self._node2info[node] = result = _NodeInfo(node)
         return result
+
+    def __deepcopy__(self, memo: dict) -> "TopoSorter":
+        sorter = TopoSorter()
+        for slot in self.__slots__:
+            if slot == "_node2info":
+                new_node2info = {}
+                for node, info in self._node2info.items():
+                    new_info = _NodeInfo(node)
+                    new_info.nqueue = info.nqueue
+                    new_info.successors = set(info.successors)
+                    new_node2info[node] = new_info
+                sorter._node2info = new_node2info
+            elif isinstance((val := getattr(self, slot)), dict | defaultdict | set):
+                getattr(sorter, slot).update(val)
+            elif isinstance(val, int | float):
+                setattr(sorter, slot, getattr(self, slot))
+            else:
+                setattr(sorter, slot, copy(getattr(self, slot)))
+        return sorter

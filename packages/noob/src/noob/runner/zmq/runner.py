@@ -173,10 +173,12 @@ class ZMQRunner(TubeRunner):
                 self.tube.scheduler.done(self._current_epoch, "input")
             if "assets" in self.tube.scheduler._epochs[self._current_epoch].ready_nodes:
                 self.tube.scheduler.done(self._current_epoch, "assets")
+
+            future = self._get_epoch_future(self._current_epoch)
             self.command = cast(CommandNode, self.command)
             self.command.process(self._current_epoch, input)
             self._logger.debug("awaiting epoch %s", self._current_epoch)
-            self.await_epoch(self._current_epoch)
+            future.result()
             self._logger.debug("collecting return")
 
             return self.collect_return(self._current_epoch)
@@ -233,7 +235,7 @@ class ZMQRunner(TubeRunner):
                 ret = MetaSignal.NoEvent
                 loop = 0
                 while ret is MetaSignal.NoEvent:
-                    self.await_epoch(Epoch(epoch))
+                    self._get_epoch_future(Epoch(epoch)).result()
                     ret = self.collect_return(Epoch(epoch))
                     epoch += 1
                     self._current_epoch = Epoch(epoch)
@@ -305,7 +307,9 @@ class ZMQRunner(TubeRunner):
             # run n epochs
             self.command.start(n)
             self._running.set()
-            self._current_epoch = self.await_epoch(Epoch(self._current_epoch[0].epoch + n))
+            self._current_epoch = self._get_epoch_future(
+                Epoch(self._current_epoch[0].epoch + n)
+            ).result()
             return None
 
     def stop(self) -> None:
@@ -363,7 +367,8 @@ class ZMQRunner(TubeRunner):
                 and e["signal"] == MetaEventType.EpochEnded
                 and e["value"] in self._epoch_futures
             ):
-                self._epoch_futures[e["value"]].set_result(e["value"])
+                if not self._epoch_futures[e["value"]].done():
+                    self._epoch_futures[e["value"]].set_result(e["value"])
                 del self._epoch_futures[e["value"]]
 
     def on_router(self, msg: Message) -> None:
@@ -451,10 +456,11 @@ class ZMQRunner(TubeRunner):
     def disable_node(self, node_id: str) -> None:
         raise NotImplementedError()
 
-    def await_epoch(self, epoch: Epoch) -> Epoch:
-        if self.tube.scheduler.epoch_completed(epoch):
-            return epoch
-
+    def _get_epoch_future(self, epoch: Epoch) -> concurrent.futures.Future:
         if epoch not in self._epoch_futures:
             self._epoch_futures[epoch] = concurrent.futures.Future()
-        return self._epoch_futures[epoch].result()
+
+        if self.tube.scheduler.epoch_completed(epoch):
+            self._epoch_futures[epoch].set_result(epoch)
+
+        return self._epoch_futures[epoch]

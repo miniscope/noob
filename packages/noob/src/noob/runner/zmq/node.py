@@ -502,7 +502,7 @@ class NodeRunner(EventloopMixin):
                 for e in self._node.edges
                 if e.source_node != "assets" or e.source_signal in self.receives_assets_from
             ],
-            logger=init_logger(f"noob.scheduler.{self.spec.id}"),
+            _logger=init_logger(f"noob.scheduler.{self.spec.id}"),
         )
         self.state.init(AssetScope.runner, self._node.edges)
         async with self._ready_condition:

@@ -5,6 +5,7 @@ from typing import Self
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     ValidationError,
     ValidationInfo,
@@ -18,7 +19,7 @@ from noob.input import InputCollection, InputScope, InputSpecification
 from noob.node import Edge, Node, NodeSpecification, Return
 from noob.scheduler import Scheduler
 from noob.state import State
-from noob.types import ConfigSource, PythonIdentifier
+from noob.types import ConfigSource, NodeSignal, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
 
@@ -157,6 +158,8 @@ class Tube(BaseModel):
     scheduler: Scheduler = None  # type: ignore[assignment]
 
     _enabled_nodes: dict[str, Node] | None = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @field_validator("scheduler", mode="before")
     @classmethod
@@ -353,7 +356,14 @@ class Tube(BaseModel):
             successors: list[str] = []
             for generation in generations:
                 if depended_node in generation or successors:
-                    successors.extend([node for node in generation if node != depended_node])
+
+                    successors.extend(
+                        [
+                            node
+                            for node in generation
+                            if node != depended_node and not isinstance(node, NodeSignal)
+                        ]
+                    )
 
             # assert no successor nodes depend on the asset directly.
             for successor in successors:

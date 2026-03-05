@@ -2,20 +2,20 @@ import contextlib
 import logging
 from collections import defaultdict, deque
 from collections.abc import MutableSequence
+from copy import deepcopy
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import cached_property
 from itertools import count
 from typing import Self
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
-
-from noob.const import META_SIGNAL
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import AlreadyDoneError, EpochCompletedError, EpochExistsError, NotOutYetError
+from noob.exceptions import AlreadyDoneError, EpochCompletedError, EpochExistsError, NotAddedError
 from noob.logging import init_logger
 from noob.node import Edge, NodeSpecification
-from noob.toposort import TopoSorter
-from noob.types import Epoch, NodeID
+from noob.toposort import GraphItem, NodeSignal, TopoSorter
+from noob.types import Epoch, NodeID, SignalName
 
 _VIRTUAL_NODES = ("input", "assets")
 """
@@ -25,21 +25,24 @@ but can be depended on
 """
 
 
-class Scheduler(BaseModel):
+@dataclass()
+class Scheduler:
     nodes: dict[str, NodeSpecification]
     edges: list[Edge]
-    source_nodes: list[NodeID] = Field(default_factory=list)
-    logger: logging.Logger = Field(default_factory=lambda: init_logger("noob.scheduler"))
+    source_nodes: list[NodeID] = field(default_factory=list)
+    _logger: logging.Logger = field(default_factory=lambda: init_logger("noob.scheduler"))
 
-    _clock: count = PrivateAttr(default_factory=count)
-    _epochs: dict[Epoch, TopoSorter] = PrivateAttr(default_factory=dict)
-    _subepochs: dict[Epoch, set[Epoch]] = PrivateAttr(default_factory=lambda: defaultdict(set))
-    _epoch_log: deque[int] = PrivateAttr(default_factory=lambda: deque(maxlen=100))
-    _subgraphs: dict[NodeID, tuple[dict[str, NodeSpecification], list[Edge]]] = PrivateAttr(
+    _clock: count = field(default_factory=count)
+    _epochs: dict[Epoch, TopoSorter] = field(default_factory=dict)
+    _subepochs: dict[Epoch, set[Epoch]] = field(default_factory=lambda: defaultdict(set))
+    _epoch_log: deque[int] = field(default_factory=lambda: deque(maxlen=100))
+    _subgraphs: dict[NodeID, tuple[dict[str, NodeSpecification], list[Edge]]] = field(
         default_factory=dict
     )
+    _frozen_sorters: dict[tuple[NodeID, ...], TopoSorter] = field(default_factory=dict)
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    def __post_init__(self):
+        self._get_sources()
 
     @classmethod
     def from_specification(cls, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> Self:
@@ -49,8 +52,7 @@ class Scheduler(BaseModel):
         """
         return cls(nodes=nodes, edges=edges)
 
-    @model_validator(mode="after")
-    def get_sources(self) -> Self:
+    def _get_sources(self) -> Self:
         """
         Get the IDs of the nodes that do not depend on other nodes.
 
@@ -60,12 +62,26 @@ class Scheduler(BaseModel):
         """
         if not self.source_nodes:
             graph = self._init_graph()
-            self.source_nodes = [id_ for id_ in graph.ready_nodes if id_ not in _VIRTUAL_NODES]
+            self.source_nodes = [
+                id_
+                for id_ in graph.ready_nodes
+                if id_ not in _VIRTUAL_NODES and not isinstance(id_, NodeSignal)
+            ]
         return self
 
     @property
     def subepochs(self) -> dict[Epoch, set[Epoch]]:
         return self._subepochs
+
+    @cached_property
+    def graph_signals(self) -> set[tuple[NodeID, SignalName]]:
+        """
+        The set of (node id, signal) tuples that are depended on in the graph.
+
+        Nodes can have many more signals than we actually care about for structuring the graph,
+        this set is only the ones that we care about.
+        """
+        return {(e.source_node, e.source_signal) for e in self.edges}
 
     def add_epoch(self, epoch: int | Epoch | None = None) -> Epoch:
         """
@@ -95,21 +111,46 @@ class Scheduler(BaseModel):
         graph = self._init_graph(epoch=this_epoch)
         self._epochs[this_epoch] = graph
 
-        # handle subepochs
-        if this_epoch.parent is not None:
-            for parent in this_epoch.parents:
-                self._subepochs[parent].add(this_epoch)
-
-            # a node inducing subepochs expires the node in the (immediate) parent epoch
-            if this_epoch[-1].node_id not in self._epochs[this_epoch.parent].done_nodes:
-                self.expire(this_epoch.parent, this_epoch[-1].node_id)
-
         return this_epoch
+
+    def add_subepoch(self, epoch: Epoch) -> Epoch:
+        """
+        Add subepoch!
+
+        Creates a topo sorter with all the nodes downstream of the node that created the epoch.
+        """
+
+        if epoch.parent is None:
+            raise ValueError(f"Cannot create a subepoch for root epoch {epoch}")
+
+        parent_epoch = self[epoch.parent]
+        sorter = self._init_graph(epoch)
+
+        # mark any nodes that are completed in the parent as completed in the subepoch
+        # EXCEPT don't expire the node that induced the subepoch or its signals -
+        # we expect that the subepoch is typically created during an `update` call
+        # where we'll be handling done or expiredness of the signals separately.
+        parent_deps = set(sorter.node_info)
+        exclude_current = sorter.signals[epoch[-1].node_id] | {epoch[-1].node_id}
+        for parent_dep in parent_deps:
+            if parent_dep in parent_epoch.ran_nodes:
+                sorter.done(parent_dep)
+            elif parent_dep in parent_epoch.done_nodes and parent_dep not in exclude_current:
+                sorter.mark_expired(parent_dep)
+
+        self._epochs[epoch] = sorter
+        for parent in epoch.parents:
+            self._subepochs[parent].add(epoch)
+
+        # a node inducing subepochs expires the node in the (immediate) parent epoch
+        if epoch[-1].node_id not in parent_epoch.done_nodes:
+            self.expire(epoch.parent, epoch[-1].node_id, with_signals=False)
+
+        return epoch
 
     def is_active(self, epoch: Epoch | None = None) -> bool:
         """
         Graph remains active while it holds at least one epoch that is active.
-
         """
         if epoch is not None:
             if epoch not in self._epochs:
@@ -144,19 +185,32 @@ class Scheduler(BaseModel):
             graphs, key=lambda g: (tuple(e.node_id for e in g[0]), tuple(e.epoch for e in g[0]))
         )
 
-        ready_nodes = [
-            MetaEvent(
-                id=uuid4().int,
-                timestamp=datetime.now(),
-                node_id="meta",
-                signal=MetaEventType.NodeReady,
-                epoch=epoch,
-                value=node,
-            )
-            for epoch, graph in graphs
-            for node in graph.get_ready(node_id)
-            if node in _VIRTUAL_NODES or (node not in self.nodes or self.nodes[node].enabled)
-        ]
+        ready_nodes = []
+        for epoch, graph in graphs:
+            for node in graph.get_ready(node_id):
+                if isinstance(node, NodeSignal):
+                    self._logger.warning(
+                        "Scheduler attempted to return signal tuple %s in %s - "
+                        "something is wrong with how the graph is instantiated or run, "
+                        "or a node is emitting incorrect events manually, "
+                        "all signals should be marked done/expired by events passed in `update`. "
+                        "Ignoring - nodes downstream of this signal will not run.",
+                        node,
+                        epoch,
+                    )
+                    graph.mark_expired(node)
+                    continue
+                elif node in _VIRTUAL_NODES or (node not in self.nodes or self.nodes[node].enabled):
+                    ready_nodes.append(
+                        MetaEvent(
+                            id=uuid4().int,
+                            timestamp=datetime.now(),
+                            node_id="meta",
+                            signal=MetaEventType.NodeReady,
+                            epoch=epoch,
+                            value=node,
+                        )
+                    )
         return ready_nodes
 
     def node_is_ready(self, node: NodeID, epoch: Epoch | None = None) -> bool:
@@ -193,7 +247,11 @@ class Scheduler(BaseModel):
             epoch = Epoch(epoch)
 
         if epoch not in self._epochs:
-            self.add_epoch(epoch)
+            if len(epoch) == 1:
+                self.add_epoch(epoch)
+            else:
+                self.add_subepoch(epoch)
+
         return self._epochs[epoch]
 
     def sources_finished(self, epoch: Epoch | None = None) -> bool:
@@ -220,17 +278,32 @@ class Scheduler(BaseModel):
             return events
 
         end_events: MutableSequence[MetaEvent] = []
-        marked_done = set()
+        nodes_done = set()
+        # process subepochs first so they're created when we handle parent epochs
+        events = sorted(events, key=lambda ee: len(ee["epoch"]), reverse=True)
         for e in events:
-            if (done_marker := (e["epoch"], e["node_id"])) in marked_done or e["node_id"] == "meta":
+            if e["node_id"] == "meta":
                 continue
-            else:
-                marked_done.add(done_marker)
+            elif (node_done := (e["epoch"], e["node_id"])) not in nodes_done:
+                nodes_done.add(node_done)
+                # FIXME: This exception suppression is a *bit* broad - fix underlying issue
+                # The zmq runner has an incomplete graph, and so sometimes we don't have
+                # all the nodes in the graph when we go to mark the node done.
+                with contextlib.suppress(AlreadyDoneError, NotAddedError):
+                    epoch_ended = self.done(e["epoch"], e["node_id"], with_signals=False)
+                    if epoch_ended:
+                        end_events.append(epoch_ended)
+                        continue
 
-            if e["signal"] == META_SIGNAL and e["value"] == MetaSignal.NoEvent:
-                epoch_ended = self.expire(epoch=e["epoch"], node_id=e["node_id"])
+            if (e["node_id"], e["signal"]) not in self.graph_signals:
+                continue
+
+            if e["value"] == MetaSignal.NoEvent:
+                epoch_ended = self.expire(
+                    epoch=e["epoch"], node_id=e["node_id"], signal=e["signal"]
+                )
             else:
-                epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"])
+                epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"], signal=e["signal"])
 
             if epoch_ended:
                 end_events.append(epoch_ended)
@@ -239,54 +312,66 @@ class Scheduler(BaseModel):
 
         return ret_events
 
-    def done(self, epoch: Epoch, node_id: str) -> MetaEvent | None:
+    def done(
+        self,
+        epoch: Epoch,
+        node_id: str,
+        signal: SignalName | None = None,
+        with_signals: bool = True,
+    ) -> MetaEvent | None:
         """
         Mark a node in a given epoch as done.
+
+        Args:
+            with_signals (bool): When marking this node as done, also mark all its signals as done.
         """
         if epoch[0].epoch in self._epoch_log:
-            self.logger.debug(
+            self._logger.debug(
                 "Marking node %s as done in epoch %s, " "but epoch was already completed. ignoring",
                 node_id,
                 epoch,
             )
             return None
 
+        to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
         try:
-            self[epoch].done(node_id)
-        except NotOutYetError:
-            # in parallel mode, we don't `get_ready` the preceding ready nodes
-            # so we have to manually mark them as "out"
-            self[epoch].mark_out(node_id)
-            self[epoch].done(node_id)
+            self[epoch].done(to_mark)
         except AlreadyDoneError as e:
-            # if we induced subepochs but emitted another event in the parent epoch,
-            # we were marked expired when the subepochs were created
-            # (which is fine)
-            if node_id not in self[epoch].ran_nodes and any(
-                subep[-1].node_id == node_id for subep in self._subepochs[epoch]
-            ):
-                return None
-            else:
+            if not self._subepochs[epoch]:
                 raise AlreadyDoneError(f"Node {node_id} already done in {epoch}") from e
 
-        self._done_subepochs(epoch, node_id)
+        self._done_subepochs(epoch, node_id, signal)
         for parent in epoch.parents:
-            self[parent].mark_expired(node_id)
+            self[parent].mark_expired(to_mark)
+
+        if signal is None and with_signals:
+            self[epoch].done(*self[epoch].signals[node_id].difference(self[epoch].done_nodes))
 
         if not self.is_active(epoch):
             return self.end_epoch(epoch)
         return None
 
-    def expire(self, epoch: Epoch, node_id: str) -> MetaEvent | None:
+    def expire(
+        self,
+        epoch: Epoch,
+        node_id: str,
+        signal: SignalName | None = None,
+        with_signals: bool = True,
+    ) -> MetaEvent | None:
         """
         Mark a node as having been completed without making its dependent nodes ready.
         i.e. when the node emitted ``NoEvent``
         """
-        self[epoch].mark_expired(node_id)
+        to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
+        self[epoch].mark_expired(to_mark)
         # if any immediate successors are already marked as "ready," we also want to cancel them.
-        if info := self[epoch].node_info.get(node_id):
+        if info := self[epoch].node_info.get(to_mark):
             for successor in info.successors:
                 self[epoch].ready_nodes.discard(successor)
+        if signal is None and with_signals:
+            for graph_node in self[epoch].signals[node_id]:
+                self.expire(epoch, node_id=node_id, signal=graph_node[1])
+
         if not self.is_active(epoch):
             return self.end_epoch(epoch)
 
@@ -317,7 +402,7 @@ class Scheduler(BaseModel):
             ep = epoch
         else:
             raise TypeError("Can only end an epoch with an integer or Epoch")
-        self.logger.debug("Ending epoch %s", ep)
+        self._logger.debug("Ending epoch %s", ep)
         if len(ep) == 1:
             self._epoch_log.append(ep[0].epoch)
             for subep in {ep, *self._subepochs[ep]}:
@@ -340,6 +425,7 @@ class Scheduler(BaseModel):
 
         """
         self.nodes[node_id].enabled = True
+        self._frozen_sorters = {}
 
     def disable_node(self, node_id: str) -> None:
         """
@@ -348,6 +434,7 @@ class Scheduler(BaseModel):
 
         """
         self.nodes[node_id].enabled = False
+        self._frozen_sorters = {}
         for graph in self._epochs.values():
             graph.mark_expired(node_id)
 
@@ -362,39 +449,18 @@ class Scheduler(BaseModel):
         """
         Produce a :class:`.TopoSorter` based on the graph induced by
         a set of :class:`.Node` and a set of :class:`.Edge` that yields node ids.
-
-        .. note:: Optional params
-
-            Dependency graph only includes edges where `required == True` -
-            aka even if we declare some dependency that passes a value to an
-            optional (type annotation is `type | None`), default == `None`
-            param, we still call that node even if that optional param is absent.
-
-            Additionally, nodes with `enabled == False` are excluded, even when
-            other nodes declare dependency to the disabled node. This means the
-            signal of the disabled node will not be emitted and thus will not reach
-            the dependent nodes. Disable nodes at your own risk.
-
-            This behavior will likely change,
-            allowing explicit parameterization of how optional values are handled,
-            see: https://github.com/miniscope/noob/issues/26,
-
         """
-        if epoch and epoch.parent:
-            nodes, edges = self._subgraph(epoch[-1].node_id)
-            sorter = TopoSorter(nodes, edges)
-            # mark any nodes that are completed in the parent as completed in the subepoch
-            parent_epoch = self[epoch.parent]
-            parent_deps = set(sorter.node_info) - set(nodes) - {epoch[-1].node_id}
-            for parent_dep in parent_deps:
-                if parent_dep in parent_epoch.ran_nodes:
-                    sorter.mark_out(parent_dep)
-                    sorter.done(parent_dep)
-                elif parent_dep in parent_epoch.done_nodes:
-                    sorter.mark_expired(parent_dep)
-            return sorter
-        else:
-            return TopoSorter(self.nodes, self.edges)
+        frozen_key = ("tube",) if epoch is None else tuple(e.node_id for e in epoch)
+
+        if frozen_key not in self._frozen_sorters:
+            if epoch and epoch.parent:
+                nodes, edges = self._subgraph(epoch[-1].node_id)
+                sorter = TopoSorter(nodes, edges)
+            else:
+                sorter = TopoSorter(self.nodes, self.edges)
+            self._frozen_sorters[frozen_key] = sorter
+
+        return deepcopy(self._frozen_sorters[frozen_key])
 
     def has_cycle(self) -> bool:
         """
@@ -404,7 +470,7 @@ class Scheduler(BaseModel):
         cycle = graph.find_cycle()
         return bool(cycle)
 
-    def generations(self) -> list[tuple[str, ...]]:
+    def generations(self) -> list[tuple[GraphItem, ...]]:
         """
         Get the topological generations of the graph:
         tuples for each set of nodes that can be run at the same time.
@@ -435,7 +501,8 @@ class Scheduler(BaseModel):
                     [
                         g
                         for g in gen
-                        if any(
+                        if not isinstance(g, NodeSignal)
+                        and any(
                             e.source_node == "assets"
                             and e.source_signal == asset
                             and e.target_node == g
@@ -461,7 +528,9 @@ class Scheduler(BaseModel):
             )
         return self._subgraphs[node_id]
 
-    def _done_subepochs(self, epoch: Epoch, node_id: NodeID) -> None:
+    def _done_subepochs(
+        self, epoch: Epoch, node_id: NodeID, signal: SignalName | None = None
+    ) -> None:
         """
         Called when a node in a parent epoch is marked done -
         mark the node done in all subepochs,
@@ -481,21 +550,20 @@ class Scheduler(BaseModel):
         our_subgraph = set(self._subgraph(node_id)[0])
         _exclusive_subgraphs = {}
 
+        to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
+
         for subepoch in self._subepochs[epoch]:
             if (
-                node_id in self._epochs[subepoch].ran_nodes
-                or node_id not in self._epochs[subepoch].node_info
-                or subepoch[-1].node_id == node_id
+                to_mark in self._epochs[subepoch].ran_nodes
+                or to_mark not in self._epochs[subepoch].node_info
             ):
                 # fine
                 continue
-            elif node_id in self._epochs[subepoch].done_nodes:
+            elif to_mark in self._epochs[subepoch].done_nodes:
                 # needs to be resurrected
-                self._epochs[subepoch].resurrect(node_id)
+                self._epochs[subepoch].resurrect(to_mark)
 
-            if node_id not in self._epochs[subepoch].out_nodes:
-                self._epochs[subepoch].mark_out(node_id)
-            self._epochs[subepoch].done(node_id)
+            self._epochs[subepoch].done(to_mark)
 
             # mark all nodes that are exclusively downstream of this node expired
             subep_node = subepoch[-1].node_id

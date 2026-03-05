@@ -82,7 +82,7 @@ def test_roundtrip_noevent():
                 id=0,
                 timestamp=datetime.now(UTC),
                 node_id="example",
-                signal=META_SIGNAL,
+                signal="something",
                 epoch=Epoch(0),
                 value=MetaSignal.NoEvent,
             ),
@@ -90,7 +90,7 @@ def test_roundtrip_noevent():
     )
     dumped = msg.model_dump_json()
     as_json = json.loads(dumped)
-    assert as_json["value"][0]["value"] == "NoEvent"
+    assert as_json["value"][0]["value"] == f"{META_SIGNAL}NoEvent"
 
     z = EventMsg.model_validate_json(dumped)
     assert msg == z

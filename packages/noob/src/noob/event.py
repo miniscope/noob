@@ -84,7 +84,7 @@ class MetaEvent(Event):
 
 
 class MetaSignal(StrEnum):
-    NoEvent = "NoEvent"
+    NoEvent = f"{META_SIGNAL}NoEvent"
 
 
 def _type_discriminator(v: dict | Event | MetaEvent) -> str:
@@ -96,8 +96,12 @@ def _type_discriminator(v: dict | Event | MetaEvent) -> str:
 
 def _meta_signals_to_enum(evt: Event) -> Event:
     """If we are a meta signal, ensure the value is cast to the enum rather than string value"""
-    if evt["signal"] == META_SIGNAL and evt["value"] in MetaSignal.__members__:
-        evt["value"] = MetaSignal.__members__[evt["value"]]
+    if (
+        isinstance(evt["value"], str)
+        and evt["value"].startswith(META_SIGNAL)
+        and (metaevt_key := evt["value"].replace(META_SIGNAL, "")) in MetaSignal.__members__
+    ):
+        evt["value"] = MetaSignal.__members__[metaevt_key]
     return evt
 
 
