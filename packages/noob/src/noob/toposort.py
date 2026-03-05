@@ -49,6 +49,18 @@ class TopoSorter:
     and modifying graph mid-iteration.
     """
 
+    __slots__ = (
+        "signals",
+        "_node2info",
+        "_ready_nodes",
+        "_out_nodes",
+        "_done_nodes",
+        "_disabled_nodes",
+        "_ran_nodes",
+        "_npassedout",
+        "_nfinished",
+    )
+
     def __init__(
         self, nodes: dict[str, NodeSpecification] | None = None, edges: list[Edge] | None = None
     ) -> None:
@@ -346,3 +358,17 @@ class TopoSorter:
         if (result := self._node2info.get(node)) is None:
             self._node2info[node] = result = _NodeInfo(node)
         return result
+
+    def __deepcopy__(self, memo: dict) -> "TopoSorter":
+        sorter = TopoSorter()
+        for slot in self.__slots__:
+            if slot == "_node2info":
+                sorter._node2info = {
+                    key: _NodeInfo(
+                        *{nodeslot: getattr(val, nodeslot) for nodeslot in val.__slots__}
+                    )
+                    for key, val in self._node2info.items()
+                }
+            else:
+                setattr(sorter, slot, getattr(sorter, slot))
+        return sorter
