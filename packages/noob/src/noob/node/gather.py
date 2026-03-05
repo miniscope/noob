@@ -7,6 +7,7 @@ from typing import Any, Generic, TypeVar, cast
 from pydantic import PrivateAttr
 
 from noob.event import Event, MetaSignal
+from noob.node import Slot
 from noob.node.base import Node
 from noob.types import Epoch
 
@@ -75,6 +76,24 @@ class Gather(Node, Generic[_TInput]):
                     # clear list after returning
                     self._items = []
             return MetaSignal.NoEvent
+
+    def _collect_slots(self) -> dict[str, Slot]:
+        slots = {
+            "value": Slot(name="value", annotation=Any),
+            "epoch": Slot(name="epoch", annotation=Epoch),
+            "trigger": Slot(name="trigger", annotation=Any | None, required=False),
+        }
+        if (
+            self.spec
+            and self.spec.depends
+            and any(
+                next(iter(dep.keys())) == "n" for dep in self.spec.depends if isinstance(dep, dict)
+            )
+        ):
+            slots["n"] = Slot(name="n", annotation=int | None, required=True)
+        else:
+            slots["n"] = Slot(name="n", annotation=int, required=False)
+        return slots
 
     def _should_return(self, trigger: Any | None) -> bool:
         return (self.n is not None and len(self._items) >= self.n) or (

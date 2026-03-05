@@ -83,5 +83,5 @@ class Return(Node):
             if isinstance(dep, str):
                 continue
             name = list(dep.keys())[0]
-            slots[name] = Slot(name=name, annotation=Any)
+            slots[name] = Slot(name=name, annotation=Any, required=False)
         return slots

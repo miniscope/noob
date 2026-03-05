@@ -34,6 +34,7 @@ from noob.testing.nodes import (
     repeat,
     rewind,
     sporadic_word,
+    switch,
     word_counts,
     word_source,
     zip_iter,
@@ -77,6 +78,7 @@ __all__ = [
     "rewind",
     "jump",
     "just_wait",
+    "switch",
     "zip_iter",
     "Initializer",
 ]

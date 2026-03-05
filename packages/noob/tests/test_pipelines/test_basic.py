@@ -1,6 +1,8 @@
+from itertools import cycle
+
 import pytest
 
-from noob import SynchronousRunner, Tube
+from noob import Tube
 from noob.runner import TubeRunner
 
 
@@ -39,6 +41,17 @@ def test_branch(loaded_tube: Tube, runner: TubeRunner):
         assert value == e
 
 
+@pytest.mark.parametrize("loaded_tube", ["testing-branch-switching"], indirect=True)
+def test_branch_switching(loaded_tube: Tube, runner: TubeRunner):
+    """Nodes can have switching outputs - yielding only a subset of thier signals"""
+    expected = cycle(["fruit", "vegetable", "mineral"])
+    for _ in range(5):
+        value = runner.process()
+        e = next(expected)
+        assert e in value
+        assert value[e].endswith("!")
+
+
 @pytest.mark.parametrize("loaded_tube", ["testing-merge"], indirect=True)
 def test_merge(loaded_tube: Tube, runner: TubeRunner):
     """Multiple node outputs can be merged into one node!"""
@@ -74,24 +87,6 @@ def test_gather_dependent(loaded_tube: Tube, runner: TubeRunner):
         value = value["word"]
         inner = value[list(value.keys())[0]]
         assert inner == e
-
-
-@pytest.mark.xfail(reason="map has not been implemented.")
-def test_map():
-    """
-    A node with a sequence output can be mapped to a node with a scalar input
-
-    In this case, "process" should know to iterate over the mapped values
-    and return them one by one, so we should get n of the mapped values,
-    not n calls of the source node -> n sets of mapped values.
-    """
-    tube = Tube.from_specification("testing-map")
-    runner = SynchronousRunner(tube)
-
-    for value in runner.iter(n=5):
-        assert len(value) == 2
-        assert isinstance(value, str)
-        assert value[1] == "!"
 
 
 @pytest.mark.parametrize("loaded_tube", ["testing-multi-signal"], indirect=True)

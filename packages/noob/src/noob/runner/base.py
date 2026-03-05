@@ -241,6 +241,7 @@ class TubeRunner(ABC):
         without needing a million levels of nesting.
         """
         node_id, epoch = node_info["value"], node_info["epoch"]
+        self._logger.debug("running %s in epoch %s", node_id, epoch)
         node = self._get_node(node_id)
 
         with self._asset_context(AssetScope.node, node.edges):

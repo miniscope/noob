@@ -136,7 +136,7 @@ class Scheduler:
             if parent_dep in parent_epoch.ran_nodes:
                 sorter.done(parent_dep)
             elif parent_dep in parent_epoch.done_nodes and parent_dep not in exclude_current:
-                sorter.mark_expired(parent_dep)
+                sorter.mark_expired(parent_dep, unlock_optionals=False)
 
         self._epochs[epoch] = sorter
         for parent in epoch.parents:
@@ -144,7 +144,7 @@ class Scheduler:
 
         # a node inducing subepochs expires the node in the (immediate) parent epoch
         if epoch[-1].node_id not in parent_epoch.done_nodes:
-            self.expire(epoch.parent, epoch[-1].node_id, with_signals=False)
+            self.expire(epoch.parent, epoch[-1].node_id, with_signals=False, unlock_optionals=False)
 
         return epoch
 
@@ -342,7 +342,7 @@ class Scheduler:
 
         self._done_subepochs(epoch, node_id, signal)
         for parent in epoch.parents:
-            self[parent].mark_expired(to_mark)
+            self[parent].mark_expired(to_mark, unlock_optionals=False)
 
         if signal is None and with_signals:
             self[epoch].done(*self[epoch].signals[node_id].difference(self[epoch].done_nodes))
@@ -357,20 +357,23 @@ class Scheduler:
         node_id: str,
         signal: SignalName | None = None,
         with_signals: bool = True,
+        unlock_optionals: bool = True,
     ) -> MetaEvent | None:
         """
         Mark a node as having been completed without making its dependent nodes ready.
         i.e. when the node emitted ``NoEvent``
         """
         to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
-        self[epoch].mark_expired(to_mark)
+        self[epoch].mark_expired(to_mark, unlock_optionals=unlock_optionals)
         # if any immediate successors are already marked as "ready," we also want to cancel them.
         if info := self[epoch].node_info.get(to_mark):
             for successor in info.successors:
                 self[epoch].ready_nodes.discard(successor)
         if signal is None and with_signals:
             for graph_node in self[epoch].signals[node_id]:
-                self.expire(epoch, node_id=node_id, signal=graph_node[1])
+                self.expire(
+                    epoch, node_id=node_id, signal=graph_node[1], unlock_optionals=unlock_optionals
+                )
 
         if not self.is_active(epoch):
             return self.end_epoch(epoch)

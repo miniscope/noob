@@ -183,7 +183,10 @@ class EventStore:
         """
         events = self.collect_events(edges, epoch)
         if events is None:
-            return None
+            if eventmap is not None:
+                return {eventmap: {}}
+            else:
+                return None
 
         transformed_events = self.transform_events(edges=edges, events=events)
 

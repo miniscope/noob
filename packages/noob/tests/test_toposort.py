@@ -394,3 +394,75 @@ def test_deepcopy():
         if slot not in ("signals", "_out_nodes", "_disabled_nodes"):
             # everything changes except for the things that... don't change...
             assert getattr(ts, slot) != getattr(copied, slot)
+
+
+def test_optional_dependencies():
+    """
+    Topo sorter should run nodes with optional dependencies when those upstream nodes are expired
+    """
+    edges = [
+        Edge(
+            source_node="a",
+            source_signal="a1",
+            target_node="only_optional",
+            target_slot="value",
+            required=False,
+        ),
+        Edge(
+            source_node="a",
+            source_signal="a1",
+            target_node="mixed",
+            target_slot="optional",
+            required=False,
+        ),
+        Edge(
+            source_node="a",
+            source_signal="a2",
+            target_node="mixed",
+            target_slot="required",
+            required=True,
+        ),
+        Edge(
+            source_node="mixed",
+            source_signal="value",
+            target_node="two_hop",
+            target_slot="optional",
+            required=False,
+        ),
+        Edge(
+            source_node="a",
+            source_signal="a2",
+            target_node="two_hop",
+            target_slot="required",
+            required=True,
+        ),
+    ]
+    ts = TopoSorter(edges=edges)
+
+    # optional dependencies were constructed correctly
+    assert ts.node_info["only_optional"].optional_predecessors == {NodeSignal("a", "a1")}
+    assert ts.node_info["mixed"].optional_predecessors == {NodeSignal("a", "a1")}
+    assert ts.node_info["two_hop"].optional_predecessors == {NodeSignal("mixed", "value")}
+
+    assert ts.node_info[NodeSignal("a", "a1")].optional_successors == {"only_optional", "mixed"}
+    assert ts.node_info[NodeSignal("mixed", "value")].optional_successors == {"two_hop"}
+    # nodes do not get optional successors, signals are the things that are NoEvent or not
+    assert ts.node_info["a"].optional_successors == set()
+    assert ts.node_info["mixed"].optional_successors == set()
+
+    ready = ts.get_ready()
+    # nodes with only optional dependencies should still wait for those to be done
+    assert set(ready) == {"a"}
+    ts.done("a")
+    ready = ts.get_ready()
+    assert set(ready) == {NodeSignal("a", "a1"), NodeSignal("a", "a2")}
+    ts.mark_expired(NodeSignal("a", "a1"))
+    ts.done(NodeSignal("a", "a2"))
+    ready = ts.get_ready()
+    assert set(ready) == {"only_optional", "mixed"}
+    ts.done("only_optional", "mixed")
+    ready = ts.get_ready()
+    assert set(ready) == {NodeSignal("mixed", "value")}
+    ts.mark_expired(NodeSignal("mixed", "value"))
+    ready = ts.get_ready()
+    assert set(ready) == {"two_hop"}

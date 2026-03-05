@@ -11,6 +11,7 @@ from typing import Any
 from faker import Faker
 
 from noob import Name, process_method
+from noob.event import MetaSignal
 from noob.node import Node
 from noob.types import Epoch, EventMap
 
@@ -267,3 +268,17 @@ def inject_eventmap(special_value: Any, events: EventMap) -> EventMap:
 def just_wait(value: Any, wait_for: float = 0.5) -> Any:
     sleep(wait_for)
     return value
+
+
+def switch() -> (
+    Generator[tuple[A[str, Name("fruits")], A[str, Name("vegetables")], A[str, Name("minerals")]]]
+):
+    """Yield in a cycle from different signals, noeventing in the others"""
+    fruits = cycle(["apple", "banana", "cherry"])
+    vegetables = cycle(["daikon", "eggplant", "fiddlehead"])
+    minerals = cycle(["galaxite", "halite", "iolite"])
+
+    while True:
+        yield next(fruits), MetaSignal.NoEvent, MetaSignal.NoEvent
+        yield MetaSignal.NoEvent, next(vegetables), MetaSignal.NoEvent
+        yield MetaSignal.NoEvent, MetaSignal.NoEvent, next(minerals)

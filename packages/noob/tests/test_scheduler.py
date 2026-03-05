@@ -302,7 +302,7 @@ def test_map_gather_mixed_epochs():
     for i in range(3):
         scheduler.done(ep / ("b", i), node_id="c", signal="value")
     for i in range(3):
-        scheduler.expire(ep / ("b", i), node_id="d", signal="value")
+        scheduler.expire(ep / ("b", i), node_id="d", signal="value", unlock_optionals=False)
     scheduler.done(ep, node_id="d", signal="value")
     scheduler.done(ep, node_id="e")
     ready = scheduler.get_ready(ep)
