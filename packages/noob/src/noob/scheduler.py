@@ -453,17 +453,18 @@ class Scheduler:
         Produce a :class:`.TopoSorter` based on the graph induced by
         a set of :class:`.Node` and a set of :class:`.Edge` that yields node ids.
         """
-        frozen_key = ("tube",) if epoch is None else tuple(e.node_id for e in epoch)
+        # frozen_key = ("tube",) if epoch is None else tuple(e.node_id for e in epoch)
 
-        if frozen_key not in self._frozen_sorters:
-            if epoch and epoch.parent:
-                nodes, edges = self._subgraph(epoch[-1].node_id)
-                sorter = TopoSorter(nodes, edges)
-            else:
-                sorter = TopoSorter(self.nodes, self.edges)
-            self._frozen_sorters[frozen_key] = sorter
+        #if frozen_key not in self._frozen_sorters:
+        if epoch and epoch.parent:
+            nodes, edges = self._subgraph(epoch[-1].node_id)
+            sorter = TopoSorter(nodes, edges)
+        else:
+            sorter = TopoSorter(self.nodes, self.edges)
+        return sorter
+        #self._frozen_sorters[frozen_key] = sorter
 
-        return deepcopy(self._frozen_sorters[frozen_key])
+        #return deepcopy(self._frozen_sorters[frozen_key])
 
     def has_cycle(self) -> bool:
         """
