@@ -5,6 +5,7 @@ from typing import Self
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     ValidationError,
     ValidationInfo,
@@ -157,6 +158,8 @@ class Tube(BaseModel):
     scheduler: Scheduler = None  # type: ignore[assignment]
 
     _enabled_nodes: dict[str, Node] | None = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @field_validator("scheduler", mode="before")
     @classmethod

@@ -3,13 +3,12 @@ import logging
 from collections import defaultdict, deque
 from collections.abc import MutableSequence
 from copy import deepcopy
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import cached_property
 from itertools import count
 from typing import Self
 from uuid import uuid4
-
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
 from noob.exceptions import AlreadyDoneError, EpochCompletedError, EpochExistsError, NotAddedError
@@ -26,22 +25,24 @@ but can be depended on
 """
 
 
-class Scheduler(BaseModel):
+@dataclass()
+class Scheduler:
     nodes: dict[str, NodeSpecification]
     edges: list[Edge]
-    source_nodes: list[NodeID] = Field(default_factory=list)
-    logger: logging.Logger = Field(default_factory=lambda: init_logger("noob.scheduler"))
+    source_nodes: list[NodeID] = field(default_factory=list)
+    _logger: logging.Logger = field(default_factory=lambda: init_logger("noob.scheduler"))
 
-    _clock: count = PrivateAttr(default_factory=count)
-    _epochs: dict[Epoch, TopoSorter] = PrivateAttr(default_factory=dict)
-    _subepochs: dict[Epoch, set[Epoch]] = PrivateAttr(default_factory=lambda: defaultdict(set))
-    _epoch_log: deque[int] = PrivateAttr(default_factory=lambda: deque(maxlen=100))
-    _subgraphs: dict[NodeID, tuple[dict[str, NodeSpecification], list[Edge]]] = PrivateAttr(
+    _clock: count = field(default_factory=count)
+    _epochs: dict[Epoch, TopoSorter] = field(default_factory=dict)
+    _subepochs: dict[Epoch, set[Epoch]] = field(default_factory=lambda: defaultdict(set))
+    _epoch_log: deque[int] = field(default_factory=lambda: deque(maxlen=100))
+    _subgraphs: dict[NodeID, tuple[dict[str, NodeSpecification], list[Edge]]] = field(
         default_factory=dict
     )
-    _frozen_sorters: dict[tuple[NodeID, ...], TopoSorter] = PrivateAttr(default_factory=dict)
+    _frozen_sorters: dict[tuple[NodeID, ...], TopoSorter] = field(default_factory=dict)
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    def __post_init__(self):
+        self._get_sources()
 
     @classmethod
     def from_specification(cls, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> Self:
@@ -51,8 +52,7 @@ class Scheduler(BaseModel):
         """
         return cls(nodes=nodes, edges=edges)
 
-    @model_validator(mode="after")
-    def get_sources(self) -> Self:
+    def _get_sources(self) -> Self:
         """
         Get the IDs of the nodes that do not depend on other nodes.
 
@@ -195,7 +195,7 @@ class Scheduler(BaseModel):
         for epoch, graph in graphs:
             for node in graph.get_ready(node_id):
                 if isinstance(node, NodeSignal):
-                    self.logger.warning(
+                    self._logger.warning(
                         "Scheduler attempted to return signal tuple %s in %s - "
                         "something is wrong with how the graph is instantiated or run, "
                         "or a node is emitting incorrect events manually, "
@@ -329,7 +329,7 @@ class Scheduler(BaseModel):
             with_signals (bool): When marking this node as done, also mark all its signals as done.
         """
         if epoch[0].epoch in self._epoch_log:
-            self.logger.debug(
+            self._logger.debug(
                 "Marking node %s as done in epoch %s, " "but epoch was already completed. ignoring",
                 node_id,
                 epoch,
@@ -405,7 +405,7 @@ class Scheduler(BaseModel):
             ep = epoch
         else:
             raise TypeError("Can only end an epoch with an integer or Epoch")
-        self.logger.debug("Ending epoch %s", ep)
+        self._logger.debug("Ending epoch %s", ep)
         if len(ep) == 1:
             self._epoch_log.append(ep[0].epoch)
             for subep in {ep, *self._subepochs[ep]}:
