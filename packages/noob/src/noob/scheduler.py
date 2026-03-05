@@ -2,6 +2,7 @@ import contextlib
 import logging
 from collections import defaultdict, deque
 from collections.abc import MutableSequence
+from copy import deepcopy
 from datetime import UTC, datetime
 from functools import cached_property
 from itertools import count
@@ -38,6 +39,7 @@ class Scheduler(BaseModel):
     _subgraphs: dict[NodeID, tuple[dict[str, NodeSpecification], list[Edge]]] = PrivateAttr(
         default_factory=dict
     )
+    _frozen_sorters: dict[tuple[NodeID, ...], TopoSorter] = PrivateAttr(default_factory=dict)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -426,6 +428,7 @@ class Scheduler(BaseModel):
 
         """
         self.nodes[node_id].enabled = True
+        self._frozen_sorters = {}
 
     def disable_node(self, node_id: str) -> None:
         """
@@ -434,6 +437,7 @@ class Scheduler(BaseModel):
 
         """
         self.nodes[node_id].enabled = False
+        self._frozen_sorters = {}
         for graph in self._epochs.values():
             graph.mark_expired(node_id)
 
@@ -449,11 +453,17 @@ class Scheduler(BaseModel):
         Produce a :class:`.TopoSorter` based on the graph induced by
         a set of :class:`.Node` and a set of :class:`.Edge` that yields node ids.
         """
-        if epoch and epoch.parent:
-            nodes, edges = self._subgraph(epoch[-1].node_id)
-            return TopoSorter(nodes, edges)
-        else:
-            return TopoSorter(self.nodes, self.edges)
+        frozen_key = ("tube",) if epoch is None else tuple(e.node_id for e in epoch)
+
+        if frozen_key not in self._frozen_sorters:
+            if epoch and epoch.parent:
+                nodes, edges = self._subgraph(epoch[-1].node_id)
+                sorter = TopoSorter(nodes, edges)
+            else:
+                sorter = TopoSorter(self.nodes, self.edges)
+            self._frozen_sorters[frozen_key] = sorter
+
+        return deepcopy(self._frozen_sorters[frozen_key])
 
     def has_cycle(self) -> bool:
         """
