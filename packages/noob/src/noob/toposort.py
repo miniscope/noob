@@ -38,6 +38,10 @@ class _NodeInfo:
 
         # Optional (immediate) predecessors - we only run once their fate has been decided,
         # but we can run without them having emitted an event
+        # Elsewhere the sign is flipped ("required" rather than "optional"),
+        # but we use optional here, assuming that optional deps are comparatively rare,
+        # and it is less costly to represent the few times we do need to handle it
+        # rather than every time we don't.
         self.optional_predecessors: set[GraphItem] = set()
 
         # Optional **downstream** successors - nodes that have some optional dependency
