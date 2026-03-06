@@ -327,7 +327,9 @@ class ZMQRunner(TubeRunner):
             self._logger.debug(f"Ignoring message type {msg.type_}")
             return
 
+        self.command = cast(CommandNode, self.command)
         msg = cast(EventMsg, msg)
+
         # store events (if we are not in freerun mode, where we don't want to store infinite events)
         if not self._ignore_events:
             for event in msg.value:
@@ -362,14 +364,13 @@ class ZMQRunner(TubeRunner):
                 )
 
         for e in events:
-            if (
-                e["node_id"] == "meta"
-                and e["signal"] == MetaEventType.EpochEnded
-                and e["value"] in self._epoch_futures
-            ):
-                if not self._epoch_futures[e["value"]].done():
-                    self._epoch_futures[e["value"]].set_result(e["value"])
-                del self._epoch_futures[e["value"]]
+            if e["node_id"] == "meta" and e["signal"] == MetaEventType.EpochEnded:
+                if len(e["value"]) == 1:
+                    await self.command.epoch_ended(e["value"])
+                if e["value"] in self._epoch_futures:
+                    if not self._epoch_futures[e["value"]].done():
+                        self._epoch_futures[e["value"]].set_result(e["value"])
+                    del self._epoch_futures[e["value"]]
 
     def on_router(self, msg: Message) -> None:
         if isinstance(msg, ErrorMsg):

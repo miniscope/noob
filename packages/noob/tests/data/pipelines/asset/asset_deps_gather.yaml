@@ -1,0 +1,47 @@
+noob_id: testing-asset-deps-gather
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.0
+description: |
+  Regression test (#164)
+  A runner-scoped asset can depend on a node after a gather
+
+assets:
+  counter:
+    type: noob.testing.counter
+    params:
+      start: 1
+    scope: runner
+    depends: b.iterator
+
+nodes:
+  a:
+    type: noob.testing.increment
+    depends:
+      - iterator: assets.counter
+  gather:
+    type: gather
+    params:
+      n: 5
+    depends:
+      - value: a.value
+  sum:
+    type: sum
+    depends:
+      - gather.value
+  b:
+    type: noob.testing.increment
+    depends:
+      - iterator: a.iterator
+      - increment: sum.value
+  post_depends:
+    type: noob.testing.increment
+    depends:
+      - iterator: b.iterator
+  return:
+    type: return
+    depends:
+      - a_value: a.value
+      - b_value: b.value
+      - post_value: post_depends.value
+      - gathered: gather.value
+      - sum: sum.value

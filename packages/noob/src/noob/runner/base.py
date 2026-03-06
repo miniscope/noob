@@ -316,7 +316,7 @@ class TubeRunner(ABC):
             inputs |= {node.injections["epoch"]: epoch}
 
         self.tube.state.init(AssetScope.node)
-        state_inputs = self.tube.state.collect(edges, epoch)
+        state_inputs = self.tube.state.collect(edges)
         inputs |= state_inputs if state_inputs else inputs
 
         event_inputs = self.store.collect(edges, epoch, eventmap=node.injections.get("events"))

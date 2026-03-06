@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from noob.asset import Asset, AssetScope, AssetSpecification
 from noob.event import Event, MetaEvent
 from noob.node.base import Edge
-from noob.types import Epoch, NodeID, PythonIdentifier
+from noob.types import NodeID, PythonIdentifier
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
@@ -125,7 +125,7 @@ class State(BaseModel):
         yield
         self.deinit(scope, edges)
 
-    def collect(self, edges: list[Edge], epoch: Epoch) -> dict | None:
+    def collect(self, edges: list[Edge]) -> dict | None:
         """
         Gather events into a form that can be consumed by a :meth:`.Node.process` method,
         given the collection of inbound edges (usually from :meth:`.Tube.in_edges` ).
@@ -152,17 +152,7 @@ class State(BaseModel):
                 if edge.source_signal not in self.assets:
                     continue
                 asset = self.assets[edge.source_signal]
-                if (
-                    not asset.depends
-                    or asset.depends.split(".")[0] not in self.dependencies
-                    or epoch[0].epoch == asset.stored_at[0].epoch + 1
-                ):
-                    args[edge.target_slot] = asset.obj
-                else:
-                    raise ValueError(
-                        f"Asset not ready to emit for epoch {epoch}: "
-                        f"asset was last stored at epoch {asset.stored_at}."
-                    )
+                args[edge.target_slot] = asset.obj
 
         return None if not args or all(val is None for val in args.values()) else args
 

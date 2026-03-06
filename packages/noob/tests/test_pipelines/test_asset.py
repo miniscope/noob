@@ -125,6 +125,33 @@ async def test_asset_copy_post_depends(loaded_tube, all_runners):
             )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-asset-deps-gather"], indirect=True)
+async def test_asset_depends_post_gather(loaded_tube, all_runners):
+    """
+    Regression test (#164)
+    An asset should be able to depend on an event downstream from a gather -
+    i.e. assets shouldn't try and do scheduler things by protecting the asset from being collected
+    in a nonsequential epoch.
+    """
+    runner = all_runners
+    last_b = 0
+    for i in range(15):
+        if iscoroutinefunction_partial(runner.process):
+            result = await runner.process()
+        else:
+            result = runner.process()
+        if (i + 1) % 5 != 0 or i == 0:
+            if not isinstance(runner, ZMQRunner):
+                assert result is None
+        else:
+            # should have incremented by (n_gather) + (sum(gathered values)) and NOT by that + 1
+            assert result["b_value"] == 5 + result["sum"] + last_b
+            assert result["post_value"] == result["b_value"] + 1
+            assert result["a_value"] == last_b + 5
+            last_b = result["b_value"]
+
+
 def test_asset_nocopy_when_unused():
     """
     Don't copy assets when there is no chance for them to be mutated after they are stored

@@ -21,12 +21,13 @@ from noob import init_logger
 from noob.asset import AssetScope, AssetSpecification
 from noob.config import config
 from noob.event import Event, MetaEvent
-from noob.exceptions import AlreadyDoneError
+from noob.exceptions import AlreadyDoneError, EpochCompletedError
 from noob.input import InputCollection
 from noob.network.loop import EventloopMixin
 from noob.network.message import (
     AnnounceMsg,
     DeinitMsg,
+    EpochEndedMsg,
     ErrorMsg,
     ErrorValue,
     EventMsg,
@@ -384,7 +385,7 @@ class NodeRunner(EventloopMixin):
 
                 self.state.init(AssetScope.node, self._node.edges)
                 self.state.init(AssetScope.process, self._node.edges)
-                assets = self.state.collect(self._node.edges, ready["epoch"])
+                assets = self.state.collect(self._node.edges)
                 inputs |= assets if assets else {}
 
                 if self._node.injections.get("epoch"):
@@ -573,6 +574,9 @@ class NodeRunner(EventloopMixin):
             await self.on_deinit(message)
         elif message.type_ == MessageType.ping:
             await self.identify()
+        elif message.type_ == MessageType.epoch_ended:
+            message = cast(EpochEndedMsg, message)
+            await self.on_epoch_ended(message)
         else:
             # log but don't throw - other nodes shouldn't be able to crash us
             self.logger.error(f"{message.type_} not implemented!")
@@ -624,7 +628,10 @@ class NodeRunner(EventloopMixin):
             self.store.add(event)
 
         async with self._ready_condition:
-            self.scheduler.update(to_update)
+            # we might have already been told the epoch was completed,
+            # so this information is redundant.
+            with contextlib.suppress(EpochCompletedError):
+                self.scheduler.update(to_update)
             self._handle_assets(msg)
             self._ready_condition.notify_all()
 
@@ -717,6 +724,24 @@ class NodeRunner(EventloopMixin):
             ),
         )
         await self.sockets["dealer"].send_multipart([msg.to_bytes()])
+
+    async def on_epoch_ended(self, msg: EpochEndedMsg) -> None:
+        """
+        Command node has told us that an epoch has ended.
+        Under most conditions, we don't need to be told this explicitly,
+        but when we are a node that stores an asset from a later node,
+        we need to mark the asset as done manually.
+        """
+        if not self.scheduler.epoch_completed(msg.value):
+            async with self._ready_condition:
+                self.scheduler.end_epoch(msg.value)
+                self._ready_condition.notify_all()
+
+        if self.state.dependencies and not self._assets_done(msg.value + 1):
+            with contextlib.suppress(AlreadyDoneError):
+                async with self._ready_condition:
+                    self.scheduler.done(epoch=msg.value + 1, node_id="assets")
+                    self._ready_condition.notify_all()
 
     async def await_node(self, epoch: Epoch | None = None) -> list[MetaEvent]:
         """
