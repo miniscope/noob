@@ -105,7 +105,7 @@ class EventStore:
                 if is_event(val):
                     self.add(val)
                     new_events.append(val)
-                elif isinstance(val, Sequence) and is_event(val[0]):
+                elif isinstance(val, Sequence) and len(val) > 0 and is_event(val[0]):
                     for e in val:
                         self.add(e)
                     new_events.extend(val)
