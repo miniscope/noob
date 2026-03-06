@@ -92,7 +92,7 @@ class Gather(Node, Generic[_TInput]):
         ):
             slots["n"] = Slot(name="n", annotation=int | None, required=True)
         else:
-            slots["n"] = Slot(name="n", annotation=int, required=False)
+            slots["n"] = Slot(name="n", annotation=int | None, required=False)
         return slots
 
     def _should_return(self, trigger: Any | None) -> bool:
