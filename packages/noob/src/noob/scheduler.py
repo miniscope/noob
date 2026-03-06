@@ -236,6 +236,10 @@ class Scheduler:
         is_ready = any(node in graph.ready_nodes for epoch, graph in graphs)
         return is_ready
 
+    def node_is_done(self, node: NodeID, epoch: Epoch) -> bool:
+        """Node is expired or done in specified epoch"""
+        return epoch in self._epoch_log or node in self._epochs[epoch].done_nodes
+
     def __getitem__(self, epoch: Epoch | int) -> TopoSorter:
         if epoch == -1:
             if len(self._epochs) == 1:
@@ -516,6 +520,22 @@ class Scheduler:
                 if gen_deps:
                     generations[asset].append(gen_deps)
         return generations
+
+    def upstream_nodes(self, node: NodeID) -> set[NodeID]:
+        """
+        All the nodes that have an effect on the given node
+
+        From:
+        * Dependencies
+        * If the node has optional dependencies, nodes whose NoEvents it should listen to
+        """
+        upstream = {e.source_node for e in self.edges if e.target_node == node}
+        sorter = self._init_graph()
+        for item, info in sorter.node_info.items():
+            if node in info.optional_successors:
+                upstream.add(item[0] if isinstance(item, NodeSignal) else item)
+        return upstream
+
 
     def _subgraph(self, node_id: str) -> tuple[dict[str, NodeSpecification], list[Edge]]:
         """

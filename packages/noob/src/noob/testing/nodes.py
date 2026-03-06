@@ -282,3 +282,14 @@ def switch() -> (
         yield next(fruits), MetaSignal.NoEvent, MetaSignal.NoEvent
         yield MetaSignal.NoEvent, next(vegetables), MetaSignal.NoEvent
         yield MetaSignal.NoEvent, MetaSignal.NoEvent, next(minerals)
+
+def this_or_that(this: Any | None = None, that: Any | None = None, the_other: Any | None = None) -> dict:
+    """Optional inputs!"""
+    ret = {}
+    if this is not None:
+        ret['this'] = this
+    if that is not None:
+        ret['that'] = that
+    if the_other is not None:
+        ret['the_other'] = the_other
+    return ret

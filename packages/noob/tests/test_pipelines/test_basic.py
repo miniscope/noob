@@ -45,12 +45,15 @@ def test_branch(loaded_tube: Tube, runner: TubeRunner):
 def test_branch_switching(loaded_tube: Tube, runner: TubeRunner):
     """Nodes can have switching outputs - yielding only a subset of thier signals"""
     expected = cycle(["fruit", "vegetable", "mineral"])
+    keys = cycle(["this", "that", "the_other"])
     for _ in range(5):
         value = runner.process()
         e = next(expected)
-        assert len(value) == 1
+        key = next(keys)
+        assert len(value) == 2
         assert e in value
         assert value[e].endswith("!")
+        assert value['this_or_that'][key] == value[e]
 
 
 @pytest.mark.parametrize("loaded_tube", ["testing-merge"], indirect=True)

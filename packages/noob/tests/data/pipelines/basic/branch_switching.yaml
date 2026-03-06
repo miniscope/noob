@@ -26,9 +26,18 @@ nodes:
       hype: 3
     depends:
       - string: switch.minerals
+  this_or_that:
+    type: noob.testing.this_or_that
+    description: | 
+      Return node is special so we have a non-return node with optional slots.
+    depends:
+      - this: fruit.value
+      - that: vegetable.value
+      - the_other: mineral.value
   return:
     type: return
     depends:
       - fruit: fruit.value
       - vegetable: vegetable.value
       - mineral: mineral.value
+      - this_or_that: this_or_that.value

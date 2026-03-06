@@ -95,6 +95,7 @@ class ZMQRunner(TubeRunner):
                     kwargs={
                         "asset_specs": self.tube.state.specs,
                         "asset_generations": self.tube.scheduler.asset_generations(),
+                        "edges": self.tube.edges,
                         "runner_id": self.runner_id,
                         "command_outbox": self.command.pub_address,
                         "command_router": self.command.router_address,
