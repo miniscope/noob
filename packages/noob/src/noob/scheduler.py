@@ -238,7 +238,13 @@ class Scheduler:
 
     def node_is_done(self, node: NodeID, epoch: Epoch) -> bool:
         """Node is expired or done in specified epoch"""
-        return epoch in self._epoch_log or node in self._epochs[epoch].done_nodes
+        if epoch in self._epoch_log:
+            return True
+
+        if self._subepochs[epoch]:
+            return all(node in self._epochs[e].done_nodes for e in self._subepochs[epoch] | {epoch})
+        else:
+            return node in self._epochs[epoch].done_nodes
 
     def __getitem__(self, epoch: Epoch | int) -> TopoSorter:
         if epoch == -1:

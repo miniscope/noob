@@ -752,7 +752,7 @@ class NodeRunner(EventloopMixin):
                     self.scheduler.done(epoch=msg.value + 1, node_id="assets")
                     self._ready_condition.notify_all()
 
-    async def await_node(self, epoch: Epoch) -> list[MetaEvent]:
+    async def await_node(self, epoch: Epoch | None = None) -> list[MetaEvent]:
         """
         Block until a node is ready
 
@@ -762,11 +762,17 @@ class NodeRunner(EventloopMixin):
 
         """
         async with self._ready_condition:
-            await self._ready_condition.wait_for(
-                lambda: self.scheduler.node_is_ready(self.spec.id, epoch)
-                or self.scheduler.node_is_done(self.spec.id, epoch)
-            )
-            if self.scheduler.node_is_done(self.spec.id, epoch):
+
+            def _wait_for() -> bool:
+                node_ready = self.scheduler.node_is_ready(self.spec.id, epoch)
+                node_done = (
+                    False if epoch is None else self.scheduler.node_is_done(self.spec.id, epoch)
+                )
+                return node_ready or node_done
+
+            await self._ready_condition.wait_for(_wait_for)
+
+            if epoch is not None and self.scheduler.node_is_done(self.spec.id, epoch):
                 return []
 
             # be FIFO-like and get the earliest epoch the node is ready in
