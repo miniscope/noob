@@ -48,7 +48,7 @@ def test_branch_switching(loaded_tube: Tube, runner: TubeRunner):
     for _ in range(5):
         value = runner.process()
         e = next(expected)
-        assert len(e) == 1
+        assert len(value) == 1
         assert e in value
         assert value[e].endswith("!")
 
