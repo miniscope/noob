@@ -536,7 +536,6 @@ class Scheduler:
                 upstream.add(item[0] if isinstance(item, NodeSignal) else item)
         return upstream
 
-
     def _subgraph(self, node_id: str) -> tuple[dict[str, NodeSpecification], list[Edge]]:
         """
         Subgraph that is downstream of a given node (including the node itself).

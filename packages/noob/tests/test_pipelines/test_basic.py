@@ -53,7 +53,7 @@ def test_branch_switching(loaded_tube: Tube, runner: TubeRunner):
         assert len(value) == 2
         assert e in value
         assert value[e].endswith("!")
-        assert value['this_or_that'][key] == value[e]
+        assert value["this_or_that"][key] == value[e]
 
 
 @pytest.mark.parametrize("loaded_tube", ["testing-merge"], indirect=True)

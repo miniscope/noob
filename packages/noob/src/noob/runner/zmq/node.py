@@ -41,7 +41,7 @@ from noob.network.message import (
     StatusMsg,
     StopMsg,
 )
-from noob.node import Node, NodeSpecification, Signal, Edge
+from noob.node import Edge, Node, NodeSpecification, Signal
 from noob.scheduler import Scheduler
 from noob.state import State
 from noob.store import EventStore
@@ -398,7 +398,9 @@ class NodeRunner(EventloopMixin):
                 yield args, kwargs, ready["epoch"]
                 self.state.deinit(AssetScope.node, self._node.edges)
 
-            if self.scheduler.node_is_done(self.spec.id, epoch) and not self.scheduler.epoch_completed(epoch):
+            if self.scheduler.node_is_done(
+                self.spec.id, epoch
+            ) and not self.scheduler.epoch_completed(epoch):
                 self.scheduler.end_epoch(epoch)
 
             if self.scheduler.epoch_completed(epoch):
@@ -502,13 +504,18 @@ class NodeRunner(EventloopMixin):
             specs={asset: self.asset_specs[asset] for asset in self.inits_assets}
         )
 
+        # we can not receive edges from the full tube,
+        # so we at least listen to the edges we know about from the node spec
+        # and supplement if we can
+        edges = [
+            e
+            for e in self._node.edges
+            if e.source_node != "assets" or e.source_signal in self.receives_assets_from
+        ]
+        edges += [e for e in self.edges if e.source_node != "assets"]
         self.scheduler = Scheduler(
             nodes={self.spec.id: self.spec},
-            edges=[
-                e
-                for e in self._node.edges
-                if e.source_node != "assets" or e.source_signal in self.receives_assets_from
-            ] + self.edges,
+            edges=edges,
             _logger=init_logger(f"noob.scheduler.{self.spec.id}"),
         )
         self.state.init(AssetScope.runner, self._node.edges)
@@ -622,11 +629,7 @@ class NodeRunner(EventloopMixin):
             self.logger.debug("No dependencies, not storing events")
             return
 
-        to_update = [
-            e
-            for e in events
-            if e["node_id"] != "assets"
-        ]
+        to_update = [e for e in events if e["node_id"] != "assets"]
         for event in events:
             if event["node_id"] == "meta":
                 continue
@@ -760,7 +763,8 @@ class NodeRunner(EventloopMixin):
         """
         async with self._ready_condition:
             await self._ready_condition.wait_for(
-                lambda: self.scheduler.node_is_ready(self.spec.id, epoch) or self.scheduler.node_is_done(self.spec.id, epoch)
+                lambda: self.scheduler.node_is_ready(self.spec.id, epoch)
+                or self.scheduler.node_is_done(self.spec.id, epoch)
             )
             if self.scheduler.node_is_done(self.spec.id, epoch):
                 return []
