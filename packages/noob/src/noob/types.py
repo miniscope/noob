@@ -167,6 +167,9 @@ class NodeSignal(NamedTuple):
     node_id: NodeID
     signal: SignalName
 
+    def __repr__(self) -> str:
+        return str((self.node_id, self.signal))
+
 
 ReturnNodeType: TypeAlias = None | dict[str, Any] | Any
 EventMap: TypeAlias = dict[PythonIdentifier, "Event"]

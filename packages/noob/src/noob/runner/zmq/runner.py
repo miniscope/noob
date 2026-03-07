@@ -95,6 +95,7 @@ class ZMQRunner(TubeRunner):
                     kwargs={
                         "asset_specs": self.tube.state.specs,
                         "asset_generations": self.tube.scheduler.asset_generations(),
+                        "edges": self.tube.edges,
                         "runner_id": self.runner_id,
                         "command_outbox": self.command.pub_address,
                         "command_router": self.command.router_address,
@@ -387,10 +388,11 @@ class ZMQRunner(TubeRunner):
             else:
                 epochs = [epoch]
             for ep in epochs:
-                events = self.store.collect(
-                    self._return_node.edges, ep, eventmap=self._return_node.injections.get("events")
-                )
-                if not events:
+                eventmap_key = self._return_node.injections.get("events")
+                events = self.store.collect(self._return_node.edges, ep, eventmap=eventmap_key)
+                if not events or (
+                    len(events) == 1 and eventmap_key in events and not events[eventmap_key]
+                ):
                     return MetaSignal.NoEvent
                 args, kwargs = self.store.split_args_kwargs(events)
                 self._return_node.process(*args, **kwargs)  # type: ignore[call-arg]

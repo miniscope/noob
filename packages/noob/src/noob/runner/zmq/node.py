@@ -41,7 +41,7 @@ from noob.network.message import (
     StatusMsg,
     StopMsg,
 )
-from noob.node import Node, NodeSpecification, Signal
+from noob.node import Edge, Node, NodeSpecification, Signal
 from noob.scheduler import Scheduler
 from noob.state import State
 from noob.store import EventStore
@@ -114,6 +114,7 @@ class NodeRunner(EventloopMixin):
         input_collection: InputCollection,
         asset_specs: dict[str, AssetSpecification] | None = None,
         asset_generations: dict[str, list[tuple[str, ...]]] | None = None,
+        edges: list[Edge] | None = None,
         protocol: str = "ipc",
     ):
         self.spec = spec
@@ -125,6 +126,7 @@ class NodeRunner(EventloopMixin):
         self.store = EventStore()
         self.asset_specs = asset_specs or {}
         self.asset_generations = asset_generations or {}
+        self.edges = edges or []
         self.state: State = None  # type: ignore[assignment]
         self.scheduler: Scheduler = None  # type: ignore[assignment]
         self.logger = init_logger(f"runner.node.{runner_id}.{self.spec.id}")
@@ -173,9 +175,10 @@ class NodeRunner(EventloopMixin):
         """
         if self.depends is None:
             return set()
-        subscribes = set(d[0] for d in self.depends) - {"assets", "input"}
+        subscribes = set(d[0] for d in self.depends) | self.scheduler.upstream_nodes(self.spec.id)
         for senders in self.receives_assets_from.values():
             subscribes.update(senders)
+        subscribes.difference_update({"assets", "input"})
         return subscribes
 
     @cached_property
@@ -395,6 +398,11 @@ class NodeRunner(EventloopMixin):
                 yield args, kwargs, ready["epoch"]
                 self.state.deinit(AssetScope.node, self._node.edges)
 
+            if self.scheduler.node_is_done(
+                self.spec.id, epoch
+            ) and not self.scheduler.epoch_completed(epoch):
+                self.scheduler.end_epoch(epoch)
+
             if self.scheduler.epoch_completed(epoch):
                 self.logger.debug("Epoch completed: %s", epoch)
                 self.state.deinit(AssetScope.process, self._node.edges)
@@ -496,13 +504,18 @@ class NodeRunner(EventloopMixin):
             specs={asset: self.asset_specs[asset] for asset in self.inits_assets}
         )
 
+        # Edges from the full tube are an optional param for a node running on its own,
+        # so we at least listen to the edges we know about from the node spec
+        # and supplement if we can
+        edges = [
+            e
+            for e in self._node.edges
+            if e.source_node != "assets" or e.source_signal in self.receives_assets_from
+        ]
+        edges += [e for e in self.edges if e.source_node != "assets"]
         self.scheduler = Scheduler(
             nodes={self.spec.id: self.spec},
-            edges=[
-                e
-                for e in self._node.edges
-                if e.source_node != "assets" or e.source_signal in self.receives_assets_from
-            ],
+            edges=edges,
             _logger=init_logger(f"noob.scheduler.{self.spec.id}"),
         )
         self.state.init(AssetScope.runner, self._node.edges)
@@ -616,11 +629,7 @@ class NodeRunner(EventloopMixin):
             self.logger.debug("No dependencies, not storing events")
             return
 
-        to_update = [
-            e
-            for e in events
-            if e["node_id"] != "assets" and e["node_id"] in set(d[0] for d in self.depends)
-        ]
+        to_update = [e for e in events if e["node_id"] != "assets"]
         for event in events:
             if event["node_id"] == "meta":
                 continue
@@ -753,9 +762,18 @@ class NodeRunner(EventloopMixin):
 
         """
         async with self._ready_condition:
-            await self._ready_condition.wait_for(
-                lambda: self.scheduler.node_is_ready(self.spec.id, epoch)
-            )
+
+            def _wait_for() -> bool:
+                node_ready = self.scheduler.node_is_ready(self.spec.id, epoch)
+                node_done = (
+                    False if epoch is None else self.scheduler.node_is_done(self.spec.id, epoch)
+                )
+                return node_ready or node_done
+
+            await self._ready_condition.wait_for(_wait_for)
+
+            if epoch is not None and self.scheduler.node_is_done(self.spec.id, epoch):
+                return []
 
             # be FIFO-like and get the earliest epoch the node is ready in
             if epoch is None:

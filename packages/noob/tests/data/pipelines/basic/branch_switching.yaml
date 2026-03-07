@@ -1,0 +1,43 @@
+noob_id: testing-branch-switching
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  Branching signals to different nodes where the signals switch - 
+  only one signal is emitted per epoch
+
+nodes:
+  switch:
+    type: noob.testing.switch
+  fruit:
+    type: noob.testing.exclaim
+    params:
+      hype: 1
+    depends:
+      - string: switch.fruits
+  vegetable:
+    type: noob.testing.exclaim
+    params:
+      hype: 2
+    depends:
+      - string: switch.vegetables
+  mineral:
+    type: noob.testing.exclaim
+    params:
+      hype: 3
+    depends:
+      - string: switch.minerals
+  this_or_that:
+    type: noob.testing.this_or_that
+    description: | 
+      Return node is special so we have a non-return node with optional slots.
+    depends:
+      - this: fruit.value
+      - that: vegetable.value
+      - the_other: mineral.value
+  return:
+    type: return
+    depends:
+      - fruit: fruit.value
+      - vegetable: vegetable.value
+      - mineral: mineral.value
+      - this_or_that: this_or_that.value

@@ -15,7 +15,7 @@ nobes-input = "file:///${PROJECT_ROOT}/packages/nobes-input"
 nobes-video = "file:///${PROJECT_ROOT}/packages/nobes-video"
 
 [tool.pdm.scripts]
-test-noob.cmd = "pytest"
+test-noob.cmd = "pytest --cov=noob --cov-append"
 test-noob.working_dir = "packages/noob"
 test.composite = [
     "test-noob",

@@ -394,3 +394,71 @@ def test_deepcopy():
         if slot not in ("signals", "_out_nodes", "_disabled_nodes"):
             # everything changes except for the things that... don't change...
             assert getattr(ts, slot) != getattr(copied, slot)
+
+
+def test_derive_optional_adjacency(optional_graph):
+    """
+    Topo sorter correctly derives optional predecessors and successors
+    It should find successors up to the nearest optional and no further,
+    and only set optional successors for signals, not nodes.
+    """
+
+    ts = TopoSorter(edges=optional_graph)
+
+    # optional dependencies were constructed correctly
+    assert ts.node_info["only_optional"].optional_predecessors == {NodeSignal("a", "a1")}
+    assert ts.node_info["mixed"].optional_predecessors == {NodeSignal("a", "a1")}
+    assert ts.node_info["two_hop"].optional_predecessors == {NodeSignal("mixed", "value")}
+
+    assert ts.node_info[NodeSignal("a", "a1")].optional_successors == {
+        "only_optional",
+        "mixed",
+        "b",
+    }
+    assert ts.node_info[NodeSignal("mixed", "value")].optional_successors == {"two_hop"}
+    # nodes do not get optional successors, signals are the things that are NoEvent or not
+    assert ts.node_info["a"].optional_successors == set()
+    assert ts.node_info["mixed"].optional_successors == set()
+
+
+def test_optional_dependencies(optional_graph):
+    """
+    Topo sorter should run nodes with optional dependencies when those upstream nodes are expired
+    """
+    ts = TopoSorter(edges=optional_graph)
+
+    ready = ts.get_ready()
+    # nodes with only optional dependencies should still wait for those to be done
+    assert set(ready) == {"a"}
+    ts.done("a")
+    ready = ts.get_ready()
+    assert set(ready) == {NodeSignal("a", "a1"), NodeSignal("a", "a2")}
+    ts.mark_expired(NodeSignal("a", "a1"))
+    ts.done(NodeSignal("a", "a2"))
+    ready = ts.get_ready()
+    assert set(ready) == {"only_optional", "mixed", "b"}
+    ts.done("only_optional", "mixed")
+    ready = ts.get_ready()
+    assert set(ready) == {NodeSignal("mixed", "value")}
+    ts.mark_expired(NodeSignal("mixed", "value"))
+    ready = ts.get_ready()
+    assert set(ready) == {"two_hop"}
+
+
+@pytest.mark.parametrize("unlock_optionals", [True, False])
+def test_unlock_optionals(optional_graph, unlock_optionals: bool):
+    """
+    The "unlock_optionals" arg controls whether expiring nodes causes their downstream deps to be
+    made ready.
+    """
+    ts = TopoSorter(edges=optional_graph)
+
+    ready = ts.get_ready()
+    ts.done("a")
+    ready = ts.get_ready()
+    ts.mark_expired(*ready, unlock_optionals=unlock_optionals)
+    ready = ts.get_ready()
+    if unlock_optionals:
+        assert set(ready) == {"only_optional", "b"}
+    else:
+        assert ready == tuple()
