@@ -7,6 +7,7 @@ import pytest
 from noob import SynchronousRunner, Tube
 from noob.event import Event, MetaEventType
 from noob.exceptions import EpochCompletedError
+from noob.scheduler import Scheduler
 from noob.toposort import TopoSorter
 from noob.types import Epoch
 
@@ -351,3 +352,17 @@ def test_asset_generations():
         assert set(generations[asset][0]) == {"a1", "a2"}
         assert set(generations[asset][1]) == {"b1", "b2"}
         assert set(generations[asset][2]) == {"c1", "c2"}
+
+
+def test_upstream_nodes(optional_graph):
+    """
+    Upstream nodes detects immediate dependencies as well as nodes who can affect our running
+    by indirect optional dependencies
+    (i.e., if they emitted NoEvent, we would be eligible for running)
+    """
+    sched = Scheduler(edges=optional_graph, nodes={})
+    # d should implicitly have b upstream but not a, because a->b is optional,
+    # despite only directly depending on c
+    # the rest are just direct dependencies and that's the `Node.edges` method, so not tested here.
+    assert not any(e.source_node == "b" and e.target_node == "d" for e in optional_graph)
+    assert sched.upstream_nodes("d") == {"b", "c"}

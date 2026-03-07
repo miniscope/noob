@@ -11,6 +11,7 @@ from .config import (
 from .meta import monkeypatch_session
 from .paths import CONFIG_DIR, DATA_DIR, PIPELINE_DIR
 from .runner import all_runner_cls, all_runners, runner, sync_runner_cls
+from .sorter import optional_graph
 from .tubes import basic_tubes, loaded_tube
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "all_runner_cls",
     "loaded_tube",
     "monkeypatch_session",
+    "optional_graph",
     "basic_tubes",
     "runner",
     "sync_runner_cls",

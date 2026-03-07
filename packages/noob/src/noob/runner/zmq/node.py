@@ -504,7 +504,7 @@ class NodeRunner(EventloopMixin):
             specs={asset: self.asset_specs[asset] for asset in self.inits_assets}
         )
 
-        # we can not receive edges from the full tube,
+        # Edges from the full tube are an optional param for a node running on its own,
         # so we at least listen to the edges we know about from the node spec
         # and supplement if we can
         edges = [
