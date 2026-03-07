@@ -13,7 +13,9 @@ _ChangeStr: TypeAlias = Literal["added", "deleted", "modified"]
 
 
 def watch(
-    path: Path, change_types: Sequence[Change | _ChangeStr] | Change | _ChangeStr | None = None
+    path: Path,
+    change_types: Sequence[Change | _ChangeStr] | Change | _ChangeStr | None = None,
+    recursive: bool = True,
 ) -> Generator[
     tuple[A[Path, Name("added")], A[Path, Name("deleted")], A[Path, Name("modified")]], None, None
 ]:
@@ -25,7 +27,7 @@ def watch(
         changes (Sequence[Change | _ChangeStr] | Change | _ChangeStr | None): Optionally,
             filter to only the types of changes indicated ("added", "deleted", "modified").
     """
-    if change_types and isinstance(change_types, str) or not isinstance(change_types, Sequence):
+    if change_types and (isinstance(change_types, str) or not isinstance(change_types, Sequence)):
         change_types = {change_types}
     if change_types:
         change_types = {c if isinstance(c, Change) else Change[c] for c in change_types}
@@ -34,7 +36,7 @@ def watch(
     if not path.exists():
         raise FileNotFoundError(f"Directory {path} does not exist!")
 
-    for changes in _watch(path):
+    for changes in _watch(path, recursive=recursive):
         for change in changes:
             change_type = change[0]
             changed_path = Path(change[1])
