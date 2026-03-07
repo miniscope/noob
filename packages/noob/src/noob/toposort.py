@@ -1,6 +1,5 @@
 from collections import defaultdict
 from collections.abc import Sequence
-from copy import copy
 from operator import attrgetter
 from typing import Any, TypeAlias
 
@@ -497,23 +496,33 @@ class TopoSorter:
                 seen.update(current_info.predecessors)
 
     def __deepcopy__(self, memo: dict) -> "TopoSorter":
+        """
+        optimized deepcopy:
+        turns out manually creating new objects is expensive,
+        and so are instance checks and generic `getattr`.
+        Creating new sets is also somehow faster than updating existing sets.
+        So we do it all manually at the expense of needing to keep this updated if the slots change
+        """
         sorter = TopoSorter()
-        for slot in self.__slots__:
-            if slot == "_node2info":
-                new_node2info = {}
-                for node, info in self._node2info.items():
-                    new_info = _NodeInfo(node)
-                    new_info.nqueue = info.nqueue
-                    new_info.successors = set(info.successors)
-                    new_info.predecessors = set(info.predecessors)
-                    new_info.optional_predecessors = set(info.optional_predecessors)
-                    new_info.optional_successors = set(info.optional_successors)
-                    new_node2info[node] = new_info
-                sorter._node2info = new_node2info
-            elif isinstance((val := getattr(self, slot)), dict | defaultdict | set):
-                getattr(sorter, slot).update(val)
-            elif isinstance(val, int | float):
-                setattr(sorter, slot, getattr(self, slot))
-            else:
-                setattr(sorter, slot, copy(getattr(self, slot)))
+        new_node2info = {}
+        for node, info in self._node2info.items():
+            new_info = _NodeInfo(node)
+            new_info.nqueue = info.nqueue
+            new_info.successors = set(info.successors)
+            new_info.predecessors = set(info.predecessors)
+            new_info.optional_predecessors = set(info.optional_predecessors)
+            new_info.optional_successors = set(info.optional_successors)
+            new_node2info[node] = new_info
+        sorter._node2info = new_node2info
+
+        sorter.signals.update(self.signals)
+        sorter._ready_nodes = set(self._ready_nodes)
+        sorter._out_nodes = set(self._out_nodes)
+        sorter._done_nodes = set(self._done_nodes)
+        sorter._disabled_nodes = set(self._disabled_nodes)
+        sorter._ran_nodes = set(self._ran_nodes)
+
+        sorter._npassedout = self._npassedout
+        sorter._nfinished = self._nfinished
+
         return sorter
