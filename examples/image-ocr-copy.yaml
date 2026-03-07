@@ -1,0 +1,103 @@
+noob_id: image-ocr-copy
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  When a file is added to a directory, create a copy, encode the image as a jpg,
+  make a copy of it, OCR the image, and show a notification popover prompting the user to
+  add the OCR'd text to their clipboard.
+  
+  Demonstrates use of noob as a background service, inputs, file manipulation,
+  and the use of NoEvent in filter_path
+
+input:
+  watch_dir:
+    type: pathlib.Path
+    scope: tube
+    default: "./"
+  backup_dir:
+    type: pathlib.Path
+    scope: tube
+    default: "./backups/"
+
+nodes:
+  watcher:
+    type: nobes.files.watch
+    params:
+      path: input.watch_dir
+      recursive: false
+  filter:
+    type: nobes.files.filter_path
+    params:
+      extension:
+        - png
+    depends:
+      - path: watcher.added
+
+  # make a backup
+  relative_path:
+    type: nobes.files.relative_path
+    depends:
+      - path: filter.path
+      - relative: input.backup_dir
+  copy:
+    type: nobes.files.copy
+    params:
+      destination:
+    depends:
+      - source: filter.path
+      - destination: relative_path.path
+
+  # derive paths
+  jpg_path:
+    type: nobes.files.with_suffix
+    params:
+      suffix: ".jpg"
+    depends:
+      - path: filter.path
+  txt_path:
+    type: nobes.files.with_suffix
+    params:
+      suffix: ".txt"
+    depends:
+      - path: filter.path
+
+
+  # read & process image
+  read_image:
+    type: nobes.image.read_image
+    depends:
+      - path: filter.path
+  convert:
+    type: nobes.image.convert
+    depends:
+      - source: read_image.image
+      - destination: jpg_path.path
+  ocr:
+    type: nobes.image.tesseract
+    depends:
+      - image: read_image.image
+  write_text:
+    type: pathlib.Path.write_text
+    depends:
+      - txt_path.path
+      - ocr.text
+  to_clipboard:
+    type: nobes.os.set_clipboard
+    depends:
+      - value: ocr.text
+
+  # prompt to copy to clipboard
+  # however this isn't working on mac right now because they have locked down the notification center
+  # it is left in as a demonstration
+  #  notification:
+  #    type: nobes.os.notification
+  #    params:
+  #      title: "OCR Complete"
+  #      message: filter.path
+  #      button_title: "Copy to clipboard"
+  #    depends:
+  #      - button_value: ocr.text
+  #  to_clipboard:
+  #    type: nobes.os.set_clipboard
+  #    depends:
+  #      - value: notification.value

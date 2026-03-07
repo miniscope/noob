@@ -11,7 +11,10 @@ dev = [
 
 [tool.pdm.resolution.overrides]
 nobes-core = "file:///${PROJECT_ROOT}/packages/nobes-core"
+nobes-files = "file:///${PROJECT_ROOT}/packages/nobes-files"
+nobes-image = "file:///${PROJECT_ROOT}/packages/nobes-image"
 nobes-input = "file:///${PROJECT_ROOT}/packages/nobes-input"
+nobes-os = "file:///${PROJECT_ROOT}/packages/nobes-os"
 nobes-video = "file:///${PROJECT_ROOT}/packages/nobes-video"
 
 [tool.pdm.scripts]

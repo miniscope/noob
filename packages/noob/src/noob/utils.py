@@ -29,7 +29,19 @@ def resolve_python_identifier(ref: AbsoluteIdentifier) -> Any:
         return getattr(builtins, ref)
     else:
         module_name, obj = ref.rsplit(".", 1)
-        module = sys.modules.get(module_name, importlib.import_module(module_name))
+        try:
+            module = sys.modules.get(module_name, importlib.import_module(module_name))
+        except ImportError as e:
+            # may have been a method name
+            try:
+                module_name_parent, obj_parent = module_name.rsplit(".")
+                module = sys.modules.get(
+                    module_name_parent, importlib.import_module(module_name_parent)
+                )
+                module = getattr(module, obj_parent)
+            except Exception:
+                raise ImportError(f"Could not import module {module_name} or its parent") from e
+
         return getattr(module, obj)
 
 
