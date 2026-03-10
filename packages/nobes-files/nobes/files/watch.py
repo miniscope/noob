@@ -1,7 +1,7 @@
 from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import Annotated as A
-from typing import Literal, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 from watchfiles import Change
 from watchfiles import watch as _watch
@@ -16,6 +16,7 @@ def watch(
     path: Path,
     change_types: Sequence[Change | _ChangeStr] | Change | _ChangeStr | None = None,
     recursive: bool = True,
+    **kwargs: Any,
 ) -> Generator[
     tuple[A[Path, Name("added")], A[Path, Name("deleted")], A[Path, Name("modified")]], None, None
 ]:
@@ -36,7 +37,7 @@ def watch(
     if not path.exists():
         raise FileNotFoundError(f"Directory {path} does not exist!")
 
-    for changes in _watch(path, recursive=recursive):
+    for changes in _watch(path, recursive=recursive, **kwargs):
         for change in changes:
             change_type = change[0]
             changed_path = Path(change[1])
