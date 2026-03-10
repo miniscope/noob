@@ -30,6 +30,7 @@ def resolve_python_identifier(ref: AbsoluteIdentifier) -> Any:
     else:
         module_name, obj = ref.rsplit(".", 1)
         module = sys.modules.get(module_name, importlib.import_module(module_name))
+
         return getattr(module, obj)
 
 

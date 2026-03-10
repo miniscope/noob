@@ -18,7 +18,10 @@ keywords = [
 dependencies = [
   "noob",
   "nobes-core",
+  "nobes-files",
+  "nobes-image",
   "nobes-input",
+  "nobes-os",
   "nobes-video",
 ]
 
@@ -26,7 +29,10 @@ dependencies = [
 [tool.pdm.dev-dependencies]
 dev = [
   "-e file:///${PROJECT_ROOT}/../nobes-core",
+  "-e file:///${PROJECT_ROOT}/../nobes-files",
+  "-e file:///${PROJECT_ROOT}/../nobes-image",
   "-e file:///${PROJECT_ROOT}/../nobes-input",
+  "-e file:///${PROJECT_ROOT}/../nobes-os",
   "-e file:///${PROJECT_ROOT}/../nobes-video",
 ]
 
