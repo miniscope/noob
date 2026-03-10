@@ -84,7 +84,7 @@ def test_watch(tmp_path: Path, change: Change) -> None:
             assert events[0][2] is MetaSignal.NoEvent
         else:
             if sys.platform != "darwin":
-                assert len(events) == 2 if change == Change.modified else 1
+                assert len(events) == 2
 
     finally:
         stop_evt.set()
