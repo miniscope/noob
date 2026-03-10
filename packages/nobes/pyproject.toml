@@ -23,6 +23,7 @@ dependencies = [
   "nobes-input",
   "nobes-os",
   "nobes-video",
+  "nobes-web",
 ]
 
 # use the local versions rather than the pypi versions when developing locally!
@@ -34,6 +35,7 @@ dev = [
   "-e file:///${PROJECT_ROOT}/../nobes-input",
   "-e file:///${PROJECT_ROOT}/../nobes-os",
   "-e file:///${PROJECT_ROOT}/../nobes-video",
+  "-e file:///${PROJECT_ROOT}/../nobes-web",
 ]
 
 [project.optional-dependencies]

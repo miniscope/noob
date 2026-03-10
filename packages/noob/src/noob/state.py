@@ -7,7 +7,8 @@ from typing import Self, TypeAlias
 from pydantic import BaseModel, Field
 
 from noob.asset import Asset, AssetScope, AssetSpecification
-from noob.event import Event, MetaEvent
+from noob.event import Event, MetaEvent, MetaSignal
+from noob.input import InputCollection
 from noob.node.base import Edge
 from noob.types import NodeID, PythonIdentifier
 
@@ -57,7 +58,10 @@ class State(BaseModel):
 
     @classmethod
     def from_specification(
-        cls, specs: dict[str, AssetSpecification], edges: list[Edge] | None = None
+        cls,
+        specs: dict[str, AssetSpecification],
+        edges: list[Edge] | None = None,
+        input_collection: InputCollection | None = None,
     ) -> Self:
         """
         Instantiate a :class:`.State` model from its configuration
@@ -70,7 +74,9 @@ class State(BaseModel):
                 then we don't have to copy.
         """
 
-        assets = {spec.id: Asset.from_specification(spec) for spec in specs.values()}
+        assets = {
+            spec.id: Asset.from_specification(spec, input_collection) for spec in specs.values()
+        }
         dependencies = cls._get_dependencies(specs, edges)
         scope_to_assets = defaultdict(list)
         for asset in assets.values():
@@ -159,9 +165,11 @@ class State(BaseModel):
     def update(self, events: list[Event] | list[Event | MetaEvent]) -> None:
         """Update asset if asset depends on a node signal"""
         for event in events:
-            if (dep := self.dependencies.get(event["node_id"])) and dep["signal"] == event[
-                "signal"
-            ]:
+            if (
+                (dep := self.dependencies.get(event["node_id"]))
+                and dep["signal"] == event["signal"]
+                and event["value"] != MetaSignal.NoEvent
+            ):
                 self.assets[dep["asset_id"]].update(value=event["value"], epoch=event["epoch"])
 
     def clear(self) -> None:
@@ -179,9 +187,9 @@ class State(BaseModel):
             if not asset.depends:
                 continue
             node_id, signal = asset.depends.split(".")
-            if edges and not any(
-                edge.source_node == node_id and edge.source_signal == signal for edge in edges
-            ):
-                continue
+            # if edges and not any(
+            #     edge.source_node == node_id and edge.source_signal == signal for edge in edges
+            # ):
+            #     continue
             deps[node_id] = _AssetDependency(asset_id=asset.id, signal=signal)
         return deps

@@ -1,4 +1,5 @@
 import ast
+import asyncio
 import json
 import sys
 from collections.abc import Generator
@@ -45,6 +46,9 @@ from noob.runner import get_runner
               jsonl emits each result separately as they are completed on newlines.
               """,
 )
+@click.option(
+    "--progress/--no-progress",
+)
 def run(
     tube: str,
     runner: L["sync", "async", "zmq"] = "sync",
@@ -52,25 +56,24 @@ def run(
     input_format: L["json", "jsonl"] = "json",
     inparams: tuple[tuple[str, str]] | None = None,
     output_format: L["json", "jsonl"] = "json",
+    progress: bool = False,
 ) -> None:
     input_dict = {}
     if inparams:
         for key, val in inparams:
             try:
                 input_dict[key] = ast.literal_eval(val)
-            except ValueError:
+            except (ValueError, SyntaxError):
                 input_dict[key] = val
 
     tube_id = tube
     tube_ = Tube.from_specification(tube, input=input_dict)
-    runner_cls = get_runner(runner)
-    runner_ = runner_cls(tube_)
 
     assert tube_.spec is not None
     piped_input = not sys.stdin.isatty() and tube_.spec.input
 
     console = Console(file=sys.stderr)
-    progress = Progress(
+    progress_ = Progress(
         TextColumn(f"[bold green]{tube_id}[/bold green]"),
         SpinnerColumn(),
         *Progress.get_default_columns(),
@@ -78,8 +81,32 @@ def run(
         transient=True,
         console=console,
     )
+    if not progress:
+        progress_.disable = True
 
+    if runner != "async":
+        results = _run_sync(runner, tube_, progress_, n, piped_input, input_format, output_format)
+    else:
+        results = asyncio.run(
+            _run_async(runner, tube_, progress_, n, piped_input, input_format, output_format)
+        )
+
+    if output_format == "json":
+        click.echo(json.dumps(results))
+
+
+def _run_sync(
+    runner: L["sync", "zmq"],
+    tube: Tube,
+    progress: Progress,
+    n: int | None,
+    piped_input: bool,
+    input_format: L["json", "jsonl"],
+    output_format: L["json", "jsonl"],
+) -> list:
     results = []
+    runner_cls = get_runner(runner)
+    runner_ = runner_cls(tube)
     with runner_, progress:
         task = progress.add_task("Running", total=n)
         if piped_input:
@@ -98,8 +125,37 @@ def run(
                     results.append(result)
                 progress.advance(task)
 
-    if output_format == "json":
-        click.echo(json.dumps(results))
+
+async def _run_async(
+    runner: L["async"],
+    tube: Tube,
+    progress: Progress,
+    n: int | None,
+    piped_input: bool,
+    input_format: L["json", "jsonl"],
+    output_format: L["json", "jsonl"],
+) -> list:
+    results = []
+    runner_cls = get_runner(runner)
+    runner_ = runner_cls(tube)
+    with progress:
+        async with runner_:
+            task = progress.add_task("Running", total=n)
+            if piped_input:
+                for input in _iter_stdin(input_format):
+                    result = await runner_.process(**input)
+                    if output_format == "jsonl":
+                        click.echo(json.dumps(result))
+                    else:
+                        results.append(result)
+                    progress.advance(task)
+            else:
+                async for result in runner_.iter(n=n):
+                    if output_format == "jsonl":
+                        click.echo(json.dumps(result))
+                    else:
+                        results.append(result)
+                    progress.advance(task)
 
 
 def _iter_stdin(format: L["json", "jsonl"] = "json") -> Generator[dict, None, None]:

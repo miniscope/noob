@@ -45,6 +45,14 @@ class Gather(Node, Generic[_TInput]):
     """
 
     n: int | None = None
+    flatten: bool = False
+    """
+    If an individual gathered value is a sequence 
+    (and thus the returned gathered value a sequence of sequences),
+    flatten the sequences by 1 level.
+    
+    [['a', 'b'], ['c'], []] -> ['a', 'b', 'c'] 
+    """
     _items: list[tuple[Epoch, _TInput]] = PrivateAttr(default_factory=list)
     _lock: LockType = PrivateAttr(default_factory=Lock)
 
@@ -60,6 +68,9 @@ class Gather(Node, Generic[_TInput]):
             self._items.append((epoch, value))
             if self._should_return(trigger):
                 items = [item[1] for item in sorted(self._items, key=lambda i: i[0])]
+                if self.flatten:
+                    items = self._do_flatten(items)
+
                 try:
                     # collapse epoch if in a sub-epoch
                     ep = epoch.parent if len(epoch) > 1 else epoch
@@ -99,3 +110,12 @@ class Gather(Node, Generic[_TInput]):
         return (self.n is not None and len(self._items) >= self.n) or (
             self.n is None and trigger is not None
         )
+
+    def _do_flatten(self, items: list[list]) -> list:
+        flat = []
+        for item in items:
+            try:
+                flat.extend(item)
+            except TypeError as e:
+                raise TypeError("Requested flatten, but error spreading the gathered value!") from e
+        return flat
