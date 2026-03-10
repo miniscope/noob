@@ -36,6 +36,7 @@ class AsyncRunner(TubeRunner):
         self._running = asyncio.Event()
         self._node_ready = asyncio.Event()
         self._init_lock = asyncio.Lock()
+        self._scheduler_lock = asyncio.Lock()
         self._pending_futures = set()
         self._exception: BaseException | None = None
 
@@ -117,17 +118,20 @@ class AsyncRunner(TubeRunner):
         if not self._running.is_set():
             await self.init()
         self.store.clear()
-        self.tube.scheduler.add_epoch()
+        async with self._scheduler_lock:
+            self.tube.scheduler.add_epoch()
 
     async def _get_ready(self, epoch: Epoch | None = None) -> list[MetaEvent]:  # type: ignore[override]
         if self._exception:
             await self._raise_exception()
-        ready = self.tube.scheduler.get_ready()
+        async with self._scheduler_lock:
+            ready = self.tube.scheduler.get_ready()
         if not ready:
             # if none are ready, wait until another node is complete and check again
             self._node_ready.clear()
             await self._node_ready.wait()
-            return self.tube.scheduler.get_ready()
+            async with self._scheduler_lock:
+                return self.tube.scheduler.get_ready()
         else:
             return ready
 
