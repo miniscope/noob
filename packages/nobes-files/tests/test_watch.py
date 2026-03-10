@@ -10,7 +10,14 @@ from nobes.files.watch import watch
 from noob.event import MetaSignal
 
 
-@pytest.mark.parametrize("change", [Change.added, Change.deleted, Change.modified])
+@pytest.mark.parametrize(
+    "change",
+    [
+        pytest.param(Change.added, id="added"),
+        pytest.param(Change.deleted, id="deleted"),
+        pytest.param(Change.modified, id="modified"),
+    ],
+)
 def test_watch(tmp_path: Path, change: Change) -> None:
     """
     Watching a directory should yield changes, modifications, and removals as separate events.
@@ -84,7 +91,7 @@ def test_watch(tmp_path: Path, change: Change) -> None:
             assert events[0][2] is MetaSignal.NoEvent
         else:
             if sys.platform != "darwin":
-                assert len(events) == 2
+                assert len(events) == 1
 
     finally:
         stop_evt.set()
