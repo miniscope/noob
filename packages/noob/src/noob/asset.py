@@ -68,6 +68,8 @@ class AssetSpecification(BaseModel):
     description: str | None = None
     """An optional description of the asset"""
 
+    model_config = ConfigDict(extra="forbid")
+
     @model_validator(mode="after")
     def validate_depends(self) -> Self:
         """

@@ -1,7 +1,7 @@
 from typing import Annotated, TypeAlias
 
 from annotated_types import Len
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from noob.types import AbsoluteIdentifier, DependencyIdentifier, PythonIdentifier
 from noob.yaml import id_optional_json_schema
@@ -122,6 +122,8 @@ class NodeSpecification(BaseModel):
     """
     description: str | None = None
     """An optional description of the node"""
+
+    model_config = ConfigDict(extra="forbid")
 
     @field_validator("depends", mode="after")
     @classmethod

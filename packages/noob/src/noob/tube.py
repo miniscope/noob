@@ -50,6 +50,8 @@ class TubeSpecification(ConfigYAMLMixin):
     description: str | None = None
     """An optional description of the tube"""
 
+    model_config = ConfigDict(extra="forbid")
+
     @field_validator("nodes", "assets", "input", mode="before")
     @classmethod
     def fill_node_ids(cls, value: dict[str, dict]) -> dict[str, dict]:

@@ -12,6 +12,7 @@
       "type": "string"
     }
   },
+  "additionalProperties": false,
   "description": "Specification of inputs to a noob tube.\n\nInputs can be supplied at different times and frequencies,\nas specified by `scope`:\n\n- `tube`: When instantiating the tube\n- `process`: Per call to :meth:`.TubeRunner.process`\n\n`tube`-scoped inputs may be used in a node's `param` specification,\nand `process`-scoped inputs may be used as one of a node's `depends`.\n\nInputs can be supplied at a \"higher\" scope and be accessed by lower scopes:\ne.g. input requested with a process scope can use input provided when instantiating the tube,\nif not provided to process but provided to the tube.",
   "properties": {
     "id": {
