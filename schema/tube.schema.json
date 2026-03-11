@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/miniscope/noob/tree/v0.1.2/schema/tube.schema.json",
+  "$defs": {
+    "AssetScope": {
+      "enum": [
+        "runner",
+        "process",
+        "node"
+      ],
+      "title": "AssetScope",
+      "type": "string"
+    },
+    "AssetSpecification": {
+      "description": "Specification for a single asset within a tube .yaml file.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/AssetScope"
+        },
+        "params": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Params"
+        },
+        "depends": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "scope"
+      ],
+      "title": "AssetSpecification",
+      "type": "object"
+    },
+    "InputScope": {
+      "description": "The scope that input must be provided in",
+      "enum": [
+        "tube",
+        "process"
+      ],
+      "title": "InputScope",
+      "type": "string"
+    },
+    "InputSpecification": {
+      "description": "Specification of inputs to a noob tube.\n\nInputs can be supplied at different times and frequencies,\nas specified by `scope`:\n\n- `tube`: When instantiating the tube\n- `process`: Per call to :meth:`.TubeRunner.process`\n\n`tube`-scoped inputs may be used in a node's `param` specification,\nand `process`-scoped inputs may be used as one of a node's `depends`.\n\nInputs can be supplied at a \"higher\" scope and be accessed by lower scopes:\ne.g. input requested with a process scope can use input provided when instantiating the tube,\nif not provided to process but provided to the tube.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/InputScope",
+          "default": "tube"
+        },
+        "default": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "InputSpecification",
+      "type": "object"
+    },
+    "NodeSpecification": {
+      "description": "Specification for a single processing node within a tube .yaml file.",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "depends": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "maxProperties": 1,
+                    "minProperties": 1,
+                    "type": "object"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends"
+        },
+        "params": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Params"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "stateful": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stateful"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "title": "NodeSpecification",
+      "type": "object"
+    }
+  },
+  "description": "Configuration for the nodes within a tube.\n\nRepresentation of the yaml-form of a tube.\nConverted to the runtime-form with :meth:`.Tube.from_specification`.\n\nNot much, if any validation is performed here on the whole tube except\nthat the nodes have the correct fields, ignoring validity of\ne.g. type mismatches or dependencies on signals that don't exist.\nThose require importing and introspecting the specified node classes,\nwhich should only happen when we try and instantiate the tube -\nthis class is just a carrier for the yaml spec.",
+  "properties": {
+    "noob_id": {
+      "anyOf": [
+        {
+          "pattern": "[\\w\\-\\/#]+",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Noob Id"
+    },
+    "noob_model": {
+      "default": null,
+      "title": "Noob Model",
+      "type": "string"
+    },
+    "noob_version": {
+      "default": "0.1.2",
+      "title": "Noob Version",
+      "type": "string"
+    },
+    "assets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/AssetSpecification"
+      },
+      "title": "Assets",
+      "type": "object"
+    },
+    "input": {
+      "additionalProperties": {
+        "$ref": "#/$defs/InputSpecification"
+      },
+      "title": "Input",
+      "type": "object"
+    },
+    "nodes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/NodeSpecification"
+      },
+      "title": "Nodes",
+      "type": "object"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    }
+  },
+  "title": "TubeSpecification",
+  "type": "object"
+}
