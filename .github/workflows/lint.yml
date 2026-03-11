@@ -80,6 +80,7 @@ jobs:
       - name: check schemas
         run: |
           if [[ -n $(git status --porcelain) ]]; then
+              echo $(git diff)
               echo "Regenerate the schema with pdm run render_schema" >> "$GITHUB_STEP_SUMMARY"
               exit 1
           fi
