@@ -85,8 +85,7 @@
     }
   },
   "required": [
-    "type",
-    "id"
+    "type"
   ],
   "title": "NodeSpecification",
   "type": "object"

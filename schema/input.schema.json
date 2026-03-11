@@ -50,7 +50,6 @@
     }
   },
   "required": [
-    "id",
     "type"
   ],
   "title": "InputSpecification",

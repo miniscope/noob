@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from noob.exceptions import ExtraInputWarning, InputMissingError
 from noob.node.base import Edge
 from noob.types import AbsoluteIdentifier, PythonIdentifier
+from noob.yaml import id_optional_json_schema
 
 
 class InputScope(StrEnum):
@@ -43,6 +44,8 @@ class InputSpecification(BaseModel):
     default: Any | None = None
     description: str | None = None
     """An optional description of the input value"""
+
+    __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)
 
 
 class InputCollection(BaseModel):

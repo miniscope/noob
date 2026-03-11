@@ -64,7 +64,6 @@
         }
       },
       "required": [
-        "id",
         "type",
         "scope"
       ],
@@ -119,7 +118,6 @@
         }
       },
       "required": [
-        "id",
         "type"
       ],
       "title": "InputSpecification",
@@ -210,8 +208,7 @@
         }
       },
       "required": [
-        "type",
-        "id"
+        "type"
       ],
       "title": "NodeSpecification",
       "type": "object"

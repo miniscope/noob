@@ -4,6 +4,7 @@ from annotated_types import Len
 from pydantic import BaseModel, Field, field_validator
 
 from noob.types import AbsoluteIdentifier, DependencyIdentifier, PythonIdentifier
+from noob.yaml import id_optional_json_schema
 
 _DependsBasic: TypeAlias = Annotated[
     dict[PythonIdentifier, DependencyIdentifier], Len(min_length=1, max_length=1)
@@ -139,3 +140,5 @@ class NodeSpecification(BaseModel):
                 raise ValueError(f"Duplicate signal in dependencies: {signal}")
             seen.add(signal)
         return val
+
+    __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)

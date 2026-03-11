@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from noob.types import AbsoluteIdentifier, DependencyIdentifier, Epoch, PythonIdentifier
 from noob.utils import resolve_python_identifier
+from noob.yaml import id_optional_json_schema
 
 TOutput = TypeVar("TOutput")
 PWrap = ParamSpec("PWrap")
@@ -78,6 +79,8 @@ class AssetSpecification(BaseModel):
             )
 
         return self
+
+    __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)
 
 
 class Asset(BaseModel):
