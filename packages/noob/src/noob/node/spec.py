@@ -141,4 +141,4 @@ class NodeSpecification(BaseModel):
             seen.add(signal)
         return val
 
-    __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)
+    __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)  # type: ignore[var-annotated]

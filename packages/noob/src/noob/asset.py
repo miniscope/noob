@@ -80,7 +80,7 @@ class AssetSpecification(BaseModel):
 
         return self
 
-    __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)
+    __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)  # type: ignore[var-annotated]
 
 
 class Asset(BaseModel):
