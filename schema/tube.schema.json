@@ -12,6 +12,7 @@
       "type": "string"
     },
     "AssetSpecification": {
+      "additionalProperties": false,
       "description": "Specification for a single asset within a tube .yaml file.",
       "properties": {
         "id": {
@@ -80,6 +81,7 @@
       "type": "string"
     },
     "InputSpecification": {
+      "additionalProperties": false,
       "description": "Specification of inputs to a noob tube.\n\nInputs can be supplied at different times and frequencies,\nas specified by `scope`:\n\n- `tube`: When instantiating the tube\n- `process`: Per call to :meth:`.TubeRunner.process`\n\n`tube`-scoped inputs may be used in a node's `param` specification,\nand `process`-scoped inputs may be used as one of a node's `depends`.\n\nInputs can be supplied at a \"higher\" scope and be accessed by lower scopes:\ne.g. input requested with a process scope can use input provided when instantiating the tube,\nif not provided to process but provided to the tube.",
       "properties": {
         "id": {
@@ -124,6 +126,7 @@
       "type": "object"
     },
     "NodeSpecification": {
+      "additionalProperties": false,
       "description": "Specification for a single processing node within a tube .yaml file.",
       "properties": {
         "type": {
@@ -214,6 +217,7 @@
       "type": "object"
     }
   },
+  "additionalProperties": false,
   "description": "Configuration for the nodes within a tube.\n\nRepresentation of the yaml-form of a tube.\nConverted to the runtime-form with :meth:`.Tube.from_specification`.\n\nNot much, if any validation is performed here on the whole tube except\nthat the nodes have the correct fields, ignoring validity of\ne.g. type mismatches or dependencies on signals that don't exist.\nThose require importing and introspecting the specified node classes,\nwhich should only happen when we try and instantiate the tube -\nthis class is just a carrier for the yaml spec.",
   "properties": {
     "noob_id": {

@@ -12,6 +12,7 @@
       "type": "string"
     }
   },
+  "additionalProperties": false,
   "description": "Specification for a single asset within a tube .yaml file.",
   "properties": {
     "id": {

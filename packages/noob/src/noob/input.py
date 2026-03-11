@@ -5,7 +5,7 @@ from enum import StrEnum
 from functools import cached_property
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from noob.exceptions import ExtraInputWarning, InputMissingError
 from noob.node.base import Edge
@@ -44,6 +44,8 @@ class InputSpecification(BaseModel):
     default: Any | None = None
     description: str | None = None
     """An optional description of the input value"""
+
+    model_config = ConfigDict(extra="forbid")
 
     __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)  # type: ignore[var-annotated]
 
