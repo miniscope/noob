@@ -16,10 +16,12 @@ from pydantic import (
     ConfigDict,
     Field,
     GetCoreSchemaHandler,
+    GetJsonSchemaHandler,
     ValidationError,
     field_validator,
 )
-from pydantic_core import core_schema
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import CoreSchema, core_schema
 from ruamel.yaml import YAML, CommentedMap, CommentToken, RoundTripRepresenter, ScalarNode
 
 from noob.types import AbsoluteIdentifier, ConfigID, ConfigSource, valid_config_id
@@ -320,6 +322,22 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             #     [handler(source_type), handler(ConfigID)]
             # ),
         )
+
+
+def id_optional_json_schema(
+    cls: type,
+    core_schema: CoreSchema,
+    handler: GetJsonSchemaHandler,
+    /,
+) -> JsonSchemaValue:
+    """
+    Customize JSON schema to make `id` optional in json schema,
+    as it is typically filled in by the key in the containing dictionary
+    """
+    json_schema = handler(core_schema)
+    json_schema = handler.resolve_ref_schema(json_schema)
+    json_schema["required"] = [r for r in json_schema["required"] if r != "id"]
+    return json_schema
 
 
 @overload

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/miniscope/noob/tree/v0.1.2/schema/asset.schema.json",
+  "$defs": {
+    "AssetScope": {
+      "enum": [
+        "runner",
+        "process",
+        "node"
+      ],
+      "title": "AssetScope",
+      "type": "string"
+    }
+  },
+  "description": "Specification for a single asset within a tube .yaml file.",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "type": {
+      "title": "Type",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/AssetScope"
+    },
+    "params": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Params"
+    },
+    "depends": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Depends"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    }
+  },
+  "required": [
+    "type",
+    "scope"
+  ],
+  "title": "AssetSpecification",
+  "type": "object"
+}

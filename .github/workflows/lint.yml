@@ -60,3 +60,30 @@ jobs:
         run: python -m pip install pdm
       - name: check lockfile
         run: pdm lock --check --with :all
+
+  schema:
+    name: JSON schemas current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: install python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+      - name: install pdm & deps
+        run: |
+          python -m pip install pdm
+          pdm install
+      - name: generate schemas
+        run: pdm run render_schema
+      - name: check schemas
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+              echo $(git diff)
+              echo "Regenerate the schema with pdm run render_schema" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+          fi
+

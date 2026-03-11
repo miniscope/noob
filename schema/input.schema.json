@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/miniscope/noob/tree/v0.1.2/schema/input.schema.json",
+  "$defs": {
+    "InputScope": {
+      "description": "The scope that input must be provided in",
+      "enum": [
+        "tube",
+        "process"
+      ],
+      "title": "InputScope",
+      "type": "string"
+    }
+  },
+  "description": "Specification of inputs to a noob tube.\n\nInputs can be supplied at different times and frequencies,\nas specified by `scope`:\n\n- `tube`: When instantiating the tube\n- `process`: Per call to :meth:`.TubeRunner.process`\n\n`tube`-scoped inputs may be used in a node's `param` specification,\nand `process`-scoped inputs may be used as one of a node's `depends`.\n\nInputs can be supplied at a \"higher\" scope and be accessed by lower scopes:\ne.g. input requested with a process scope can use input provided when instantiating the tube,\nif not provided to process but provided to the tube.",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "type": {
+      "title": "Type",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/InputScope",
+      "default": "tube"
+    },
+    "default": {
+      "anyOf": [
+        {},
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Default"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    }
+  },
+  "required": [
+    "type"
+  ],
+  "title": "InputSpecification",
+  "type": "object"
+}
