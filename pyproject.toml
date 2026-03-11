@@ -51,7 +51,7 @@ mypy = "mypy"
 benchmark.cmd = "pytest tests/bench.py --codspeed --timeout=15"
 benchmark.working_dir = "packages/noob"
 new_nobes = "copier copy templates/nobes packages"
-render_schema = """python scripts/render_schema.py"""
+render_schema = "python scripts/render_schema.py"
 
 [tool.black]
 target-version = ["py311", "py312", "py313"]
