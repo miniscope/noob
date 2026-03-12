@@ -1,0 +1,28 @@
+noob_id: testing-input-asset-params
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  Assets can use inputs in their params!
+input:
+  start:
+    scope: tube
+    type: int
+
+assets:
+  counter:
+    type: noob.testing.counter
+    params:
+      start: input.start
+    scope: runner
+    depends: increment.iterator
+
+nodes:
+  increment:
+    type: noob.testing.fast_forward
+    params:
+      n: 1
+    depends:
+      - generator: assets.counter
+  return:
+    type: return
+    depends: increment.next
