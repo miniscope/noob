@@ -3,7 +3,7 @@ import warnings
 from collections import ChainMap, defaultdict
 from enum import StrEnum
 from functools import cached_property
-from typing import Any, ClassVar, TypeVar, overload
+from typing import Any, ClassVar, overload
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -11,8 +11,6 @@ from noob.exceptions import ExtraInputWarning, InputMissingError
 from noob.node.base import Edge
 from noob.types import AbsoluteIdentifier, PythonIdentifier
 from noob.yaml import id_optional_json_schema
-
-_TParams = TypeVar("_TParams", bound=list | dict)
 
 
 class InputScope(StrEnum):
