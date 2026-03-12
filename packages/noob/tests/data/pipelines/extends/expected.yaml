@@ -1,0 +1,71 @@
+noob_id: testing-extends-expected
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.0
+description: "Main tube for testing extends behavior!\n"
+
+input:
+  l2_a:
+    type: str
+    scope: process
+  l2_b:
+    type: int
+    scope: process
+  l1_a:
+    type: str
+    scope: process
+  l1_b:
+    type: str
+    scope: process
+  main:
+    type: str
+    scope: process
+
+assets:
+  l2_a:
+    type: set
+    scope: runner
+  l2_b:
+    type: set
+    scope: runner
+  l1_a:
+    type: set
+    scope: runner
+  main:
+    type: set
+    scope: runner
+
+nodes:
+  a:
+    type: noob.testing.word_source
+  b:
+    type: noob.testing.passthrough
+    depends:
+    - value: a.word
+  c:
+    type: noob.testing.count_source
+  d:
+    type: noob.testing.passthrough
+    depends:
+    - value: c.index
+  l1_a:
+    type: noob.testing.count_source
+    params:
+      start: 10
+  l1_b:
+    type: noob.testing.count_source
+  e:
+    type: noob.testing.passthrough
+    depends:
+    - value: l1_a.index
+    - l1_b: l1_b.index
+    - l2_a: input.l2_a
+    - l2_b: input.l2_b
+  return:
+    type: return
+    depends:
+    - a: a.word
+    - b: b.value
+    - c: c.value
+    - d: d.value
+    - e: e.value
+

@@ -1,0 +1,47 @@
+noob_id: testing-extends-main
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.0
+description: |
+  Main tube for testing extends behavior!
+extends:
+  - testing-extends-l1-a
+  - testing-extends-l1-b
+
+input:
+  main:
+    type: str
+    scope: process
+
+assets:
+  main:
+    type: set
+    scope: runner
+
+nodes:
+  # override deps again!
+  b:
+    depends:
+      - value: a.word
+
+  # add a param
+  l1_a:
+    params:
+      start: 10
+
+  e:
+    type: noob.testing.passthrough
+    depends:
+      - value: l1_a.index
+      - l1_b: l1_b.index
+      - l2_a: input.l2_a
+      - l2_b: input.l2_b
+
+  return:
+    type: return
+    depends:
+      - a: a.word
+      - b: b.value
+      - c: c.value
+      - d: d.value
+      - e: e.value
+

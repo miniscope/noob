@@ -1,7 +1,8 @@
 from collections import defaultdict
+from collections.abc import Mapping
 from importlib import resources
 from itertools import permutations
-from typing import Self
+from typing import Self, cast
 
 from pydantic import (
     BaseModel,
@@ -12,6 +13,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from ruamel.yaml import CommentedMap
 
 from noob.asset import AssetSpecification
 from noob.exceptions import InputMissingError
@@ -146,15 +148,19 @@ class TubeSpecification(ConfigYAMLMixin):
         return self
 
     @classmethod
-    def _post_load_yaml(cls, config: dict) -> dict:
+    def _post_load_yaml(cls, config: CommentedMap) -> Mapping:
         """Handle extensions!"""
         if (extends := config.get("extends")) and isinstance(extends, list):
             # induction step - materialize the extension tree of the depth-1 extension layer
-            merge_stack = [*(TubeSpecification.from_any(e) for e in extends), config]
+            merge_stack: list[TubeSpecification | Mapping] = [
+                *(TubeSpecification.from_any(e) for e in extends),
+                config,
+            ]
             # merge depth-1 specs
             new_config = merge_stack.pop(0)
             for extended in merge_stack:
                 new_config = merge_tube_specs(new_config, extended)
+            new_config = cast(Mapping, new_config)
             return new_config
         return config
 
@@ -480,21 +486,16 @@ def downstream_nodes(edges: list[Edge], node_id: str, exclude: set[str] | None =
     return downstream
 
 
-def merge_tube_specs(left: dict, right: dict | TubeSpecification) -> dict:
+def merge_tube_specs(
+    left: Mapping | TubeSpecification, right: Mapping | TubeSpecification
+) -> Mapping:
     """
     Merge the yaml/json dict form of a tube spec pre-casting to :class:`.TubeSpecification`
     while resolving ``extends``.
 
     See :attr:`.TubeSpecification.extends` for details of merge behavior.
     """
-    if isinstance(right, TubeSpecification):
-        right = right.model_dump(exclude_unset=True, exclude_defaults=True)
-        # materialized node specs have `id` fields filled in.
-        # treat the keys in the dict as decisive
-        for node in right["nodes"].values():
-            if "id" in node:
-                del node["id"]
-
+    left, right = _dump_spec(left), _dump_spec(right)
     left, right = _merge_returns(left, right)
     left, right = _merge_nodes(left, right)
     merged = _merge_dicts(left, right)
@@ -545,7 +546,7 @@ def _merge_returns(left: dict, right: dict) -> tuple[dict, dict]:
             )
         left_key, right_key = list(left_return)[0], list(right_return)[0]
         merged = _merge_node(left_return[left_key], right_return[right_key])
-        left["nodes"] = {k: v for k, v in left["nodes"].items() if k != left_return}
+        left["nodes"] = {k: v for k, v in left["nodes"].items() if k != left_key}
         right["nodes"][right_key] = merged
     return left, right
 
@@ -570,6 +571,19 @@ def _merge_dicts(left: dict, right: dict, force_right: set | None = None) -> dic
         elif key in left:
             merged[key] = left[key]
     return merged
+
+
+def _dump_spec(spec: TubeSpecification | Mapping) -> dict:
+    if not isinstance(spec, TubeSpecification):
+        return dict(spec)
+    # dump spec while merging
+    data = spec.model_dump(exclude_unset=True, exclude_defaults=True, by_alias=True)
+    # materialized node specs have `id` fields filled in.
+    # treat the keys in the dict as decisive
+    for node in data["nodes"].values():
+        if "id" in node:
+            del node["id"]
+    return data
 
 
 class TubeClassicEdition:

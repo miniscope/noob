@@ -1,0 +1,23 @@
+noob_id: testing-extends-l2-b
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.0
+description: |
+  Second layer extension!
+
+input:
+  l2_b:
+    type: str
+    scope: process
+
+assets:
+  l2_b:
+    type: set
+    scope: runner
+
+nodes:
+  c:
+    type: noob.testing.count_source
+  d:
+    type: noob.testing.passthrough
+    depends:
+      - value: c.index

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from noob.tube import Tube, TubeSpecification
+from noob.tube import Tube, TubeSpecification, merge_tube_specs
 
 
 def test_tube_init_edges():
@@ -78,3 +78,51 @@ def test_assets_exhausted_after_storage(tube: str):
     """
     with pytest.raises(ValidationError):
         Tube.from_specification(tube)
+
+
+def test_tube_extends():
+    """
+    Tube `extends` properly resolve multiple layers of extensions,
+    fully overriding deps, but otherwise allowing partial overrides.
+    """
+    tube = TubeSpecification.from_id("testing-extends-main")
+    expected = TubeSpecification.from_id("testing-extends-expected")
+    expected = expected.model_dump()
+    # copy things that should be different in the expected tube
+    expected["noob_id"] = tube.noob_id
+    expected["extends"] = tube.extends
+    assert tube.model_dump() == expected
+
+
+def test_extends_merge_returns():
+    """Tube specs with multiple returns only take the return from the right"""
+    left = {"nodes": {"return_a": {"type": "return", "depends": [{"a": "b.value"}]}}}
+    right = {"nodes": {"return_b": {"type": "return", "depends": [{"b": "c.value"}]}}}
+    merged = merge_tube_specs(left, right)
+    assert len(merged["nodes"]) == 1
+    assert merged == right
+
+
+def test_extends_merge_dictlike():
+    """All normal dictlikeparams are merged!"""
+    left = {
+        "input": {"a": {"type": "int", "scope": "runner"}},
+        "nodes": {"a": {"type": "something", "params": {"a": "a_value"}}},
+    }
+    right = {
+        "input": {"a": {"type": "str", "scope": "runner"}},
+        "nodes": {"a": {"type": "something", "params": {"b": "b_value"}}},
+    }
+    merged = merge_tube_specs(left, right)
+    assert len(merged["nodes"]) == 1
+    assert merged["nodes"]["a"]["params"] == {"a": "a_value", "b": "b_value"}
+    assert merged["input"]["a"]["type"] == "str"
+
+
+def test_extends_merge_depends():
+    """The right dependencies override!"""
+    left = {"nodes": {"a": {"type": "something", "depends": [{"a": "b.value"}]}}}
+    right = {"nodes": {"a": {"type": "something", "depends": [{"b": "c.value"}]}}}
+    merged = merge_tube_specs(left, right)
+    assert len(merged["nodes"]) == 1
+    assert merged["nodes"]["a"]["depends"] == right["nodes"]["a"]["depends"]
