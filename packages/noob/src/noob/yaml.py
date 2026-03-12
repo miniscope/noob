@@ -118,6 +118,8 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         with open(file_path) as file:
             config_data = yaml.load(file)
 
+        config_data = cls._post_load_yaml(config_data)
+
         # fill in any missing fields in the source file needed for a header
         config_data = cls._complete_header(config_data, file_path)
         try:
@@ -299,6 +301,11 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
                 yaml.dump(data, yfile)
 
         return data
+
+    @classmethod
+    def _post_load_yaml(cls, config: dict) -> dict:
+        """Hook to allow inheriting classes to customize instantiation after loading yaml"""
+        return config
 
     @classmethod
     def __get_pydantic_core_schema__(
