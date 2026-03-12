@@ -167,8 +167,8 @@ class Asset(BaseModel):
                 id=spec.id, fn=obj, spec=spec, params=params, scope=scope, depends=depends
             )
 
-    def update(self, value: Any, epoch: Epoch) -> None:
-        self.obj = deepcopy(value)
+    def update(self, value: Any, epoch: Epoch, copy: bool = True) -> None:
+        self.obj = deepcopy(value) if copy else value
         self.stored_at = epoch
 
 

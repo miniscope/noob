@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
@@ -81,7 +81,7 @@ class AsyncRunner(TubeRunner):
             result = self.collect_return()
         return result
 
-    async def iter(self, n: int | None = None) -> AsyncIterator[ReturnNodeType]:
+    async def iter(self, n: int | None = None) -> AsyncGenerator[ReturnNodeType]:
         try:
             _ = self.tube.input_collection.validate_input(InputScope.process, {})
         except InputMissingError as e:

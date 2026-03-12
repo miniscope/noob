@@ -109,8 +109,12 @@ async def test_no_iter_with_process_input(loaded_tube, all_runners):
     Trying to use `run` with a tube with process-scoped inputs should fail!
     """
     with pytest.raises(InputMissingError):
-        for _ in all_runners.iter(n=5):
-            pass
+        if iscoroutinefunction_partial(all_runners.iter):
+            async for _ in all_runners.iter():
+                pass
+        else:
+            for _ in all_runners.iter(n=5):
+                pass
 
 
 @pytest.mark.asyncio
