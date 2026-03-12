@@ -143,7 +143,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
     def from_id(cls: type[Self], id: ConfigID) -> Self:
         """
         Instantiate a model from a config `id` specified in one of the .yaml configs in
-        either the user :attr:`.Config.config_dir` or the packaged ``config`` dir.
+        either the user :attr:`.Config.config_dirs` or the packaged ``config`` dir.
 
         .. note::
 
@@ -196,11 +196,10 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
                 if source.exists():
                     # either relative to cwd or absolute
                     return cls.from_yaml(source)
-                elif (
-                    not source.is_absolute()
-                    and (user_source := config.config_dir / source).exists()
-                ):
-                    return cls.from_yaml(user_source)
+                elif not source.is_absolute():
+                    for config_dir in config.config_dirs:
+                        if (user_source := config_dir / source).exists():
+                            return cls.from_yaml(user_source)
 
         raise ValueError(
             f"Instance of config model {cls.__name__} could not be instantiated from "
@@ -223,7 +222,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         """
         from noob.config import Config, get_entrypoint_sources, get_extra_sources
 
-        return [Config().config_dir, *get_extra_sources(), *get_entrypoint_sources()]
+        return [*Config().config_dirs, *get_extra_sources(), *get_entrypoint_sources()]
 
     def _dump_data(self, **kwargs: Any) -> dict:
         """Ensure that header is prepended to model data"""

@@ -4,6 +4,7 @@ import json
 import sys
 from collections.abc import Generator
 from typing import Literal as L
+from typing import cast
 
 import click
 from rich.console import Console
@@ -85,8 +86,10 @@ def run(
         progress_.disable = True
 
     if runner != "async":
+        runner = cast(L["sync", "zmq"], runner)
         results = _run_sync(runner, tube_, progress_, n, piped_input, input_format, output_format)
     else:
+        runner = cast(L["async"], runner)
         results = asyncio.run(
             _run_async(runner, tube_, progress_, n, piped_input, input_format, output_format)
         )
@@ -124,6 +127,7 @@ def _run_sync(
                 else:
                     results.append(result)
                 progress.advance(task)
+    return results
 
 
 async def _run_async(
@@ -156,6 +160,7 @@ async def _run_async(
                     else:
                         results.append(result)
                     progress.advance(task)
+    return results
 
 
 def _iter_stdin(format: L["json", "jsonl"] = "json") -> Generator[dict, None, None]:
