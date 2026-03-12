@@ -264,6 +264,30 @@
       "title": "Nodes",
       "type": "object"
     },
+    "extends": {
+      "anyOf": [
+        {
+          "items": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "pattern": "[\\w\\-\\/#]+",
+                "type": "string"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extends"
+    },
     "description": {
       "anyOf": [
         {
