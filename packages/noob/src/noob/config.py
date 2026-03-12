@@ -108,7 +108,7 @@ class Config(BaseSettings):
     )
 
     @field_validator("user_dir", "config_dirs", "tmp_dir", mode="after")
-    def create_dir(cls, value: Path | list[Path]) -> Path:
+    def create_dir(cls, value: Path | list[Path]) -> Path | list[Path]:
         if os.environ.get("READTHEDOCS", False):
             return value
         if isinstance(value, list):

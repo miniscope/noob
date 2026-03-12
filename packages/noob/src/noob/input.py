@@ -3,7 +3,7 @@ import warnings
 from collections import ChainMap, defaultdict
 from enum import StrEnum
 from functools import cached_property
-from typing import Any, ClassVar
+from typing import Any, ClassVar, TypeVar, overload
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -11,6 +11,8 @@ from noob.exceptions import ExtraInputWarning, InputMissingError
 from noob.node.base import Edge
 from noob.types import AbsoluteIdentifier, PythonIdentifier
 from noob.yaml import id_optional_json_schema
+
+_TParams = TypeVar("_TParams", bound=list | dict)
 
 
 class InputScope(StrEnum):
@@ -93,6 +95,12 @@ class InputCollection(BaseModel):
             input = {}
 
         return self.chain.new_child(input)[key]
+
+    @overload
+    def get_node_params(self, params: dict) -> dict: ...
+
+    @overload
+    def get_node_params(self, params: list) -> list: ...
 
     def get_node_params(self, params: dict | list) -> dict | list:
         """Get tube-scoped params specified as inputs needed when instantiating a node"""

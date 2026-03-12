@@ -4,7 +4,6 @@ import json
 import sys
 from collections.abc import Generator
 from typing import Literal as L
-from typing import cast
 
 import click
 from rich.console import Console
@@ -71,7 +70,7 @@ def run(
     tube_ = Tube.from_specification(tube, input=input_dict)
 
     assert tube_.spec is not None
-    piped_input = not sys.stdin.isatty() and tube_.spec.input
+    piped_input = bool(not sys.stdin.isatty() and tube_.spec.input)
 
     console = Console(file=sys.stderr)
     progress_ = Progress(
@@ -86,10 +85,8 @@ def run(
         progress_.disable = True
 
     if runner != "async":
-        runner = cast(L["sync", "zmq"], runner)
         results = _run_sync(runner, tube_, progress_, n, piped_input, input_format, output_format)
     else:
-        runner = cast(L["async"], runner)
         results = asyncio.run(
             _run_async(runner, tube_, progress_, n, piped_input, input_format, output_format)
         )

@@ -69,7 +69,8 @@ class Gather(Node, Generic[_TInput]):
             if self._should_return(trigger):
                 items = [item[1] for item in sorted(self._items, key=lambda i: i[0])]
                 if self.flatten:
-                    items = self._do_flatten(items)
+                    # can't figure out how to convince mypy that the inner type is a list
+                    items = self._do_flatten(items)  # type: ignore[arg-type]
 
                 try:
                     # collapse epoch if in a sub-epoch
@@ -111,7 +112,7 @@ class Gather(Node, Generic[_TInput]):
             self.n is None and trigger is not None
         )
 
-    def _do_flatten(self, items: list[list]) -> list:
+    def _do_flatten(self, items: list[list[_TInput]]) -> list[_TInput]:
         flat = []
         for item in items:
             try:

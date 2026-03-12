@@ -81,7 +81,7 @@ class AsyncRunner(TubeRunner):
             result = self.collect_return()
         return result
 
-    async def iter(self, n: int | None = None) -> AsyncGenerator[ReturnNodeType]:
+    async def iter(self, n: int | None = None) -> AsyncGenerator[ReturnNodeType]:  # type: ignore[override]
         try:
             _ = self.tube.input_collection.validate_input(InputScope.process, {})
         except InputMissingError as e:
