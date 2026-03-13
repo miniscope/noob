@@ -23,7 +23,7 @@ def schema() -> dict:
     return data
 
 
-@pytest.mark.parametrize("spec", EXAMPLES)
+@pytest.mark.parametrize("spec", [pytest.param(e, id=e.name) for e in EXAMPLES])
 def test_example_tubes_valid(spec: Path, schema) -> None:
     """
     All the examples should be valid against the current version of the tube schema!
@@ -34,7 +34,7 @@ def test_example_tubes_valid(spec: Path, schema) -> None:
     validate(instance=data, schema=schema)
 
 
-@pytest.mark.parametrize("spec", NONSPECIAL_TUBES)
+@pytest.mark.parametrize("spec", [pytest.param(e, id=e.name) for e in NONSPECIAL_TUBES])
 def test_test_tubes_valid(spec: Path, schema) -> None:
     """
     All the tubes used in tests should be valid against the current version of the tube schema!
@@ -46,7 +46,7 @@ def test_test_tubes_valid(spec: Path, schema) -> None:
     validate(instance=data, schema=schema)
 
 
-@pytest.mark.parametrize("spec", INVALID_TUBES)
+@pytest.mark.parametrize("spec", [pytest.param(e, id=e.name) for e in INVALID_TUBES])
 def test_invalid_tubes_invalid(spec: Path, schema) -> None:
     yaml = YAML()
     with open(spec) as f:
