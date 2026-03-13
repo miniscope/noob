@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from multiprocessing import Queue
 from queue import Empty
 
@@ -366,3 +366,47 @@ def test_upstream_nodes(optional_graph):
     # the rest are just direct dependencies and that's the `Node.edges` method, so not tested here.
     assert not any(e.source_node == "b" and e.target_node == "d" for e in optional_graph)
     assert sched.upstream_nodes("d") == {"b", "c"}
+
+
+def test_subepoch_generation_race_condition():
+    """
+    Nodes in a parent epoch are not incorrectly run in subepochs
+    when a race condition exists between the `map` node and the parent epoch nodes.
+
+    References:
+        https://github.com/miniscope/noob/issues/193
+
+    """
+    tube = Tube.from_specification("testing-map-depends")
+    scheduler = tube.scheduler
+    ep = scheduler.add_epoch()
+    ready = scheduler.get_ready(ep)
+    assert set([r["value"] for r in ready]) == {"word", "count"}
+
+    # word completes first and is then mapped
+    scheduler.done(ep, node_id="word")
+    ready = scheduler.get_ready()
+    assert set([r["value"] for r in ready]) == {"map"}
+
+    # simulate the map events creating subepochs
+    subepochs = ep.make_subepochs("map", 3)
+    events = [
+        Event(
+            id=i, timestamp=datetime.now(UTC), node_id="map", signal="value", epoch=subep, value=i
+        )
+        for i, subep in enumerate(subepochs)
+    ] + [Event(id=3, timestamp=datetime.now(UTC), node_id="map", signal="n", epoch=ep, value=3)]
+    scheduler.update(events)
+
+    # next node in subepoch "exclaim" depends on count, which is not done yet
+    # we should not have accidentally yielded count in the subepochs here
+    # because it wasn't done in the parent.
+    ready = scheduler.get_ready(ep)
+    assert len(ready) == 0
+
+    # then when count is done, all the exclaim nodes in the subepoch should be ready.
+    scheduler.done(ep, node_id="count")
+    ready = scheduler.get_ready(ep)
+    assert len(ready) == 3
+    assert all(len(r["epoch"]) > 1 for r in ready)
+    assert set(r["value"] for r in ready) == {"exclaim"}
