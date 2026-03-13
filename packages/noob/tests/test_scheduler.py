@@ -405,7 +405,18 @@ def test_subepoch_generation_race_condition():
     assert len(ready) == 0
 
     # then when count is done, all the exclaim nodes in the subepoch should be ready.
-    scheduler.update([Event(id=4, timestamp=datetime.now(UTC), node_id="count", signal="index", epoch=ep, value=4)])
+    scheduler.update(
+        [
+            Event(
+                id=4,
+                timestamp=datetime.now(UTC),
+                node_id="count",
+                signal="index",
+                epoch=ep,
+                value=4,
+            )
+        ]
+    )
     ready = scheduler.get_ready(ep)
     assert len(ready) == 3
     assert all(len(r["epoch"]) > 1 for r in ready)
