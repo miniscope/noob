@@ -1,0 +1,10 @@
+noob_id: testing-invalid-no-extends-no-type
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1
+description: |
+  When a tube doesn't have `extends`, node types are required
+
+nodes:
+  a:
+    depends:
+      - something: something.else

@@ -1,0 +1,43 @@
+noob_id: testing-extends-l1-a
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.0
+description: |
+  First layer extension that has its own extensions!
+extends:
+  - testing-extends-l2-a
+  - testing-extends-l2-b
+
+input:
+  l1_a:
+    type: str
+    scope: process
+
+  # override just the type
+  l2_b:
+    type: int
+
+assets:
+  l1_a:
+    type: set
+    scope: runner
+
+nodes:
+  # override the type
+  a:
+    type: noob.testing.letter_source
+
+  l1_a:
+    type: noob.testing.count_source
+
+  # override the deps
+  b:
+    depends:
+      - value: a.letter
+      - index: l1_a.index
+
+  l1a_return:
+    type: return
+    depends:
+      - word: a.letter
+      - count: l1_a.index
+      - value: b.value

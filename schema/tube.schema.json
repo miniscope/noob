@@ -64,10 +64,7 @@
           "title": "Description"
         }
       },
-      "required": [
-        "type",
-        "scope"
-      ],
+      "required": [],
       "title": "AssetSpecification",
       "type": "object"
     },
@@ -119,9 +116,7 @@
           "title": "Description"
         }
       },
-      "required": [
-        "type"
-      ],
+      "required": [],
       "title": "InputSpecification",
       "type": "object"
     },
@@ -210,15 +205,49 @@
           "title": "Description"
         }
       },
-      "required": [
-        "type"
-      ],
+      "required": [],
       "title": "NodeSpecification",
       "type": "object"
     }
   },
   "additionalProperties": false,
   "description": "Configuration for the nodes within a tube.\n\nRepresentation of the yaml-form of a tube.\nConverted to the runtime-form with :meth:`.Tube.from_specification`.\n\nNot much, if any validation is performed here on the whole tube except\nthat the nodes have the correct fields, ignoring validity of\ne.g. type mismatches or dependencies on signals that don't exist.\nThose require importing and introspecting the specified node classes,\nwhich should only happen when we try and instantiate the tube -\nthis class is just a carrier for the yaml spec.",
+  "else": {
+    "properties": {
+      "assets": {
+        "additionalProperties": {
+          "required": [
+            "type",
+            "scope"
+          ]
+        }
+      },
+      "input": {
+        "additionalProperties": {
+          "required": [
+            "type"
+          ]
+        }
+      },
+      "nodes": {
+        "additionalProperties": {
+          "required": [
+            "type"
+          ]
+        }
+      }
+    }
+  },
+  "if": {
+    "properties": {
+      "extends": {
+        "type": "array"
+      }
+    },
+    "required": [
+      "extends"
+    ]
+  },
   "properties": {
     "noob_id": {
       "anyOf": [
@@ -263,6 +292,30 @@
       },
       "title": "Nodes",
       "type": "object"
+    },
+    "extends": {
+      "anyOf": [
+        {
+          "items": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "pattern": "[\\w\\-\\/#]+",
+                "type": "string"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extends"
     },
     "description": {
       "anyOf": [

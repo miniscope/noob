@@ -40,7 +40,7 @@ class AssetSpecification(BaseModel):
     Specification for a single asset within a tube .yaml file.
     """
 
-    id: PythonIdentifier
+    id: PythonIdentifier = Field(..., exclude=True)
     """The unique identifier of the asset"""
     type_: AbsoluteIdentifier = Field(..., alias="type")
     """The python path to the location of the asset

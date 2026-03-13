@@ -5,6 +5,7 @@ Should be split off into another package :)
 
 import re
 import shutil
+from collections.abc import Mapping
 from importlib.metadata import version
 from io import StringIO
 from itertools import chain
@@ -119,10 +120,13 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             config_data = yaml.load(file)
 
         # fill in any missing fields in the source file needed for a header
-        config_data = cls._complete_header(config_data, file_path)
+        src_data = cls._complete_header(config_data, file_path)
+
+        config_data = cls._post_load_yaml(src_data)
+
         try:
             instance = cls(**config_data)
-            instance._yaml_source = config_data
+            instance._yaml_source = src_data
         except ValidationError:
             if (backup_path := file_path.with_suffix(".yaml.bak")).exists():
                 from noob.logging import init_logger
@@ -299,6 +303,11 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
                 yaml.dump(data, yfile)
 
         return data
+
+    @classmethod
+    def _post_load_yaml(cls, config: CommentedMap) -> Mapping:
+        """Hook to allow inheriting classes to customize instantiation after loading yaml"""
+        return config
 
     @classmethod
     def __get_pydantic_core_schema__(

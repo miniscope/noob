@@ -1,0 +1,39 @@
+noob_id: testing-extends-l1-b
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.0
+description: |
+  First layer extension that both extends something also extended in l1_a,
+  and overrides it differently
+extends:
+  - testing-extends-l2-a
+
+input:
+  l1_b:
+    type: str
+    scope: process
+
+assets:
+  l1_a:
+    type: set
+    scope: runner
+
+nodes:
+  # override the type again
+  a:
+    type: noob.testing.word_source
+
+  l1_b:
+    type: noob.testing.count_source
+
+  # override the deps again
+  b:
+    depends:
+      - value: a.word
+      - index: l1_b.index
+
+  l1b_return:
+    type: return
+    depends:
+      - word: a.word
+      - count: l1_b.index
+      - value: b.value

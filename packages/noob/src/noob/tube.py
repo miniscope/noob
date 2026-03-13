@@ -1,17 +1,22 @@
 from collections import defaultdict
+from collections.abc import Mapping
 from importlib import resources
 from itertools import permutations
-from typing import Self
+from typing import Self, cast
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    GetJsonSchemaHandler,
     ValidationError,
     ValidationInfo,
     field_validator,
     model_validator,
 )
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import CoreSchema
+from ruamel.yaml import CommentedMap
 
 from noob.asset import AssetSpecification
 from noob.exceptions import InputMissingError
@@ -46,6 +51,32 @@ class TubeSpecification(ConfigYAMLMixin):
 
     nodes: dict[PythonIdentifier, NodeSpecification] = Field(default_factory=dict)
     """The nodes that this tube configures"""
+
+    extends: list[ConfigSource] | None = None
+    """
+    Other tubes that this tube extends.
+    
+    All the node and other specifications from the other tubes are collapsed into this one
+    such that later tubes in the list override earlier tubes
+    (and the current tube overrides all the extended tubes).
+    
+    Extensions are neither completely deep nor completely shallow.
+    In general, items are merged as deeply as they can be, with some exceptions:
+    
+    - depends: for specs with matching IDs, more recent declarations fully replace earlier ones.
+      This is to facilitate extending tubes being able to *remove* dependencies - 
+      rather than having a specific "remove" keyword, to remove a dependency,
+      copy all but the one to be removed. 
+      To add a dependency, copy all the previous ones along with the one ones
+    - return: only one return node can exist in a tube, so the id given to the most recent return
+      is used and all other returns are removed.
+    
+    In tubes that extend other tubes, fields that are typically required are treated as optional
+    in the yaml spec in order to avoid needing to redefine evey property.
+    For example, if a tube wants to just change a node's params from an extended tube,
+    the extending tube needs to only declare the node's ID and params
+    without needing to declare the type again.
+    """
 
     description: str | None = None
     """An optional description of the tube"""
@@ -118,6 +149,51 @@ class TubeSpecification(ConfigYAMLMixin):
                         dep_node_id in self.nodes
                     ), f"Node {node_id} depends on node {dep_node_id}, which does not exist"
         return self
+
+    @classmethod
+    def _post_load_yaml(cls, config: CommentedMap) -> Mapping:
+        """Handle extensions!"""
+        if (extends := config.get("extends")) and isinstance(extends, list):
+            # induction step - materialize the extension tree of the depth-1 extension layer
+            merge_stack: list[TubeSpecification | Mapping] = [
+                *(TubeSpecification.from_any(e) for e in extends),
+                config,
+            ]
+            # merge depth-1 specs
+            new_config = merge_stack.pop(0)
+            for extended in merge_stack:
+                new_config = merge_tube_specs(new_config, extended)
+            new_config = cast(Mapping, new_config)
+            return new_config
+        return config
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls,
+        core_schema: CoreSchema,
+        handler: GetJsonSchemaHandler,
+        /,
+    ) -> JsonSchemaValue:
+        """When `extends` is defined, make all the props in the spec models optional"""
+        extensible = ("assets", "input", "nodes")
+
+        json_schema = handler(core_schema)
+        json_schema = handler.resolve_ref_schema(json_schema)
+        json_schema["if"] = {"properties": {"extends": {"type": "array"}}, "required": ["extends"]}
+
+        # json schema is additive,
+        # so it's easier to make the base specs optional and add requirements in the "else"
+        json_schema["else"] = {"properties": {}}
+        for k in extensible:
+            schema = handler.resolve_ref_schema(
+                json_schema["properties"][k]["additionalProperties"]
+            )
+            json_schema["else"]["properties"][k] = {
+                "additionalProperties": {"required": schema["required"].copy()}
+            }
+            schema["required"] = []
+
+        return json_schema
 
 
 class Tube(BaseModel):
@@ -439,6 +515,106 @@ def downstream_nodes(edges: list[Edge], node_id: str, exclude: set[str] | None =
                 downstream.add(successor)
                 queue.append(successor)
     return downstream
+
+
+def merge_tube_specs(
+    left: Mapping | TubeSpecification, right: Mapping | TubeSpecification
+) -> Mapping:
+    """
+    Merge the yaml/json dict form of a tube spec pre-casting to :class:`.TubeSpecification`
+    while resolving ``extends``.
+
+    See :attr:`.TubeSpecification.extends` for details of merge behavior.
+    """
+    left, right = _dump_spec(left), _dump_spec(right)
+    left, right = _merge_returns(left, right)
+    left, right = _merge_nodes(left, right)
+    merged = _merge_dicts(left, right)
+    return merged
+
+
+def _merge_nodes(left: dict, right: dict) -> tuple[dict, dict]:
+    """
+    Merge all nodes in a pair of tube specs
+    have to have this additional wrapper in case someone wants to name a node "depends"
+    for some godforsaken reason.
+    """
+    if "nodes" not in left or "nodes" not in right:
+        return left, right
+    node_ids = list(dict.fromkeys(list(left["nodes"].keys()) + list(right["nodes"].keys())))
+    right["nodes"] = {
+        k: _merge_node(left["nodes"].get(k, {}), right["nodes"].get(k, {})) for k in node_ids
+    }
+
+    # rm the left's nodes dict by creating a new one so the merged copy in the right is used
+    left = {k: v for k, v in left.items() if k != "nodes"}
+    return left, right
+
+
+def _merge_node(left: dict, right: dict) -> dict:
+    """
+    Merge a pair of same-id nodes, preserving the rightmost depends dict.
+    left as a placeholder in case there is further refinement of node merging needed.
+    """
+    return _merge_dicts(left, right, force_right={"depends"})
+
+
+def _merge_returns(left: dict, right: dict) -> tuple[dict, dict]:
+    # where left and right are full tube specs that we mutate
+    # handle returns - merge, but keep the key of the right return node
+
+    # we only need to do anything special if the left spec has a return node
+    if left_return := {
+        key: val for key, val in left["nodes"].items() if val.get("type", "") == "return"
+    }:
+        right_return = {
+            key: val for key, val in right["nodes"].items() if val.get("type", "") == "return"
+        }
+        if len(left_return) > 1 or len(right_return) > 1:
+            raise ValueError(
+                f"Tubes can only have a single return node! "
+                f"got left: {left_return}, right: {right_return}"
+            )
+        left_key, right_key = list(left_return)[0], list(right_return)[0]
+        merged = _merge_node(left_return[left_key], right_return[right_key])
+        left["nodes"] = {k: v for k, v in left["nodes"].items() if k != left_key}
+        right["nodes"][right_key] = merged
+    return left, right
+
+
+def _merge_dicts(left: dict, right: dict, force_right: set | None = None) -> dict:
+    # NOT a general deepmerge - recursively merge only dicts by key
+    if force_right is None:
+        force_right = set()
+
+    # preserve left->right key order
+    keys = list(dict.fromkeys(list(left.keys()) + list(right.keys())))
+
+    merged = {}
+    for key in keys:
+        if key in left and key in right and key not in force_right:
+            if isinstance(left[key], dict) and isinstance(right[key], dict):
+                merged[key] = _merge_dicts(left[key], right[key])
+            else:
+                merged[key] = right[key]
+        elif key in right:
+            merged[key] = right[key]
+        elif key in left:
+            merged[key] = left[key]
+    return merged
+
+
+def _dump_spec(spec: TubeSpecification | Mapping) -> dict:
+    if not isinstance(spec, TubeSpecification):
+        return dict(spec)
+    # dump spec while merging
+    data = spec.model_dump(exclude_unset=True, exclude_defaults=True, by_alias=True)
+    # materialized node specs have `id` fields filled in.
+    # treat the keys in the dict as decisive
+    for node in data["nodes"].values():
+        if "id" in node:
+            del node["id"]
+    return data
 
 
 class TubeClassicEdition:
