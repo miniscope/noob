@@ -1,0 +1,33 @@
+noob_id: http-scrape-img
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  Extend the http-scrape tube to also include saving images!
+  
+  Demonstrates extending a tube :)
+
+extends:
+  - http-scrape
+
+assets:
+  # override how seen is updated
+  seen: {depends: update_seen_img.value }
+
+nodes:
+  # go and get them images - this part is purely additive
+  img:          { type:    nobes.web.extract_tags,
+                  params:  {tag: "img", attribute: 'src'},
+                  depends: [page: get_page.response] }
+  filter_img:   { type:    nobes.core.difference, depends: [img.value, update_seen_urls.value] }
+  img_urls:     { type:    map, depends: [value: img.value] }
+  absolute_img: { type:    urllib.parse.urljoin,
+                  params:  {allow_fragments: false },
+                  depends: [map_urls.value, img_urls.value] }
+  get_img:      { type:    nobes.web.get_url,
+                  depends: [url: absolute_img.value, client: assets.client] }
+  write_img:    { type:    nobes.web.write_binary,
+                  depends: [response: get_img.response, directory: input.output_dir] }
+
+  # Add seen images to the set of seen urls
+  gather_img: { type: gather, depends: [n: map_urls.n, value: filter_img.value], params: {flatten: true} }
+  update_seen_img: { type: nobes.core.update, depends: [update_seen_urls.value, gather_img.value] }
