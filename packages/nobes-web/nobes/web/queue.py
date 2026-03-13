@@ -4,11 +4,11 @@ A URL queue to keep track of seen URLs during web scraping!
 See examples/http-scrape-concise.yaml for example usage
 """
 
+import sys
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Annotated as A
-from typing import TypedDict
 from urllib.parse import urldefrag, urljoin
 
 from httpx import Response
@@ -16,6 +16,11 @@ from pydantic import Field, PrivateAttr
 
 from nobes.web.parse import extract_tags
 from noob import Asset, Epoch, Event, MetaSignal, Name, Node, NoEventable
+
+if sys.version_info < (3, 12):
+    from typing_extensions import TypedDict
+else:
+    from typing import TypedDict
 
 
 class QueueState(TypedDict):
