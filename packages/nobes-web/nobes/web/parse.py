@@ -1,5 +1,20 @@
+from typing import Literal as L
+from typing import overload
+
 import httpx
 from bs4 import BeautifulSoup, Tag
+
+
+@overload
+def extract_tags(page: str | httpx.Response, tag: str) -> list[Tag]: ...
+
+
+@overload
+def extract_tags(page: str | httpx.Response, tag: str, inner: L[True] = True) -> list[str]: ...
+
+
+@overload
+def extract_tags(page: str | httpx.Response, tag: str, attribute: str) -> list[str]: ...
 
 
 def extract_tags(
@@ -13,7 +28,7 @@ def extract_tags(
             If an HTTPX response, only attempts to extract tags if response code is a 200
         tag (str): The tag to extract!
         inner (bool): If ``True`` , extract inner value of tag. Otherwise return the tag itself.
-
+        attribute (str | None): IF a string, get the value of this attribute
 
     Returns:
         list[bs4.Tag] | list[str]

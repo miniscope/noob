@@ -30,7 +30,7 @@ nodes:
 
   # duck into a sub-subepoch to absolutize the urls
   extracted:    {type: map,    depends: [extract_urls.value]}
-  absolute_url: {type: urllib.parse.urljoin, depends: [map_urls.value, extracted.value], params:  {allow_fragments: false},}
+  absolute_url: {type: urllib.parse.urljoin, depends: [map_urls.value, extracted.value]}
   gather_lower: {type: gather, depends: [n: extracted.n, value: absolute_url.value]}
 
   # now back up to the top epoch

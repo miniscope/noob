@@ -21,7 +21,6 @@ nodes:
   filter_img:   { type:    nobes.core.difference, depends: [img.value, update_seen_urls.value] }
   img_urls:     { type:    map, depends: [value: img.value] }
   absolute_img: { type:    urllib.parse.urljoin,
-                  params:  {allow_fragments: false },
                   depends: [map_urls.value, img_urls.value] }
   get_img:      { type:    nobes.web.get_url,
                   depends: [url: absolute_img.value, client: assets.client] }
