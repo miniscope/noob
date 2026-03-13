@@ -137,6 +137,8 @@ class Scheduler:
                 sorter.done(parent_dep)
             elif parent_dep in parent_epoch.done_nodes and parent_dep not in exclude_current:
                 sorter.mark_expired(parent_dep, unlock_optionals=False)
+            elif parent_dep in parent_epoch.out_nodes:
+                sorter.mark_out(parent_dep)
 
         self._epochs[epoch] = sorter
         for parent in epoch.parents:
