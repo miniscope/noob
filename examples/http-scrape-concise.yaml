@@ -1,0 +1,10 @@
+noob_id: http-scrape-concise
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  A version of http-scrape that uses more purpose-built nodes 
+  rather than extremely basic general purpose ones.
+  
+  Demonstrating how there are many possible ways to do things!
+  
+
