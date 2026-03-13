@@ -102,16 +102,20 @@ class Config(BaseSettings):
     logs: LogConfig = LogConfig()
     user_dir: Path = Field(default=Path(_dirs.user_data_dir))
     tmp_dir: Path = Field(default=Path(_dirs.user_runtime_dir))
-    config_dir: Path = Field(
-        default=Path(_dirs.user_data_dir) / "config",
+    config_dirs: list[Path] = Field(
+        default_factory=lambda: [Path(_dirs.user_data_dir) / "config"],
         description="Directory where config yaml files are stored",
     )
 
-    @field_validator("user_dir", "config_dir", "tmp_dir", mode="after")
-    def create_dir(cls, value: Path) -> Path:
+    @field_validator("user_dir", "config_dirs", "tmp_dir", mode="after")
+    def create_dir(cls, value: Path | list[Path]) -> Path | list[Path]:
         if os.environ.get("READTHEDOCS", False):
             return value
-        value.mkdir(parents=True, exist_ok=True)
+        if isinstance(value, list):
+            for v in value:
+                v.mkdir(parents=True, exist_ok=True)
+        else:
+            value.mkdir(parents=True, exist_ok=True)
         return value
 
     @classmethod

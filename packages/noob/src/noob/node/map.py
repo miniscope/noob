@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated as A
 from typing import TypeVar
 
-from noob.event import Event
+from noob.event import Event, MetaSignal
 from noob.node.base import Node
 from noob.types import Epoch, Name
 
@@ -30,7 +30,9 @@ class Map(Node):
 
     def process(
         self, value: Sequence[_TInput], epoch: Epoch
-    ) -> tuple[A[list[Event[_TInput]], Name("value")], A[int, Name("n")]]:
+    ) -> tuple[A[list[Event[_TInput]] | MetaSignal, Name("value")], A[int | MetaSignal, Name("n")]]:
+        if len(value) == 0:
+            return MetaSignal.NoEvent, MetaSignal.NoEvent
         subepochs = epoch.make_subepochs(self.id, len(value))
         now = datetime.now(UTC)
         ret = []

@@ -9,8 +9,9 @@ from noob.types import AbsoluteIdentifier, AbsoluteIdentifierAdapter
 
 if sys.version_info < (3, 14):
     from asyncio import iscoroutinefunction
+    from inspect import isasyncgenfunction
 else:
-    from inspect import iscoroutinefunction
+    from inspect import isasyncgenfunction, iscoroutinefunction
 
 
 def resolve_python_identifier(ref: AbsoluteIdentifier) -> Any:
@@ -47,4 +48,4 @@ def iscoroutinefunction_partial(f: Callable) -> TypeGuard[Callable[..., Coroutin
 
     # The asyncio version of iscoroutinefunction includes testing for @coroutine
     # decorations vs. the inspect version which does not.
-    return iscoroutinefunction(f)
+    return iscoroutinefunction(f) or isasyncgenfunction(f)

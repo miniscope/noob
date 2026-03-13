@@ -161,7 +161,6 @@ def test_asset_nocopy_when_unused():
 
     runner.init()
 
-    assert runner.tube.state.dependencies == {}
     first_asset_id = id(runner.tube.state.assets["counter"].obj)
     for i in range(5):
         result = runner.process()

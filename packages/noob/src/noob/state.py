@@ -7,7 +7,8 @@ from typing import Self, TypeAlias
 from pydantic import BaseModel, Field
 
 from noob.asset import Asset, AssetScope, AssetSpecification
-from noob.event import Event, MetaEvent
+from noob.event import Event, MetaEvent, MetaSignal
+from noob.input import InputCollection
 from noob.node.base import Edge
 from noob.types import NodeID, PythonIdentifier
 
@@ -55,9 +56,21 @@ class State(BaseModel):
     """
     specs: dict[str, AssetSpecification] = Field(default_factory=dict)
 
+    nocopy_deps: set[PythonIdentifier] = Field(default_factory=set)
+    """
+    When we depend on updating an asset from a node, 
+    but nothing else in the tube depends on that signal,
+    we don't need to deepcopy the asset before storing it, 
+    since there's no chance for it to be mutated after we store it.
+    Store a set of the assets that don't need to be copied!
+    """
+
     @classmethod
     def from_specification(
-        cls, specs: dict[str, AssetSpecification], edges: list[Edge] | None = None
+        cls,
+        specs: dict[str, AssetSpecification],
+        edges: list[Edge] | None = None,
+        input_collection: InputCollection | None = None,
     ) -> Self:
         """
         Instantiate a :class:`.State` model from its configuration
@@ -70,8 +83,10 @@ class State(BaseModel):
                 then we don't have to copy.
         """
 
-        assets = {spec.id: Asset.from_specification(spec) for spec in specs.values()}
-        dependencies = cls._get_dependencies(specs, edges)
+        assets = {
+            spec.id: Asset.from_specification(spec, input_collection) for spec in specs.values()
+        }
+        dependencies, nocopy_deps = cls._get_dependencies(specs, edges)
         scope_to_assets = defaultdict(list)
         for asset in assets.values():
             scope_to_assets[asset.scope].append(asset)
@@ -80,6 +95,7 @@ class State(BaseModel):
             dependencies=dependencies,
             scope_to_assets=scope_to_assets,
             specs=specs,
+            nocopy_deps=nocopy_deps,
         )
 
     def init(self, scope: AssetScope, edges: list[Edge] | None = None) -> None:
@@ -159,10 +175,16 @@ class State(BaseModel):
     def update(self, events: list[Event] | list[Event | MetaEvent]) -> None:
         """Update asset if asset depends on a node signal"""
         for event in events:
-            if (dep := self.dependencies.get(event["node_id"])) and dep["signal"] == event[
-                "signal"
-            ]:
-                self.assets[dep["asset_id"]].update(value=event["value"], epoch=event["epoch"])
+            if (
+                (dep := self.dependencies.get(event["node_id"]))
+                and dep["signal"] == event["signal"]
+                and event["value"] != MetaSignal.NoEvent
+            ):
+                self.assets[dep["asset_id"]].update(
+                    value=event["value"],
+                    epoch=event["epoch"],
+                    copy=dep["asset_id"] not in self.nocopy_deps,
+                )
 
     def clear(self) -> None:
         """
@@ -173,8 +195,9 @@ class State(BaseModel):
     @classmethod
     def _get_dependencies(
         cls, specs: dict[str, AssetSpecification], edges: list[Edge] | None = None
-    ) -> _DependencyMap:
+    ) -> tuple[_DependencyMap, set[PythonIdentifier]]:
         deps = {}
+        nocopy_deps = set()
         for asset in specs.values():
             if not asset.depends:
                 continue
@@ -182,6 +205,6 @@ class State(BaseModel):
             if edges and not any(
                 edge.source_node == node_id and edge.source_signal == signal for edge in edges
             ):
-                continue
+                nocopy_deps.add(asset.id)
             deps[node_id] = _AssetDependency(asset_id=asset.id, signal=signal)
-        return deps
+        return deps, nocopy_deps

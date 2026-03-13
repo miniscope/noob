@@ -3,7 +3,7 @@ import warnings
 from collections import ChainMap, defaultdict
 from enum import StrEnum
 from functools import cached_property
-from typing import Any, ClassVar
+from typing import Any, ClassVar, overload
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -94,20 +94,46 @@ class InputCollection(BaseModel):
 
         return self.chain.new_child(input)[key]
 
-    def get_node_params(self, params: dict) -> dict:
+    @overload
+    def get_node_params(self, params: dict) -> dict: ...
+
+    @overload
+    def get_node_params(self, params: list) -> list: ...
+
+    def get_node_params(self, params: dict | list) -> dict | list:
         """Get tube-scoped params specified as inputs needed when instantiating a node"""
-        for k, v in params.items():
-            if not isinstance(v, str):
-                continue
-            if match := InputCollection.INPUT_PATTERN.fullmatch(v):
-                input_key = match.groupdict()["key"]
-                try:
-                    params[k] = self.get(input_key)
-                except KeyError as e:
-                    raise InputMissingError(
-                        f"Node params requested {input_key}, but not present in input"
-                    ) from e
-        return params
+        if isinstance(params, list):
+            list_params = []
+            for param in params:
+                if isinstance(param, list):
+                    list_params.append(self.get_node_params(param))
+                elif isinstance(param, str) and (
+                    match := InputCollection.INPUT_PATTERN.fullmatch(param)
+                ):
+                    input_key = match.groupdict()["key"]
+                    try:
+                        params.append(self.get(input_key))
+                    except KeyError as e:
+                        raise InputMissingError(
+                            f"Node params requested {input_key}, but not present in input"
+                        ) from e
+                else:
+                    list_params.append(param)
+            return list_params
+
+        else:
+            for k, v in params.items():
+                if not isinstance(v, str):
+                    continue
+                if match := InputCollection.INPUT_PATTERN.fullmatch(v):
+                    input_key = match.groupdict()["key"]
+                    try:
+                        params[k] = self.get(input_key)
+                    except KeyError as e:
+                        raise InputMissingError(
+                            f"Node params requested {input_key}, but not present in input"
+                        ) from e
+            return params
 
     def collect(self, edges: list[Edge], input: dict) -> dict:
         args = {}

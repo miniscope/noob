@@ -2,10 +2,11 @@ import inspect
 from collections.abc import Callable
 from copy import deepcopy
 from enum import StrEnum
-from typing import Any, Generic, ParamSpec, Self, TypeVar
+from typing import Any, Generic, ParamSpec, Self, TypeVar, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from noob.input import InputCollection
 from noob.types import AbsoluteIdentifier, DependencyIdentifier, Epoch, PythonIdentifier
 from noob.utils import resolve_python_identifier
 from noob.yaml import id_optional_json_schema
@@ -48,7 +49,7 @@ class AssetSpecification(BaseModel):
     """
     scope: AssetScope
     """The scope of the asset. See :class:`.AssetScope`"""
-    params: dict | None = None
+    params: dict | list | None = None
     """Initialization parameters"""
     depends: DependencyIdentifier | None = None
     """
@@ -94,7 +95,7 @@ class Asset(BaseModel):
     """The specs of the asset. See :class:`.AssetSpecification`"""
     scope: AssetScope
     """The scope of the asset. See :class:`.AssetScope`"""
-    params: dict[str, Any] = Field(default_factory=dict)
+    params: dict[str, Any] | list = Field(default_factory=dict)
     """Initialization parameters"""
     depends: DependencyIdentifier | None
     """The signal that this asset gets updated by. See :attr:`.AssetSpecification.depends`"""
@@ -103,7 +104,7 @@ class Asset(BaseModel):
     stored_at: Epoch = Epoch(-1)
     """The latest epoch the asset was stored at. Only used when depends is not `None`"""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     def init(self) -> None:
         """
@@ -124,7 +125,9 @@ class Asset(BaseModel):
         pass
 
     @classmethod
-    def from_specification(cls, spec: "AssetSpecification") -> "Asset":
+    def from_specification(
+        cls, spec: "AssetSpecification", input_collection: Union["InputCollection", None] = None
+    ) -> "Asset":
         """
         Create an asset from its spec
 
@@ -136,6 +139,8 @@ class Asset(BaseModel):
         obj = resolve_python_identifier(spec.type_)
 
         params = spec.params if spec.params is not None else {}
+        if input_collection:
+            params = input_collection.get_node_params(params)
         scope = spec.scope
         depends = spec.depends if spec.depends is not None else None
 
@@ -143,7 +148,16 @@ class Asset(BaseModel):
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Asset):
-                return obj(id=spec.id, spec=spec, scope=scope, depends=depends, **params)
+                if isinstance(params, dict):
+                    return obj(id=spec.id, spec=spec, scope=scope, depends=depends, **params)
+                else:
+                    return obj(
+                        *params,
+                        id=spec.id,
+                        spec=spec,
+                        scope=scope,
+                        depends=depends,
+                    )
             else:
                 return WrapClassAsset(
                     id=spec.id, cls=obj, spec=spec, params=params, scope=scope, depends=depends
@@ -153,8 +167,8 @@ class Asset(BaseModel):
                 id=spec.id, fn=obj, spec=spec, params=params, scope=scope, depends=depends
             )
 
-    def update(self, value: Any, epoch: Epoch) -> None:
-        self.obj = deepcopy(value)
+    def update(self, value: Any, epoch: Epoch, copy: bool = True) -> None:
+        self.obj = deepcopy(value) if copy else value
         self.stored_at = epoch
 
 
@@ -176,7 +190,10 @@ class WrapClassAsset(Asset, Generic[T]):
     obj: T | None = None
 
     def init(self) -> None:
-        self.obj = self.cls(**self.params)
+        if isinstance(self.params, list):
+            self.obj = self.cls(*self.params)
+        else:
+            self.obj = self.cls(**self.params)
 
     def deinit(self) -> None:
         self.obj = None
@@ -194,7 +211,10 @@ class WrapFuncAsset(Asset):
     fn: Callable
 
     def init(self) -> None:
-        self.obj = self.fn(**self.params)
+        if isinstance(self.params, list):
+            self.obj = self.fn(*self.params)
+        else:
+            self.obj = self.fn(**self.params)
 
     def deinit(self) -> None:
         self.obj = None

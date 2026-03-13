@@ -3,6 +3,7 @@ import pytest
 from noob import Tube
 from noob.exceptions import ExtraInputWarning, InputMissingError
 from noob.runner.base import TubeRunner
+from noob.utils import iscoroutinefunction_partial
 
 pytestmark = pytest.mark.input
 
@@ -108,5 +109,26 @@ async def test_no_iter_with_process_input(loaded_tube, all_runners):
     Trying to use `run` with a tube with process-scoped inputs should fail!
     """
     with pytest.raises(InputMissingError):
-        for _ in all_runners.iter(n=5):
-            pass
+        if iscoroutinefunction_partial(all_runners.iter):
+            async for _ in all_runners.iter():
+                pass
+        else:
+            for _ in all_runners.iter(n=5):
+                pass
+
+
+@pytest.mark.asyncio
+@pytest.mark.assets
+async def test_asset_input_params(all_runner_cls):
+    """
+    Assets can use inputs as their parameters!
+    """
+    tube = Tube.from_specification("testing-input-asset-params", input={"start": 7})
+    runner = all_runner_cls(tube)
+    with runner:
+        for i in range(5):
+            if iscoroutinefunction_partial(runner.process):
+                result = await runner.process()
+            else:
+                result = runner.process()
+            assert result == i + 7

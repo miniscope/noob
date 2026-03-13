@@ -306,7 +306,7 @@ class Tube(BaseModel):
         edges = cls._init_edges(spec.nodes, nodes)
         scheduler = cls._init_scheduler(spec.nodes, edges)
 
-        state = cls._init_state(spec, edges)
+        state = cls._init_state(spec, edges, input_collection)
 
         return cls.model_validate(
             {
@@ -352,8 +352,12 @@ class Tube(BaseModel):
         return Scheduler.from_specification(node_specs, edges)
 
     @classmethod
-    def _init_state(cls, spec: TubeSpecification, edges: list[Edge]) -> State:
-        return State.from_specification(specs=spec.assets, edges=edges)
+    def _init_state(
+        cls, spec: TubeSpecification, edges: list[Edge], input_collection: InputCollection
+    ) -> State:
+        return State.from_specification(
+            specs=spec.assets, edges=edges, input_collection=input_collection
+        )
 
     @classmethod
     def _init_inputs(cls, spec: TubeSpecification) -> InputCollection:

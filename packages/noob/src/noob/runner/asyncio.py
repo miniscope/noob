@@ -1,10 +1,13 @@
 import asyncio
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
 from noob.asset import AssetScope
 from noob.event import MetaEvent
+from noob.exceptions import InputMissingError
+from noob.input import InputScope
 from noob.node import Node, Return
 from noob.runner.base import TubeRunner
 from noob.scheduler import Scheduler
@@ -30,6 +33,10 @@ class AsyncRunner(TubeRunner):
     When a node raises an error, wait this long (in seconds)
     before cancelling the other currently running nodes. 
     """
+    max_pending_tasks: int = 128
+    """
+    Only add this many tasks to the eventloop at a time
+    """
 
     def __post_init__(self):
         super().__post_init__()
@@ -37,6 +44,7 @@ class AsyncRunner(TubeRunner):
         self._node_ready = asyncio.Event()
         self._init_lock = asyncio.Lock()
         self._scheduler_lock = asyncio.Lock()
+        self._task_sem = asyncio.Semaphore(self.max_pending_tasks)
         self._pending_futures = set()
         self._exception: BaseException | None = None
 
@@ -66,11 +74,43 @@ class AsyncRunner(TubeRunner):
                 ready = await self._get_ready()
                 ready = self._filter_ready(ready, self.tube.scheduler)
                 for node_info in ready:
+                    await self._task_sem.acquire()
                     self._process_node(node_info=node_info, input=input)
 
             self._after_process()
             result = self.collect_return()
         return result
+
+    async def iter(self, n: int | None = None) -> AsyncGenerator[ReturnNodeType]:  # type: ignore[override]
+        try:
+            _ = self.tube.input_collection.validate_input(InputScope.process, {})
+        except InputMissingError as e:
+            raise InputMissingError(
+                "Can't use the `iter` method with tubes with process-scoped input "
+                "that was not provided when instantiating the tube! "
+                "Use `process()` directly, providing required inputs to each call."
+            ) from e
+
+        await self.init()
+        current_iter = 0
+        has_return = any(isinstance(node, Return) for node in self.tube.nodes.values())
+        try:
+            while n is None or current_iter < n:
+                ret = None
+                loop = 0
+                if not has_return:
+                    ret = await self.process()
+                else:
+                    while ret is None:
+                        ret = await self.process()
+                        loop += 1
+                        if loop > self.max_iter_loops:
+                            raise RuntimeError("Reached maximum process calls per iteration")
+
+                yield ret
+                current_iter += 1
+        finally:
+            await self.deinit()
 
     async def init(self) -> None:
         """
@@ -137,6 +177,7 @@ class AsyncRunner(TubeRunner):
 
     def _call_node(self, node: Node, *args: Any, **kwargs: Any) -> Any:
         future: asyncio.Task | asyncio.Future
+        self._logger.debug("Running node %s with args: %s, kwargs: %s", node.id, args, kwargs)
         if node.is_coroutine:
             # mypy can't propagate type guard in cached is_coroutine property
             future = self.eventloop.create_task(node.process(*args, **kwargs))  # type: ignore[arg-type]
@@ -166,6 +207,7 @@ class AsyncRunner(TubeRunner):
         self._pending_futures.remove(future)
         if future.exception():
             self._logger.debug("Node %s raised exception, re-raising outside of callback")
+            self._task_sem.release()
             self._exception = future.exception()
             self.tube.state.deinit(AssetScope.node, node.edges)
             self._node_ready.set()
@@ -179,6 +221,7 @@ class AsyncRunner(TubeRunner):
                 self.tube.state.update(events)
             self.tube.state.deinit(AssetScope.node, node.edges)
             self._call_callbacks(all_events)
+        self._task_sem.release()
         self._node_ready.set()
         self._logger.debug("Node %s emitted %s in epoch %s", node.id, value, epoch)
 
@@ -223,3 +266,10 @@ class AsyncRunner(TubeRunner):
             return None
         ret_node = ret_nodes[0]
         return ret_node.get(keep=False)
+
+    async def __aenter__(self):
+        await self.init()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):  # noqa: ANN001
+        await self.deinit()
