@@ -8,15 +8,21 @@ from noob.state import State
 from noob.input import InputCollection, InputScope, InputSpecification
 from noob.tube import Tube, TubeClassicEdition, TubeSpecification
 from noob.runner import SynchronousRunner
-from noob.types import Name
+from noob.types import Epoch, Name
+from noob.event import Event, NoEventable, MetaEvent, MetaSignal
 
 __all__ = [
     "Asset",
     "AssetSpecification",
+    "Epoch",
+    "Event",
     "InputCollection",
     "InputScope",
     "InputSpecification",
+    "MetaEvent",
+    "MetaSignal",
     "Name",
+    "NoEventable",
     "Node",
     "NodeSpecification",
     "State",
