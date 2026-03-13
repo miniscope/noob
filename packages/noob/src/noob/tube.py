@@ -8,11 +8,14 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    GetJsonSchemaHandler,
     ValidationError,
     ValidationInfo,
     field_validator,
     model_validator,
 )
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import CoreSchema
 from ruamel.yaml import CommentedMap
 
 from noob.asset import AssetSpecification
@@ -163,6 +166,34 @@ class TubeSpecification(ConfigYAMLMixin):
             new_config = cast(Mapping, new_config)
             return new_config
         return config
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls,
+        core_schema: CoreSchema,
+        handler: GetJsonSchemaHandler,
+        /,
+    ) -> JsonSchemaValue:
+        """When `extends` is defined, make all the props in the spec models optional"""
+        extensible = ("assets", "input", "nodes")
+
+        json_schema = handler(core_schema)
+        json_schema = handler.resolve_ref_schema(json_schema)
+        json_schema["if"] = {"properties": {"extends": {"type": "array"}}, "required": ["extends"]}
+
+        # json schema is additive,
+        # so it's easier to make the base specs optional and add requirements in the "else"
+        json_schema["else"] = {"properties": {}}
+        for k in extensible:
+            schema = handler.resolve_ref_schema(
+                json_schema["properties"][k]["additionalProperties"]
+            )
+            json_schema["else"]["properties"][k] = {
+                "additionalProperties": {"required": schema["required"].copy()}
+            }
+            schema["required"] = []
+
+        return json_schema
 
 
 class Tube(BaseModel):
