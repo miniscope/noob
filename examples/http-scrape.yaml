@@ -1,41 +1,27 @@
-noob_id: http-scrape-img
+noob_id: http-scrape
 noob_model: noob.tube.TubeSpecification
 noob_version: 0.0.1
 description: |
   Recursively scrape a webpage, saving all the visited HTML pages to files,
-  grabbing any images encountered and saving those too,
   and then extracting links from the page for further scraping.
+  
+  Demonstrates the use of runner-scoped assets with dependencies for preserving data between epochs
 
 input:
   root_url:   {type: str, scope: tube}
   output_dir: {type: pathlib.Path, scope: tube}
 
 assets:
-  seen:   {type: set, scope: runner, depends: update_seen_img.value}
+  seen:   {type: set, scope: runner, depends: update_seen_urls.value}
   todo:   {type: set, scope: runner, params: [[input.root_url]], depends: gather_urls.value}
   client: {type: nobes.web.AsyncHttpxClient, scope: process}
 
 nodes:
-  filter:      {type: nobes.core.difference,depends: [ assets.todo, assets.seen ] }
+  filter:      {type: nobes.core.difference,depends: [assets.todo, assets.seen]}
   map_urls:    {type: map,                  depends: [value: filter.value]}
   get_page:    {type: nobes.web.get_url,    depends: [url: map_urls.value, client: assets.client]}
   print:       {type: print,                depends: [get_page.url]}
   save_page:   {type: nobes.web.write_html, depends: [response: get_page.response, directory: input.output_dir]}
-
-  ## go and get them images
-  img:          {type:    nobes.web.extract_tags,
-                 params:  {tag: "img", attribute: 'src'},
-                 depends: [page: get_page.response]}
-  filter_img:   {type:    nobes.core.difference, depends: [img.value, update_seen_urls.value]}
-  img_urls:     {type:    map,
-                 depends: [value: img.value]}
-  absolute_img: {type:    urllib.parse.urljoin,
-                 params:  {allow_fragments: false},
-                 depends: [map_urls.value, img_urls.value]}
-  get_img:      {type:    nobes.web.get_url,
-                 depends: [url: absolute_img.value, client: assets.client]}
-  write_img:    {type:    nobes.web.write_binary,
-                 depends: [response: get_img.response, directory: input.output_dir]}
 
   ## get the next generation of urls to grab
   extract_urls: {type: nobes.web.extract_tags,
@@ -54,7 +40,5 @@ nodes:
 
   ## keep track of what we've seen
   update_seen_urls: {type: nobes.core.update, depends: [assets.seen, filter.value]}
-  gather_img:       {type: gather,            depends: [n: map_urls.n, value: filter_img.value], params: {flatten: true}}
-  update_seen_img:  {type: nobes.core.update, depends: [update_seen_urls.value, gather_img.value]}
 
 
