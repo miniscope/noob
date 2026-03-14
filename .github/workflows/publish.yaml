@@ -23,12 +23,13 @@ jobs:
     - name: Install deps
       run: pdm install
     - name: Build
+      working-directory: packages/noob
       run: pdm build
     - name: Store the distribution packages
       uses: actions/upload-artifact@v5
       with:
         name: python-package-distributions
-        path: dist/
+        path: packages/noob/dist/
 
   publish:
     name: Publish to PyPI
@@ -45,6 +46,8 @@ jobs:
       uses: actions/download-artifact@v6
       with:
         name: python-package-distributions
-        path: dist/
+        path: packages/noob/dist/
     - name: Publish
       uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: packages/noob/dist/

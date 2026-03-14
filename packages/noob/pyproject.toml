@@ -15,13 +15,14 @@ dependencies = [
     "ruamel-yaml>=0.18.16",
 ]
 requires-python = ">=3.11"
-readme = "README.md"
+readme = "../../README.md"
 repository = "https://github.com/miniscope/noob"
 license = {text = "MIT"}
 keywords = [
     "pipeline",
     "pipelines",
     "data-processing",
+    "graph-processing",
     "tube-related-content",
     "miniscope",
     "pydantic",
@@ -29,7 +30,7 @@ keywords = [
 classifiers = [
     "Framework :: Pydantic",
     "Framework :: Pydantic :: 2",
-    "Development Status :: 1 - Planning",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
@@ -41,6 +42,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Utilities",
     "Topic :: Scientific/Engineering :: Image Processing",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
