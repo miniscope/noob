@@ -3,6 +3,7 @@ import asyncio
 import json
 import sys
 from collections.abc import Generator
+from time import sleep
 from typing import Literal as L
 
 import click
@@ -15,7 +16,7 @@ from noob.runner import get_runner
 
 @click.command("run")
 @click.argument("tube")
-@click.option("--runner", type=click.Choice(("sync", "async", "zmq")), default="sync")
+@click.option("--runner", default="sync")
 @click.option("--n", "-n", type=click.INT)
 @click.option(
     "--input-format",
@@ -40,7 +41,7 @@ from noob.runner import get_runner
     "--output-format",
     "-of",
     type=click.Choice(("json", "jsonl")),
-    default="json",
+    default=None,
     help="""Output format (to stdout).
               json outputs results as a single array of results from all run epochs.
               jsonl emits each result separately as they are completed on newlines.
@@ -55,7 +56,7 @@ def run(
     n: int | None = None,
     input_format: L["json", "jsonl"] = "json",
     inparams: tuple[tuple[str, str]] | None = None,
-    output_format: L["json", "jsonl"] = "json",
+    output_format: L["json", "jsonl"] | None = None,
     progress: bool = False,
 ) -> None:
     input_dict = {}
@@ -102,7 +103,7 @@ def _run_sync(
     n: int | None,
     piped_input: bool,
     input_format: L["json", "jsonl"],
-    output_format: L["json", "jsonl"],
+    output_format: L["json", "jsonl"] | None,
 ) -> list:
     results = []
     runner_cls = get_runner(runner)
@@ -118,6 +119,14 @@ def _run_sync(
                     results.append(result)
                 progress.advance(task)
         else:
+            if n is None and output_format is None:
+                runner_.run()
+                try:
+                    while runner_.running:
+                        sleep(1)
+                except KeyboardInterrupt:
+                    runner_.stop()
+                    return results
             for result in runner_.iter(n=n):
                 if output_format == "jsonl":
                     click.echo(json.dumps(result))
