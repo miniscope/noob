@@ -3,9 +3,9 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/noob)](https://pypi.org/project/noob)
 [![Readthedocs Status](https://app.readthedocs.org/projects/noob/badge/)](https://noob.readthedocs.io)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/noob)
-![No AI - Organic Human Labor](https://github.com/miniscope/noob/blob/main/assets/img/ai_badge.svg)
+![No AI - Organic Human Labor](https://raw.githubusercontent.com/miniscope/noob/main/assets/img/ai_badge.svg)
 
-![Noob logo - It's noob! graph processing for noobs](https://github.com/miniscope/noob/blob/main/assets/img/noob_logo.gif)
+![Noob logo - It's noob! graph processing for noobs](https://raw.githubusercontent.com/miniscope/noob/refs/heads/main/assets/img/noob_logo.gif)
 
 `noob` - a **streaming**, **event-driven**, **node-centric** graph processing library that scales from a single function call to comically large distributed pipelines!
 
