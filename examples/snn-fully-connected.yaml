@@ -1,0 +1,71 @@
+noob_id: snn-fully-connected
+noob_model: noob.TubeSpecification
+noob_version: 1000.0.0
+description: |
+  A fully connected LIF spiking neural network with one neuron with constant input
+  
+  Demonstration of:
+  - using a custom runner! this requires the ZMQFreeRunner in nobes.snn
+  - completely ignoring noob's epoch structure and just using its eventing backbone
+  - time-based, queue-driven non-alignment, where all nodes just run as fast as possible
+    but still accept input whenever it exists
+  - cyclic graphs!!!!
+  - tube params!
+  
+  Note that this demo does **not make a whole lot of sense** - 
+  in no universe would you want to actually run a neural net where every neuron runs in a separate process
+  and 99.999999% of the compute effort is spent serializing and deserializing messages between neurons
+  whose internal operation takes a microsecond.
+  This is just a demo of how you can use and abuse noob by messing with its internals,
+  taking bits and pieces as needed.
+params:
+  cycles_allowed: true
+
+
+nodes:
+  a:
+    type: nobes.snn.LIFNeuron
+    params:
+      I_static: 1
+      weights: {I_static: 1}
+    depends:
+      - b: b.spike
+      - c: c.spike
+      - d: d.spike
+      - e: e.spike
+      - f: f.spike
+      - g: g.spike
+      - h: h.spike
+      - i: i.spike
+      - j: j.spike
+  b:
+    type: nobes.snn.LIFNeuron
+    depends: [a: a.spike, c: c.spike, d: d.spike, e: e.spike, f: f.spike, g: g.spike, h: h.spike, i: i.spike, j: j.spike]
+  c:
+    type: nobes.snn.LIFNeuron
+    depends: [a: a.spike, b: b.spike, d: d.spike, e: e.spike, f: f.spike, g: g.spike, h: h.spike, i: i.spike, j: j.spike]
+  d:
+    type: nobes.snn.LIFNeuron
+    depends: [a: a.spike, b: b.spike, c: c.spike, e: e.spike, f: f.spike, g: g.spike, h: h.spike, i: i.spike, j: j.spike]
+  e:
+    type: nobes.snn.LIFNeuron
+    depends: [a: a.spike, b: b.spike, c: c.spike, d: d.spike, f: f.spike, g: g.spike, h: h.spike, i: i.spike, j: j.spike]
+  f:
+    type: nobes.snn.LIFNeuron
+    depends: [a: a.spike, b: b.spike, c: c.spike, d: d.spike, e: e.spike, g: g.spike, h: h.spike, i: i.spike, j: j.spike]
+  g:
+    type: nobes.snn.LIFNeuron
+    depends: [a: a.spike, b: b.spike, c: c.spike, d: d.spike, e: e.spike, f: f.spike, h: h.spike, i: i.spike, j: j.spike]
+  h:
+    type: nobes.snn.LIFNeuron
+    depends: [a: a.spike, b: b.spike, c: c.spike, d: d.spike, e: e.spike, f: f.spike, g: g.spike, i: i.spike, j: j.spike]
+  i:
+    type: nobes.snn.LIFNeuron
+    depends: [a: a.spike, b: b.spike, c: c.spike, d: d.spike, e: e.spike, f: f.spike, g: g.spike, h: h.spike, j: j.spike]
+  j:
+    type: nobes.snn.LIFNeuron
+    depends: [a: a.spike, b: b.spike, c: c.spike, d: d.spike, e: e.spike, f: f.spike, g: g.spike, h: h.spike, i: i.spike]
+
+  monitor:
+    type: nobes.snn.Monitor
+    depends:  [a: a.voltage, b: b.voltage, c: c.voltage, d: d.voltage, e: e.voltage, f: f.voltage, g: g.voltage, h: h.voltage, i: i.voltage, j: j.voltage]
