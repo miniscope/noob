@@ -10,7 +10,16 @@ from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, NamedTuple, TypeAlias, TypedDict, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    Literal,
+    NamedTuple,
+    TypeAlias,
+    TypedDict,
+    TypeVar,
+)
 
 from pydantic import (
     AfterValidator,

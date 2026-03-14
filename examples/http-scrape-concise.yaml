@@ -1,0 +1,26 @@
+noob_id: http-scrape-concise
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  A version of http-scrape that uses more purpose-built nodes 
+  rather than extremely basic general purpose ones.
+  
+  Demonstrating using nodes and assets together,
+  how it's useful to be able to reuse node code outside of tubes (see URLQueue and extract_tags),
+  and how there are many possible ways to do things!
+  
+input:
+  root_url:   {type: str,          scope: tube}
+  output_dir: {type: pathlib.Path, scope: tube}
+
+assets:
+  queue:     {type: nobes.web.URLQueue,         scope: runner, depends: update.queue, params: {root_url: input.root_url}}
+  client:    {type: nobes.web.AsyncHttpxClient, scope: process}
+
+nodes:
+  next_urls: {type: nobes.web.next_urls,   depends: [queue: assets.queue]}
+  map_urls:  {type: map,                   depends: [value: next_urls.urls]}
+  get_page:  {type: nobes.web.get_url,     depends: [url: map_urls.value, client: assets.client]}
+  print:     {type: print,                 depends: [get_page.url]}
+  save_page: {type: nobes.web.write_html,  depends: [response: get_page.response, directory: input.output_dir]}
+  update:    {type: nobes.web.update_urls, depends: [response: get_page.response, queue: next_urls.queue, n: map_urls.n]}

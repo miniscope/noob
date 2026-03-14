@@ -1,7 +1,7 @@
 import sys
 from enum import StrEnum
 from typing import Annotated as A
-from typing import Any, Generic, Literal
+from typing import Any, Generic, Literal, TypeAlias
 
 from pydantic import AfterValidator, Discriminator, Tag, TypeAdapter
 
@@ -115,3 +115,10 @@ EventUnion = A[
     Discriminator(_type_discriminator),
 ]
 EventAdapter = TypeAdapter[EventUnion](EventUnion)
+
+
+_NoEventableInner = TypeVar("_NoEventableInner")
+NoEventable: TypeAlias = (
+    _NoEventableInner | "Event[_NoEventableInner]" | Literal[MetaSignal.NoEvent]
+)
+"""Convenience generic type to indicate that some signal can be a NoEvent"""
