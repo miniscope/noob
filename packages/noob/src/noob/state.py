@@ -178,7 +178,7 @@ class State(BaseModel):
             if (
                 (dep := self.dependencies.get(event["node_id"]))
                 and dep["signal"] == event["signal"]
-                and event["value"] != MetaSignal.NoEvent
+                and event["value"] is not MetaSignal.NoEvent
             ):
                 self.assets[dep["asset_id"]].update(
                     value=event["value"],
