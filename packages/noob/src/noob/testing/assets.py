@@ -4,6 +4,10 @@ from typing import Any
 from noob.asset import Asset
 
 
+class AnyAsset(Asset):
+    obj: Any = None
+
+
 class counter(Generator):
     """
     custom generator because itertools is removing deepcopy in 3.14
