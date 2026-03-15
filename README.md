@@ -16,7 +16,7 @@
 See the [documentation for all noob related information](https://noob.readthedocs.io)
 
 Most programs are structured as graphs![^graphs]
-But most programs end up rewrite their own graph execution system, whether the developers know it or not.
+But most programs end up rewriting their own graph execution systems, purposely or not.
 
 Existing graph processing systems are specialized for "big data" on "managed systems,"
 requiring a lot of custom framework-specific code and complex setups.
@@ -44,7 +44,7 @@ def webcam(index: int = 0) -> Generator[np.ndarray, None, None]:
         yield frame
 
 def display(frame: np.ndarray) -> None:
-    cv2.imshow('default', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+    cv2.imshow('default', frame)
     cv2.waitKey(1)
 ```
 
@@ -92,7 +92,7 @@ and then run it like this!
 ```python
 from noob import Tube, SynchronousRunner
 
-tube = Tube.from_specification("webcam-display")
+tube = Tube.from_specification("webcam-display-and-return")
 with SynchronousRunner(tube) as runner:
     frame = runner.process()
     # do whatever you want with your frame! it's your frame!
