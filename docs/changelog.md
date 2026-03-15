@@ -1,5 +1,21 @@
 # Changelog
 
+## v1000.*
+
+### v1000.0.1 - 26-03-15
+
+**Fix**
+- [#192](https://github.com/miniscope/noob/issues/192), 
+  [#201](https://github.com/miniscope/noob/issues/201),
+  [#202](https://github.com/miniscope/noob/pull/202) - 
+  Support event values that can't use the `==` operator by using `is` to check for NoEvents
+
+### v1000.0.0 - 26-03-13
+
+First "official" beta release with all target features working :).
+
+ok NOW the changelog officials starts since we're now releasing versions regularly.
+
 ## v0.1.*
 
 ### v0.1.0 - 25-12-09
