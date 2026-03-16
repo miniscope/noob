@@ -4,9 +4,10 @@ from queue import Empty
 
 import pytest
 
-from noob import SynchronousRunner, Tube
+from noob import NodeSpecification, SynchronousRunner, Tube
 from noob.event import Event, MetaEventType
 from noob.exceptions import EpochCompletedError
+from noob.node import Edge
 from noob.scheduler import Scheduler
 from noob.toposort import TopoSorter
 from noob.types import Epoch
@@ -421,3 +422,28 @@ def test_subepoch_generation_race_condition():
     assert len(ready) == 3
     assert all(len(r["epoch"]) > 1 for r in ready)
     assert set(r["value"] for r in ready) == {"exclaim"}
+
+
+def test_non_equivalent_event(non_equivalent_event):
+    """
+    Regression - we can handle events that have a value that can't use ==
+
+    References:
+        https://github.com/miniscope/noob/issues/192
+        https://github.com/miniscope/noob/issues/201
+    """
+    scheduler = Scheduler(
+        edges=[
+            Edge(
+                source_node="default",
+                source_signal="value",
+                target_node="target",
+                target_slot="value",
+            )
+        ],
+        nodes={
+            "default": NodeSpecification(id="default", type="noob.testing.notreal"),
+            "target": NodeSpecification(id="target", type="noob.testing.notreal"),
+        },
+    )
+    scheduler.update([non_equivalent_event])

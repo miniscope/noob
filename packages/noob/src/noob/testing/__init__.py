@@ -1,4 +1,4 @@
-from noob.testing.assets import Initializer, counter
+from noob.testing.assets import AnyAsset, Initializer, counter
 from noob.testing.nodes import (
     CountSource,
     CountSourceDecor,
@@ -42,6 +42,7 @@ from noob.testing.nodes import (
 )
 
 __all__ = [
+    "AnyAsset",
     "async_error",
     "concat",
     "count_source",
