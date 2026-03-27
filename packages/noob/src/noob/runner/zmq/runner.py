@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from multiprocessing.synchronize import Event as EventType
 from time import time
-from typing import Any, cast, overload
+from typing import Any, ClassVar, cast, overload
 from uuid import uuid4
 
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
@@ -41,6 +41,8 @@ class ZMQRunner(TubeRunner):
 
         See :class:`.NodeRunner` for documentation about how Assets are handled in the ZMQRunner
     """
+
+    noderunner_cls: ClassVar[type[NodeRunner]] = NodeRunner
 
     node_procs: dict[NodeID, mp.Process] = field(default_factory=dict)
     command: CommandNode | None = None
@@ -90,7 +92,7 @@ class ZMQRunner(TubeRunner):
                     self._return_node = node
                     continue
                 self.node_procs[node_id] = mp.Process(
-                    target=NodeRunner.run,
+                    target=self.noderunner_cls.run,
                     args=(node.spec,),
                     kwargs={
                         "asset_specs": self.tube.state.specs,

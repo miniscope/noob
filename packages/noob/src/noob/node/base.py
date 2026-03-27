@@ -537,3 +537,15 @@ class WrapFuncNode(Node):
 
     def _collect_slots(self) -> dict[str, Slot]:
         return Slot.from_callable(self.fn)
+
+
+def all_slots_optional(spec: NodeSpecification) -> dict[str, Slot]:
+    if isinstance(spec.depends, str):
+        return {}
+    slots = {}
+    for dep in spec.depends:
+        if isinstance(dep, str):
+            continue
+        name = list(dep.keys())[0]
+        slots[name] = Slot(name=name, annotation=Any, required=False)
+    return slots

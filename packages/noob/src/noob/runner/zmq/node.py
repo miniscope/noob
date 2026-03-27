@@ -267,7 +267,7 @@ class NodeRunner(EventloopMixin):
         # ensure that events and conditions are bound to the eventloop created in the process
         async def _run_inner() -> None:
             nonlocal spec, kwargs
-            runner = NodeRunner(spec=spec, **kwargs)
+            runner = cls(spec=spec, **kwargs)
             await runner._run()
 
         asyncio.run(_run_inner())

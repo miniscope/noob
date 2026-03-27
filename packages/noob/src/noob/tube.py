@@ -28,6 +28,10 @@ from noob.types import ConfigSource, NodeSignal, PythonIdentifier
 from noob.yaml import ConfigYAMLMixin
 
 
+class TubeParams(BaseModel):
+    cycles_allowed: bool = False
+
+
 class TubeSpecification(ConfigYAMLMixin):
     """
     Configuration for the nodes within a tube.
@@ -80,6 +84,8 @@ class TubeSpecification(ConfigYAMLMixin):
 
     description: str | None = None
     """An optional description of the tube"""
+
+    params: TubeParams = Field(default_factory=TubeParams)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -246,8 +252,6 @@ class Tube(BaseModel):
             scheduler = cls._init_scheduler(info.data["nodes"], info.data["edges"])
         else:
             scheduler = value
-
-        assert not scheduler.has_cycle()
 
         return scheduler
 
@@ -491,6 +495,15 @@ class Tube(BaseModel):
                 f"or a nested chain of map operations. "
                 f"{intersection} are downstream of unrelated map nodes {map_a} and {map_b}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def no_cycles(self) -> Self:
+        if self.spec and self.spec.params.cycles_allowed:
+            return self
+
+        assert not self.scheduler.has_cycle(), "Theres a cycle in my boots"
+
         return self
 
 

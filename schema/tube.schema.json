@@ -212,6 +212,17 @@
       "required": [],
       "title": "NodeSpecification",
       "type": "object"
+    },
+    "TubeParams": {
+      "properties": {
+        "cycles_allowed": {
+          "default": false,
+          "title": "Cycles Allowed",
+          "type": "boolean"
+        }
+      },
+      "title": "TubeParams",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -332,6 +343,9 @@
       ],
       "default": null,
       "title": "Description"
+    },
+    "params": {
+      "$ref": "#/$defs/TubeParams"
     }
   },
   "title": "TubeSpecification",
