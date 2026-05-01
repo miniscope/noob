@@ -17,7 +17,7 @@ const layoutOptions = {
   "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
   "elk.layered.nodePlacement.bk.edgeStraightening": "NONE",
   "elk.layered.crossingMinimization.strategy": "MEDIAN_LAYER_SWEEP",
-  "elk.layered.portSortingStrategy": "PORT_DEGREE"
+  "elk.layered.portSortingStrategy": "PORT_DEGREE",
 };
 
 const elk = new ELK();
