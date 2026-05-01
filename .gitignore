@@ -209,3 +209,4 @@ noob_config.yaml
 noob_config.yml
 prof/
 packages/**/pylock.toml
+packages/noob/src/noob/_js

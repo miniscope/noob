@@ -61,6 +61,8 @@ export const getLayoutedNodes = async (nodes: ElkNode[], edges: Edge[]) => {
     })),
   };
 
+  console.log("GRAPH BEFORE LAYOUT");
+  console.log(graph);
   const layoutedGraph = await elk.layout(graph);
 
   return nodes.map((node) => {
