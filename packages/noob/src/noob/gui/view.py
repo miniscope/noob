@@ -43,7 +43,7 @@ def make_view_app() -> Litestar:
         return Template(template_name="view.html.jinja2", context={"tube_id": tube_id})
 
     @websocket_stream("/spec/{tube_id: str}")
-    async def stream_spec(tube_id: str) -> AsyncGenerator[int, None]:
+    async def stream_spec(tube_id: str) -> AsyncGenerator[str, None]:
         # yield the initial spec first, then reload whenever it changes
         tube_path = TubeSpecification.path_from_id(tube_id)
         with contextlib.suppress(ValidationError):
