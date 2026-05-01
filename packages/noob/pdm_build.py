@@ -15,4 +15,3 @@ def pdm_build_initialize(context):
     )
     if result.returncode != 0:
         raise RuntimeError("JS component build failed! \n" + result.stderr.decode("utf-8"))
-
