@@ -10,11 +10,9 @@
     <div id="root"></div>
     <script>
       let wss;
-      console.log("CONNECTING");
       wss = new WebSocket('/spec/{{ tube_id }}');
       wss.addEventListener('message', (event) => {
         let spec = JSON.parse(event.data);
-        console.log("MESSAGE", spec);
         renderPipeline("#root", spec);
       })
 

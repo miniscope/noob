@@ -40,9 +40,8 @@ def _open_browser(
 def make_view_app() -> Litestar:
     @get(path="/view/{tube_id: str}")
     async def view(tube_id: str) -> Template:
-        spec_json = TubeSpecification.from_id(tube_id).model_dump_json()
         return Template(
-            template_name="view.html.jinja2", context={"tube_id": tube_id, "spec": spec_json}
+            template_name="view.html.jinja2", context={"tube_id": tube_id}
         )
 
     @websocket_stream("/spec/{tube_id: str}")
