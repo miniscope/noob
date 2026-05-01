@@ -123,6 +123,9 @@ ignore = [
     # allow unused variables, also normal in tests
     "F841",
 ]
+"**/pdm_build.py" = [
+    "ANN001", "ANN201", "D"
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["noob", "nobes"]
