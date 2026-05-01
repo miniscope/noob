@@ -3,7 +3,6 @@ import { resolve } from 'node:path'
 
 import baseConfig from './vite.config.base.ts'
 
-// https://vite.dev/config/
 export default mergeConfig(baseConfig, {
   build: {
     lib: {
