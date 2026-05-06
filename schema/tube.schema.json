@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/miniscope/noob/tree/v1000.0.1/schema/tube.schema.json",
+  "$id": "https://github.com/miniscope/noob/tree/v1000.0.2/schema/tube.schema.json",
   "$defs": {
     "AssetScope": {
       "enum": [
@@ -272,7 +272,7 @@
       "type": "string"
     },
     "noob_version": {
-      "default": "1000.0.1",
+      "default": "1000.0.2",
       "title": "Noob Version",
       "type": "string"
     },
