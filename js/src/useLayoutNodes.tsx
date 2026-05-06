@@ -26,7 +26,7 @@ const layoutOptions = {
   "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
   "elk.layered.nodePlacement.bk.edgeStraightening": "NONE",
   "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
-  "elk.layered.crossingMinimization.strategy": "MEDIAN_LAYER_SWEEP"
+  "elk.layered.crossingMinimization.strategy": "MEDIAN_LAYER_SWEEP",
 };
 
 const elk = new ELK();

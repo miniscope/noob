@@ -99,7 +99,8 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
   }
   // special case that should be moved to a normalization function -
   // only the return node can have a string as depends, used for returning scalars
-  node.depends = typeof node.depends === 'string' ? [{value: node.depends}] : node.depends
+  node.depends =
+    typeof node.depends === "string" ? [{ value: node.depends }] : node.depends;
 
   return Array.from(node.depends).map<Edge>((slotsig) => {
     const slot = Object.keys(slotsig)[0];
@@ -213,7 +214,10 @@ function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
   const returnNode = Object.values(innerTube.nodes).filter(
     (node) => node.type === "return",
   )[0];
-  returnNode.depends = typeof returnNode?.depends === 'string' ? [{value: returnNode.depends}] : returnNode?.depends
+  returnNode.depends =
+    typeof returnNode?.depends === "string"
+      ? [{ value: returnNode.depends }]
+      : returnNode?.depends;
   const sourceHandles = returnNode?.depends
     ? Array.from(returnNode.depends).map<Handle>((slotsig) => {
         const slot = Object.keys(slotsig)[0];
