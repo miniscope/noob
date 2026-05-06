@@ -166,6 +166,8 @@ class TubeSpecification(ConfigYAMLMixin):
         if info.context and info.context.get("recursive"):
             for node in self.nodes.values():
                 if node.type_ == "tube":
+                    if node.params is None:
+                        node.params = {}
                     node.params["tube"] = TubeSpecification.from_any(node.params["tube"])
         return self
 
