@@ -1,5 +1,17 @@
 # Changelog
 
+## Upcoming
+
+**Added**
+
+- [`#195`](https://github.com/miniscope/noob/pull/195),
+  [`#196`](https://github.com/miniscope/noob/pull/196) -
+  `extends` keyword - allow a tube to extend other tubes!
+  reuse tubes, add on new nodes, override them, and so on.
+  build bigger tubes out of smaller tube fragments.
+- [`#196`](https://github.com/miniscope/noob/pull/196) -
+  `NoEventable[]` convenience generic that indicates that a return type can also be NoEvent.
+
 ## v1000.*
 
 ### v1000.0.1 - 26-03-15
