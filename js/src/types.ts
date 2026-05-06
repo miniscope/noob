@@ -16,10 +16,11 @@ export interface InputSpecification {
   description?: string;
 }
 
-export enum InputScope {
-  tube = "tube",
-  process = "process",
-}
+const InputScope = {
+  tube: "tube",
+  process: "process",
+} as const;
+export type InputScope = (typeof InputScope)[keyof typeof InputScope];
 
 export interface NoobNode {
   id: string;
@@ -39,10 +40,10 @@ export interface Handle {
   key: string;
 }
 
-export interface Handles {
+export type Handles = {
   sourceHandles: Handle[];
   targetHandles: Handle[];
-}
+};
 
 // Node class expects a type with string keys, not interface
 export type ElkNodeData = {

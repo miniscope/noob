@@ -49,9 +49,9 @@ export const getLayoutedNodes = async (nodes: ElkNode[], edges: Edge[]) => {
       targets: [e.targetHandle || e.target],
     })),
   };
-  const layoutedGraph = await elk
-    .layout(graph, { layoutOptions: layoutOptions })
-    .catch(console.error); // eslint-disable-line no-console -- a perfectly cromulent console use
+  const layoutedGraph = await elk.layout(graph, {
+    layoutOptions: layoutOptions,
+  });
   const flatChildren = flattenChildren(layoutedGraph);
   return nodes.map((node) => {
     const layoutedNode = flatChildren?.find((lgNode) => lgNode.id === node.id);

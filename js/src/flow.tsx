@@ -11,7 +11,6 @@ import type {
   TubeNode,
   TubeSpecification,
 } from "./types.ts";
-import { InputScope } from "./types.ts";
 import {
   Background,
   ConnectionMode,
@@ -201,7 +200,7 @@ function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
   const innerTube = node.params.tube;
   const targetHandles = innerTube.input
     ? Object.values(innerTube.input)
-        .filter((input) => input.scope === InputScope.process)
+        .filter((input) => input.scope === "process")
         .map<Handle>((input) => {
           return {
             id: `${node.id}.${input.id}`,
@@ -246,13 +245,13 @@ function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
   // Then the children that go within it
   let childNodes = Object.values(innerTube.nodes)
     .filter((child) => child.type !== "return")
-    .flatMap<ElkNodeType>((child) => getNode(child, edges, node.id));
+    .flatMap<NodeUnion>((child) => getNode(child, edges, node.id));
   childNodes = childNodes.map((child) => {
     return {
       ...child,
       extent: "parent",
       parentId: node.id,
-    };
+    } as NodeUnion;
   });
   return [groupNode, ...childNodes];
 }
