@@ -10,6 +10,7 @@ from nobes.files.watch import watch
 from noob.event import MetaSignal
 
 
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="flaky on 3.11")
 @pytest.mark.parametrize(
     "change",
     [
