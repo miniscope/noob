@@ -24,7 +24,7 @@ export enum InputScope {
 export interface NoobNode {
   id: string;
   type: string;
-  depends?: Record<string, string>[];
+  depends?: Record<string, string>[] | string;
   params?: Record<string, string | object>;
 }
 

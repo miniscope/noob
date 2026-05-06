@@ -215,7 +215,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Configuration for the nodes within a tube.\n\nRepresentation of the yaml-form of a tube.\nConverted to the runtime-form with :meth:`.Tube.from_specification`.\n\nNot much, if any validation is performed here on the whole tube except\nthat the nodes have the correct fields, ignoring validity of\ne.g. type mismatches or dependencies on signals that don't exist.\nThose require importing and introspecting the specified node classes,\nwhich should only happen when we try and instantiate the tube -\nthis class is just a carrier for the yaml spec.",
+  "description": "Configuration for the nodes within a tube.\n\nRepresentation of the yaml-form of a tube.\nConverted to the runtime-form with :meth:`.Tube.from_specification`.\n\nNot much, if any validation is performed here on the whole tube except\nthat the nodes have the correct fields, ignoring validity of\ne.g. type mismatches or dependencies on signals that don't exist.\nThose require importing and introspecting the specified node classes,\nwhich should only happen when we try and instantiate the tube -\nthis class is just a carrier for the yaml spec.\n\nInstance creation can be customized with parameters passed to the model's\nvalidation context\n(see: https://pydantic.dev/docs/validation/latest/concepts/validators/#validation-context ).\n\n* ``recursive: True`` - replace the tube ID in a :class:`.TubeNode` with the full spec",
   "else": {
     "properties": {
       "assets": {
