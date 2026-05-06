@@ -40,6 +40,8 @@ export interface Handle {
   key: string;
 }
 
+// Same as below - node class expects type with string keys
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export type Handles = {
   sourceHandles: Handle[];
   targetHandles: Handle[];
