@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/miniscope/noob/tree/v1000.0.1/schema/asset.schema.json",
+  "$id": "https://github.com/miniscope/noob/tree/v1000.0.2/schema/asset.schema.json",
   "$defs": {
     "AssetScope": {
       "enum": [
