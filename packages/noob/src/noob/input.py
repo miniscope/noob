@@ -38,7 +38,7 @@ class InputSpecification(BaseModel):
     if not provided to process but provided to the tube.
     """
 
-    id: PythonIdentifier = Field(..., exclude=True)
+    id: PythonIdentifier
     type_: AbsoluteIdentifier = Field(..., alias="type")
     scope: InputScope = InputScope.tube
     default: Any | None = None

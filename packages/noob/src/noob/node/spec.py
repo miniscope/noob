@@ -95,7 +95,7 @@ class NodeSpecification(BaseModel):
 
     Subclasses should override this with a default.
     """
-    id: PythonIdentifier = Field(..., exclude=True)
+    id: PythonIdentifier
     """The unique identifier of the node"""
     depends: DependsType | None = None
     """Dependency specification for the node.
@@ -123,7 +123,7 @@ class NodeSpecification(BaseModel):
     description: str | None = None
     """An optional description of the node"""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", serialize_by_alias=True)
 
     @field_validator("depends", mode="after")
     @classmethod

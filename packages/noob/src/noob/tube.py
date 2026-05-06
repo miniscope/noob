@@ -41,6 +41,13 @@ class TubeSpecification(ConfigYAMLMixin):
     Those require importing and introspecting the specified node classes,
     which should only happen when we try and instantiate the tube -
     this class is just a carrier for the yaml spec.
+
+    Instance creation can be customized with parameters passed to the model's
+    validation context
+    (see: https://pydantic.dev/docs/validation/latest/concepts/validators/#validation-context ).
+
+    * ``recursive: True`` - replace the tube ID in a :class:`.TubeNode` with the full spec
+
     """
 
     assets: dict[PythonIdentifier, AssetSpecification] = Field(default_factory=dict)
@@ -148,6 +155,18 @@ class TubeSpecification(ConfigYAMLMixin):
                     assert (
                         dep_node_id in self.nodes
                     ), f"Node {node_id} depends on node {dep_node_id}, which does not exist"
+        return self
+
+    @model_validator(mode="after")
+    def load_recursive_specs(self, info: ValidationInfo) -> Self:
+        """
+        If ``recursive: True`` in the validation context,
+        load the full tube specification referenced by a tube ID in ``type: tube`` nodes.
+        """
+        if info.context and info.context.get("recursive"):
+            for node in self.nodes.values():
+                if node.type_ == "tube":
+                    node.params["tube"] = TubeSpecification.from_any(node.params["tube"])
         return self
 
     @classmethod

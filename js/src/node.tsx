@@ -14,7 +14,7 @@ export default function ElkNode({ data }: NodeProps<ElkNodeType>) {
           <LabeledHandle
             key={handle.key}
             id={handle.id}
-            type="target"
+            type="source" // Allow nested node inputs/returns to connect - hack until we replace the edge type
             position={Position.Left}
             label={handle.label}
           />
