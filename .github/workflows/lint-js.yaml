@@ -5,20 +5,22 @@ on:
       - main
     paths:
       - js/**
-      - src/noob/tube.py
-      - src/noob/node/spec.py
+      - packages/noob/src/noob/tube.py
+      - packages/noob/src/noob/node/spec.py
+      - packages/noob/src/noob/gui/**
   pull_request:
     paths:
       - js/**
-      - src/noob/tube.py
-      - src/noob/node/spec.py
+      - packages/noob/src/noob/tube.py
+      - packages/noob/src/noob/node/spec.py
+      - packages/noob/src/noob/gui/**
 
 jobs:
   # Code follows linter rules
   eslint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install
         run: npm --prefix js/ ci
       - name: Run ESLint
@@ -28,7 +30,7 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install
         run: npm --prefix js/ ci
       - name: Run ESLint
@@ -38,7 +40,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install
         run: npm --prefix js/ ci
       - name: Build main dist
