@@ -4,7 +4,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 
 import type { TubeSpecification } from "./types.ts";
 
-import "./index.css";
+import "./css/index.css";
 
 export const renderPipeline = (
   selector: string,

@@ -1,5 +1,4 @@
-// Wholesale copied from https://reactflow.dev/examples/layout/elkjs-multiple-handles
-// at the moment, haven't refined anything yet
+// Custom node class with labeled handles
 
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { type HandleProps } from "@xyflow/system";
