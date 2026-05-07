@@ -2,7 +2,7 @@ import { type Node } from "@xyflow/react";
 
 export interface TubeSpecification {
   noob_id: string;
-  noob_mode: string;
+  noob_model: string;
   noob_version: string;
   nodes: Record<string, NoobNode>;
   input?: Record<string, InputSpecification>;
