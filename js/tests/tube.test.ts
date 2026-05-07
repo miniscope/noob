@@ -1,5 +1,5 @@
 import { recursiveTube } from "./data/tubes";
-import { test, beforeAll, describe, expect, assert } from "vitest";
+import { test, beforeAll, describe, expect } from "vitest";
 import { tubeToFlow, testExports } from "../src/tube";
 import type { TubeNode, NodeUnion } from "../src/types.ts";
 import type { Edge } from "@xyflow/react";
