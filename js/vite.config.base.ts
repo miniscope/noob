@@ -10,6 +10,7 @@ export default defineConfig({
       name: "noob_js",
       fileName: "js/noob-js",
       cssFileName: "css/noob-js",
+      formats: ["es"],
     },
     outDir: resolve(__dirname, "/dist"),
     emptyOutDir: false,

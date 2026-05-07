@@ -32,7 +32,7 @@ export default function View(props: ViewProps) {
   useEffect(() => {
     const socket = new WebSocket(`/spec/${props.tube_id}`);
     socket.addEventListener("message", (event) => {
-      if (typeof event.data !== 'string') return;
+      if (typeof event.data !== "string") return;
       const spec = JSON.parse(event.data) as TubeSpecification;
       const [edges, nodes] = tubeToFlow(spec);
       setNodes(nodes);

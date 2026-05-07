@@ -1,5 +1,7 @@
-// Wholesale copied from https://reactflow.dev/examples/layout/elkjs-multiple-handles
-// at the moment, haven't refined anything yet
+// Initialized from https://reactflow.dev/examples/layout/elkjs-multiple-handles
+// also with code from https://github.com/EmilStenstrom/elkjs-svg
+// which has now been archived
+// (both MIT licensed)
 
 // elk layouting options can be found here:
 // https://www.eclipse.org/elk/reference/algorithms/org-eclipse-elk-layered.html
@@ -11,8 +13,11 @@ import { type ElkNode } from "./types";
 
 import type {
   ElkNode as OElkNode,
+  ElkExtendedEdge as OElkEdge,
   LayoutOptions,
   ElkPort as OElkPort,
+  ElkEdgeSection,
+  ElkPoint,
 } from "elkjs/lib/elk-api";
 
 // https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html
@@ -129,6 +134,73 @@ export default function useLayoutNodes() {
   }, [nodesInitialized, getNodes, getEdges, setNodes, fitView]);
 
   return null;
+}
+
+/**
+ * Create an SVG spline representation of an elk edge
+ * This code and below from https://github.com/EmilStenstrom/elkjs-svg/blob/master/elkjs-svg.js
+ * @param edge
+ * @param routing_style
+ */
+function renderEdge(
+  edge: OElkEdge,
+  routing_style: "POLYLINE" | "SPLINES" = "SPLINES",
+): string {
+  if (edge.sections === undefined) {
+    throw new Error("No got dang sections in these edges");
+  }
+  const bends = getBends(edge.sections);
+
+  if (routing_style == "SPLINES") {
+    return bendsToSpline(bends);
+  }
+  return bendsToPolyline(bends);
+}
+
+function getBends(sections: ElkEdgeSection[]): ElkPoint[] {
+  let bends: ElkPoint[] = [];
+  if (sections && sections.length > 0) {
+    sections.forEach((section) => {
+      if (section.startPoint) {
+        bends.push(section.startPoint);
+      }
+      if (section.bendPoints) {
+        bends = bends.concat(section.bendPoints);
+      }
+      if (section.endPoint) {
+        bends.push(section.endPoint);
+      }
+    });
+  }
+  return bends;
+}
+
+function bendsToPolyline(bends: ElkPoint[]) {
+  return bends.map((bend) => `${bend.x},${bend.y}`).join(" ");
+}
+
+function bendsToSpline(bends: ElkPoint[]) {
+  if (!bends.length) {
+    return "";
+  }
+
+  const { x, y } = bends[0];
+  const points = [`M${x} ${y}`];
+
+  for (let i = 1; i < bends.length; i = i + 3) {
+    const left = bends.length - i;
+    if (left == 1) {
+      points.push(`L${bends[i].x + " " + bends[i].y}`);
+    } else if (left == 2) {
+      points.push(`Q${bends[i].x + " " + bends[i].y}`);
+      points.push(bends[i + 1].x + " " + bends[i + 1].y);
+    } else {
+      points.push(`C${bends[i].x + " " + bends[i].y}`);
+      points.push(bends[i + 1].x + " " + bends[i + 1].y);
+      points.push(bends[i + 2].x + " " + bends[i + 2].y);
+    }
+  }
+  return points.join(" ");
 }
 
 interface PropertiedElkNode extends OElkNode {
