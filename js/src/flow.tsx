@@ -1,12 +1,19 @@
 // based on
 // https://reactflow.dev/examples/layout/elkjs-multiple-handles
 
-import type {TubeSpecification,} from "./types.ts";
-import {Background, ConnectionMode, Controls, ReactFlow, useEdgesState, useNodesState,} from "@xyflow/react";
+import type { TubeSpecification } from "./types.ts";
+import {
+  Background,
+  ConnectionMode,
+  Controls,
+  ReactFlow,
+  useEdgesState,
+  useNodesState,
+} from "@xyflow/react";
 import ElkNode from "./node.tsx";
 import useLayoutNodes from "./useLayoutNodes.tsx";
 import "@xyflow/react/dist/style.css";
-import {tubeToFlow} from "./tube.tsx";
+import { tubeToFlow } from "./tube.tsx";
 
 interface NoobFlowProps {
   tube: TubeSpecification;
@@ -41,4 +48,3 @@ export function NoobFlow(props: NoobFlowProps) {
     </ReactFlow>
   );
 }
-

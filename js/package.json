@@ -6,15 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:docs" : "tsc -b && vite build --config vite.config.docs.ts",
+    "build:docs": "tsc -b && vite build --config vite.config.docs.ts",
     "watch:docs": "vite build --watch --config vite.config.docs.dev.ts",
     "build:package": "tsc -b && vite build --config vite.config.package.ts",
     "watch:package": "vite build --watch --config vite.config.package.dev.ts",
     "preview": "vite preview",
     "lint": "eslint .",
     "lint:fix": "npm run lint -- --fix",
-    "format": "prettier -w src",
-    "format:check": "prettier -c src"
+    "format": "prettier -w .",
+    "format:check": "prettier -c .",
+    "test": "vitest"
   },
   "dependencies": {
     "@xyflow/react": "^12.10.0",
@@ -28,6 +29,7 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "@vitest/eslint-plugin": "^1.6.16",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
@@ -37,6 +39,7 @@
     "prettier": "^3.7.4",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "^4.1.5"
   }
 }

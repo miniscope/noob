@@ -1,0 +1,5 @@
+.vite
+dist
+node_modules
+*.html
+tsconfig*.json
