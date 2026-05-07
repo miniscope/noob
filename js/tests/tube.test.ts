@@ -1,5 +1,5 @@
 import { recursiveTube } from "./data/tubes";
-import { test, beforeAll, describe, expect } from "vitest";
+import { test, beforeAll, describe, expect, assert } from "vitest";
 import { tubeToFlow, testExports } from "../src/tube";
 import type { TubeNode, NodeUnion } from "../src/types.ts";
 import type { Edge } from "@xyflow/react";
@@ -74,7 +74,7 @@ describe("getTubeNode", () => {
   test("removes a return node", () => {
     const return_node = Object.values(tubeNode.params.tube.nodes).find(
       (n) => n.type === "return",
-    );
+    ) as NodeUnion;
 
     expect(return_node).toBeDefined();
     expect(nodes).length(4);
@@ -106,7 +106,9 @@ describe("getEdges", () => {
 
 describe(tubeToFlow, () => {
   test("connects nested inputs/returns with outer dependencies", () => {
-    const groupNode = recursiveNodes.find((n) => n.type == "group");
+    const groupNode = recursiveNodes.find(
+      (n) => n.type == "group",
+    ) as NodeUnion;
 
     expect(groupNode.data.sourceHandles).toMatchObject([
       { id: "b.value", label: "value", key: "b.value" },
