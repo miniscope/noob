@@ -25,6 +25,11 @@ const nodeTypes = {
   group: ElkNode,
 };
 
+/**
+ * Basic viewer with a static tube
+ * @param props
+ * @constructor
+ */
 export function NoobFlow(props: NoobFlowProps) {
   const [edgesInit, nodesInit] = tubeToFlow(props.tube);
 

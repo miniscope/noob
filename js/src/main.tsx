@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { NoobFlow } from "./flow.tsx";
+import View from "./pages/view.tsx";
 import { ReactFlowProvider } from "@xyflow/react";
 
 import type { TubeSpecification } from "./types.ts";
@@ -22,3 +23,20 @@ export const renderPipeline = (
     </ReactFlowProvider>,
   );
 };
+
+export function initView(
+  selector: string,
+  tube_id: string,
+  color: "dark" | "light" = "dark",
+) {
+  const node = document.querySelector(selector);
+  if (node === null) {
+    throw Error("selector not found");
+  }
+  const root = createRoot(node);
+  root.render(
+    <ReactFlowProvider>
+      <View tube_id={tube_id} color={color} />
+    </ReactFlowProvider>,
+  );
+}
