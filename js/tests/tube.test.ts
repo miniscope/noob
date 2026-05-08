@@ -49,7 +49,7 @@ describe("getNodeEdges", () => {
       );
 
       expect(edges[0]).toHaveProperty("source", "prefix");
-      expect(edges[0]).toHaveProperty("sourceHandle", "prefix.signals.something");
+      expect(edges[0]).toHaveProperty("sourceHandle", "prefix.slots.something");
     });
 
     test("unnests return targets with prefix", () => {
@@ -59,7 +59,7 @@ describe("getNodeEdges", () => {
       );
 
       expect(edges[0]).toHaveProperty("target", "prefix");
-      expect(edges[0]).toHaveProperty("targetHandle", "prefix.slots.slot");
+      expect(edges[0]).toHaveProperty("targetHandle", "prefix.signals.slot");
     });
   });
 });

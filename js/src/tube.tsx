@@ -76,8 +76,9 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
         // e.g. if we are within child tube "b" and depend on input.c,
         // then we depend on b.c
         // (a node named "c" will be prefixed like b.c.value)
+        // the input is also a slot, not a signal in this case
         sourceNode = prefix;
-        sourceHandle = `${prefix}.signals.${signalParts[1]}`;
+        sourceHandle = `${prefix}.slots.${signalParts[1]}`;
       } else {
         // Just normal nested depends
         sourceNode = `${prefix}.${signalParts[0]}`;
@@ -85,9 +86,9 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
       }
 
       if (node.type === "return") {
-        // similarly, return values are on the container
+        // similarly, return values are on the container, and they are signals
         targetNode = prefix;
-        targetHandle = `${prefix}.slots.${slot}`;
+        targetHandle = `${prefix}.signals.${slot}`;
       } else {
         targetNode = `${prefix}.${node.id}`;
         targetHandle = `${prefix}.${node.id}.slots.${slot}`;
@@ -195,8 +196,6 @@ function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
     },
     position: { x: 0, y: 0 },
     key: node.id,
-    width: 200,
-    height: 200,
   } as GroupNode;
 
   // Then the children that go within it
