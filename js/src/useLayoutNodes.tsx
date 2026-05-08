@@ -73,12 +73,23 @@ export const getLayoutedNodes = async (nodes: ElkNode[], edges: Edge[]) => {
   });
 };
 
-function flattenChildren(
-  layoutedGraph: PropertiedElkNode,
-): PropertiedElkNode[] {
-  return layoutedGraph.children
-    ? layoutedGraph.children.flatMap((c) => [c, ...flattenChildren(c)])
-    : [];
+export default function useLayoutNodes() {
+  const nodesInitialized = useNodesInitialized();
+  const { getNodes, getEdges, setNodes, fitView } = useReactFlow<ElkNode>();
+
+  useEffect(() => {
+    if (nodesInitialized) {
+      const layoutNodes = async () => {
+        const layoutedNodes = await getLayoutedNodes(getNodes(), getEdges());
+        setNodes(layoutedNodes);
+        await fitView();
+      };
+
+      void layoutNodes();
+    }
+  }, [nodesInitialized, getNodes, getEdges, setNodes, fitView]);
+
+  return null;
 }
 
 function nodeToElk(n: ElkNode, nodes: ElkNode[]): PropertiedElkNode {
@@ -117,23 +128,12 @@ function nodeToElk(n: ElkNode, nodes: ElkNode[]): PropertiedElkNode {
   };
 }
 
-export default function useLayoutNodes() {
-  const nodesInitialized = useNodesInitialized();
-  const { getNodes, getEdges, setNodes, fitView } = useReactFlow<ElkNode>();
-
-  useEffect(() => {
-    if (nodesInitialized) {
-      const layoutNodes = async () => {
-        const layoutedNodes = await getLayoutedNodes(getNodes(), getEdges());
-        setNodes(layoutedNodes);
-        await fitView();
-      };
-
-      void layoutNodes();
-    }
-  }, [nodesInitialized, getNodes, getEdges, setNodes, fitView]);
-
-  return null;
+function flattenChildren(
+  layoutedGraph: PropertiedElkNode,
+): PropertiedElkNode[] {
+  return layoutedGraph.children
+    ? layoutedGraph.children.flatMap((c) => [c, ...flattenChildren(c)])
+    : [];
 }
 
 /**
