@@ -1,0 +1,55 @@
+.handles {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+}
+
+.handles.sources {
+  right: 0;
+  top: 0;
+  height: 100%;
+  transform: translate(50%, 0);
+
+  .handle-label {
+    left: 0.75em;
+  }
+}
+
+.handles.targets {
+  left: 0;
+  top: 0;
+  height: 100%;
+  transform: translate(-50%, 0);
+
+  .handle-label {
+    right: 0.75em;
+  }
+}
+
+.handles .react-flow__handle {
+  background-color: var(--xy-handle-background-color-default);
+  position: relative;
+  top: 0;
+  left: 0;
+  transform: none;
+
+  &.connectionindicator:hover {
+    pointer-events: all;
+    border-color: var(--xy-theme-edge-hover);
+    background-color: white;
+  }
+
+  &.connectionindicator:focus,
+  &.connectingfrom,
+  &.connectingto {
+    border-color: var(--xy-theme-edge-hover);
+  }
+}
+
+.handle-label {
+  font-family: var(--font-monospace), monospace;
+  font-size: 0.8em;
+  position: absolute;
+  top: -50%;
+}
