@@ -52,7 +52,9 @@ class Slot(BaseModel):
         slots = {}
         sig = inspect.signature(func)
 
-        for name, param in sig.parameters.items():
+        for i, (name, param) in enumerate(sig.parameters.items()):
+            if i == 0 and name == "self":
+                continue
             slots[name] = Slot(
                 name=name,
                 annotation=param.annotation,
@@ -74,6 +76,8 @@ class Signal(BaseModel):
         return_annotation = inspect.signature(func).return_annotation
         for name, type_ in cls._collect_signal_names(return_annotation):
             signals.append(Signal(name=name, type_=type_))
+        if not signals:
+            signals = [Signal(name="value", type_=Any)]
         return signals
 
     @classmethod
@@ -294,20 +298,43 @@ class Node(BaseModel):
 
     @property
     def signals(self) -> list[Signal]:
+        """
+        Cached instance-level accessor for signals.
+
+        Uses :meth:`.get_signals` and stores the result for frequent access.
+        """
         if self._signals is None:
-            self._signals = self._collect_signals()
-        if not self._signals:
-            self._signals = [Signal(name="value", type_=Any)]
+            self._signals = self.get_signals(self.spec)
         return self._signals
 
-    def _collect_signals(self) -> list[Signal]:
-        return Signal.from_callable(self.process)
+    @classmethod
+    def get_signals(cls, spec: NodeSpecification | None = None) -> list[Signal]:
+        """
+        Public class method for computing signals from a node class and a specification.
+
+        Exposed as a class method for reflection purposes -
+        we don't want to have to instantiate a node to tell what would come out of it,
+        but signals can be dynamically computed by the node depending on its spec.
+
+        If signals can't be computed (because they are not annotated, etc.),
+        returns a generic "value" signal that refers to whatever the node produces.
+
+        Base implementation reads annotations from the process method and does not use the spec.
+        If subclass overrides need a spec to compute their signals,
+        they must raise a ValueError if none is provided.
+        """
+        return Signal.from_callable(cls.process)
 
     @property
     def slots(self) -> dict[str, Slot]:
         if self._slots is None:
-            self._slots = self._collect_slots()
+            self._slots = self.get_slots(self.spec)
         return self._slots
+
+    @classmethod
+    def get_slots(cls, spec: NodeSpecification | None = None) -> dict[str, Slot]:
+        """Similar to :meth:`.get_signals`, but for slots!"""
+        return Slot.from_callable(cls.process)
 
     @property
     def edges(self) -> list[Edge]:
@@ -398,9 +425,6 @@ class Node(BaseModel):
         """
         return iscoroutinefunction_partial(self.process)
 
-    def _collect_slots(self) -> dict[str, Slot]:
-        return Slot.from_callable(self.process)
-
     def _wrap_generator(self, proc: Callable[[], GeneratorType]) -> None:
         """
         Wrap a `process` method when it is a generator,
@@ -468,13 +492,26 @@ class WrapClassNode(Node):
     def deinit(self) -> None:
         self.instance = None
 
-    def _collect_signals(self) -> list[Signal]:
-        return Signal.from_callable(self.process)
+    @classmethod
+    def get_signals(cls, spec: NodeSpecification | None = None) -> list[Signal]:
+        if spec is None:
+            raise ValueError("Must pass a specification to get signals for wrapped nodes")
+        wrapped_cls = resolve_python_identifier(spec.type_)
+        fn_name = cls._get_process_method(wrapped_cls)
+        fn = getattr(wrapped_cls, fn_name)
+        return Signal.from_callable(fn)
 
-    def _collect_slots(self) -> dict[str, Slot]:
-        return Slot.from_callable(self.process)
+    @classmethod
+    def get_slots(cls, spec: NodeSpecification | None = None) -> dict[str, Slot]:
+        if spec is None:
+            raise ValueError("Must pass a specification to get slots for wrapped nodes")
+        wrapped_cls = resolve_python_identifier(spec.type_)
+        fn_name = cls._get_process_method(wrapped_cls)
+        fn = getattr(wrapped_cls, fn_name)
+        return Slot.from_callable(fn)
 
-    def _get_process_method(self, cls: type) -> str:
+    @staticmethod
+    def _get_process_method(cls: type) -> str:
         process_func = None
         for name, member in inspect.getmembers(cls, predicate=inspect.isfunction):
             if hasattr(member, _PROCESS_METHOD_SENTINEL):
@@ -532,8 +569,16 @@ class WrapFuncNode(Node):
         value.stateful = bool(inspect.isgeneratorfunction(value.fn))
         return value
 
-    def _collect_signals(self) -> list[Signal]:
-        return Signal.from_callable(self.fn)
+    @classmethod
+    def get_signals(cls, spec: NodeSpecification | None = None) -> list[Signal]:
+        if spec is None:
+            raise ValueError("Must pass a specification to get signals for wrapped nodes")
+        fn = resolve_python_identifier(spec.type_)
+        return Signal.from_callable(fn)
 
-    def _collect_slots(self) -> dict[str, Slot]:
-        return Slot.from_callable(self.fn)
+    @classmethod
+    def get_slots(cls, spec: NodeSpecification | None = None) -> dict[str, Slot]:
+        if spec is None:
+            raise ValueError("Must pass a specification to get slots for wrapped nodes")
+        fn = resolve_python_identifier(spec.type_)
+        return Slot.from_callable(fn)
