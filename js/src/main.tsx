@@ -5,6 +5,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 
 import type { TubeSpecification } from "./types.ts";
 
+import "@xyflow/react/dist/style.css";
 import "./css/index.css";
 
 export const renderPipeline = (

@@ -12,7 +12,6 @@ import {
 } from "@xyflow/react";
 import ElkNode from "./node.tsx";
 import useLayoutNodes from "./useLayoutNodes.tsx";
-import "@xyflow/react/dist/style.css";
 import { tubeToFlow } from "./tube.tsx";
 
 interface NoobFlowProps {
