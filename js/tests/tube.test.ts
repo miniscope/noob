@@ -22,7 +22,7 @@ describe("getNodeEdges", () => {
     const edges = getNodeEdges({ ...baseNode, depends: "b.something" });
 
     expect(edges).length(1);
-    expect(edges[0]).toHaveProperty("targetHandle", "test.value");
+    expect(edges[0]).toHaveProperty("targetHandle", "test.slots.value");
   });
 
   describe("with prefix", () => {
@@ -34,11 +34,11 @@ describe("getNodeEdges", () => {
 
       expect(edges).length(1);
       expect(edges[0]).toMatchObject({
-        id: "prefix.b.something-prefix.test.slot",
+        id: "prefix.b.signals.something-prefix.test.slots.slot",
         source: "prefix.b",
-        sourceHandle: "prefix.b.something",
+        sourceHandle: "prefix.b.signals.something",
         target: "prefix.test",
-        targetHandle: "prefix.test.slot",
+        targetHandle: "prefix.test.slots.slot",
       });
     });
 
@@ -49,7 +49,7 @@ describe("getNodeEdges", () => {
       );
 
       expect(edges[0]).toHaveProperty("source", "prefix");
-      expect(edges[0]).toHaveProperty("sourceHandle", "prefix.something");
+      expect(edges[0]).toHaveProperty("sourceHandle", "prefix.signals.something");
     });
 
     test("unnests return targets with prefix", () => {
@@ -59,7 +59,7 @@ describe("getNodeEdges", () => {
       );
 
       expect(edges[0]).toHaveProperty("target", "prefix");
-      expect(edges[0]).toHaveProperty("targetHandle", "prefix.slot");
+      expect(edges[0]).toHaveProperty("targetHandle", "prefix.slots.slot");
     });
   });
 });
@@ -102,6 +102,17 @@ describe("getEdges", () => {
     // inner edges
     expect(edges.slice(2).every((e) => e.id.startsWith("tube"))).toBe(true);
   });
+
+
+  test("differentiates same-named slots and signals", () => {
+    const edges = getEdges({
+      'a': {id: 'a', type: 'test.test', depends: [{value: 'z.value'}]},
+      'b': {id: 'b', type: 'test.test', depends: [{value: 'a.value'}]}
+    })
+
+    expect(edges[0]).toHaveProperty('targetHandle', 'a.slots.value')
+    expect(edges[1]).toHaveProperty('sourceHandle', 'a.signals.value')
+  })
 });
 
 describe(tubeToFlow, () => {
@@ -111,35 +122,35 @@ describe(tubeToFlow, () => {
     ) as NodeUnion;
 
     expect(groupNode.data.sourceHandles).toMatchObject([
-      { id: "b.value", label: "value", key: "b.value" },
+      { id: "b.signals.value", label: "value", key: "b.signals.value" },
     ]);
     expect(groupNode.data.targetHandles).toMatchObject([
       {
-        id: "b.child_multiply_inner",
+        id: "b.slots.child_multiply_inner",
         label: "child_multiply_inner",
-        key: "b.child_multiply_inner",
+        key: "b.slots.child_multiply_inner",
       },
       {
-        id: "b.child_multiply_input",
+        id: "b.slots.child_multiply_input",
         label: "child_multiply_input",
-        key: "b.child_multiply_input",
+        key: "b.slots.child_multiply_input",
       },
     ]);
 
     // depends on other top-level nodes -> child input
     // just checking that there exists edges between handles (asserted above) are created.
     const abEdge = recursiveEdges.find(
-      (e) => e.id === "a.index-b.child_multiply_inner",
+      (e) => e.id === "a.signals.index-b.slots.child_multiply_inner",
     );
 
     expect(abEdge).toMatchObject({
       source: "a",
       target: "b",
-      sourceHandle: "a.index",
-      targetHandle: "b.child_multiply_inner",
+      sourceHandle: "a.signals.index",
+      targetHandle: "b.slots.child_multiply_inner",
     });
 
     // other nodes depend on nested node's returns
-    expect(recursiveEdges.some((e) => e.sourceHandle === "b.value")).toBe(true);
+    expect(recursiveEdges.some((e) => e.sourceHandle === "b.signals.value")).toBe(true);
   });
 });

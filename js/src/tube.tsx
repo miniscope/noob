@@ -66,9 +66,9 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
     if (typeof prefix !== "string") {
       // Not in a nested tube! handle normally at top level
       sourceNode = signalParts[0];
-      sourceHandle = signal;
+      sourceHandle = `${signalParts[0]}.signals.${signalParts[1]}`;
       targetNode = node.id;
-      targetHandle = `${node.id}.${slot}`;
+      targetHandle = `${node.id}.slots.${slot}`;
     } else {
       // Handle nesting
       if (signalParts[0] === "input") {
@@ -77,20 +77,20 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
         // then we depend on b.c
         // (a node named "c" will be prefixed like b.c.value)
         sourceNode = prefix;
-        sourceHandle = `${prefix}.${signalParts[1]}`;
+        sourceHandle = `${prefix}.signals.${signalParts[1]}`;
       } else {
         // Just normal nested depends
-        sourceNode = `${prefix}.${signal.split(".")[0]}`;
-        sourceHandle = `${prefix}.${signal}`;
+        sourceNode = `${prefix}.${signalParts[0]}`;
+        sourceHandle = `${prefix}.${signalParts[0]}.signals.${signalParts[1]}`;
       }
 
       if (node.type === "return") {
         // similarly, return values are on the container
         targetNode = prefix;
-        targetHandle = `${prefix}.${slot}`;
+        targetHandle = `${prefix}.slots.${slot}`;
       } else {
         targetNode = `${prefix}.${node.id}`;
-        targetHandle = `${prefix}.${node.id}.${slot}`;
+        targetHandle = `${prefix}.${node.id}.slots.${slot}`;
       }
     }
     return {
@@ -160,9 +160,9 @@ function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
         .filter((input) => input.scope === "process")
         .map<Handle>((input) => {
           return {
-            id: `${node.id}.${input.id}`,
+            id: `${node.id}.slots.${input.id}`,
             label: input.id,
-            key: `${node.id}.${input.id}`,
+            key: `${node.id}.slots.${input.id}`,
           };
         })
     : [];
@@ -178,9 +178,9 @@ function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
     ? Array.from(returnNode.depends).map<Handle>((slotsig) => {
         const slot = Object.keys(slotsig)[0];
         return {
-          id: `${node.id}.${slot}`,
+          id: `${node.id}.signals.${slot}`,
           label: slot,
-          key: `${node.id}.${slot}`,
+          key: `${node.id}.signals.${slot}`,
         };
       })
     : [];
