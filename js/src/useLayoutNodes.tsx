@@ -1,27 +1,20 @@
 // Initialized from https://reactflow.dev/examples/layout/elkjs-multiple-handles
-// also with code from https://github.com/EmilStenstrom/elkjs-svg
-// which has now been archived
-// (both MIT licensed)
 
-// elk layouting options can be found here:
-// https://www.eclipse.org/elk/reference/algorithms/org-eclipse-elk-layered.html
 import { useEffect } from "react";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { type Edge, useNodesInitialized, useReactFlow } from "@xyflow/react";
 
-import { type ElkNode } from "./types";
+import {type ElkNode, type NodeUnion} from "./types";
 
 import type {
   ElkNode as OElkNode,
-  ElkExtendedEdge as OElkEdge,
   LayoutOptions,
   ElkPort as OElkPort,
-  ElkEdgeSection,
-  ElkPoint,
 } from "elkjs/lib/elk-api";
 
 // https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html
 // https://eclipse.dev/elk/reference/options/org-eclipse-elk-nodeSize-options.html
+// https://eclipse.dev/elk/blog/posts/2025/25-08-22-node-labels.html
 const layoutOptions = {
   "elk.algorithm": "layered",
   "elk.direction": "RIGHT",
@@ -32,6 +25,11 @@ const layoutOptions = {
   "elk.layered.nodePlacement.bk.edgeStraightening": "NONE",
   "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
   "elk.layered.crossingMinimization.strategy": "MEDIAN_LAYER_SWEEP",
+  "elk.nodeSize.constraints": "NODE_LABELS PORT_LABELS PORTS",
+  "elk.nodeLabels.placement": "INSIDE H_CENTER V_CENTER",
+  "elk.nodeSize.options": "COMPUTE_PADDING",
+  "elk.portConstraints": "FIXED_SIDE",
+  // "elk.nodeSize.minimum"
 };
 
 const elk = new ELK();
@@ -41,7 +39,7 @@ const elk = new ELK();
  * Have to re-nest the graph here - elk uses nested graph, reactflow uses flat node structure
  * https://github.com/xyflow/xyflow/discussions/3495
  */
-export const getLayoutedNodes = async (nodes: ElkNode[], edges: Edge[]) => {
+export const getLayoutedNodes = async (nodes: NodeUnion[], edges: Edge[]) => {
   const graph = {
     id: "root",
     layoutOptions,
@@ -67,8 +65,9 @@ export const getLayoutedNodes = async (nodes: ElkNode[], edges: Edge[]) => {
         x: layoutedNode?.x ?? 0,
         y: layoutedNode?.y ?? 0,
       },
-      width: layoutedNode?.width ?? node.width,
-      height: layoutedNode?.height ?? node.height,
+      // the reactflow-generated widths/heights are better for display,
+      // but the elk widths/heights are better for nested nodes for some reason.
+      ...(node.type === 'group') &&  {width: layoutedNode?.width, height: layoutedNode?.height},
     };
   });
 };
@@ -92,11 +91,11 @@ export default function useLayoutNodes() {
   return null;
 }
 
-function nodeToElk(n: ElkNode, nodes: ElkNode[]): PropertiedElkNode {
+function nodeToElk(n: NodeUnion, nodes: ElkNode[]): PropertiedElkNode {
   const targetPorts = n.data.targetHandles.map((t) => ({
     id: t.id,
     labels: [{ text: t.label }],
-    width: 5 * t.label.length,
+    width: 7 * t.label.length,
     properties: {
       side: "WEST",
     },
@@ -105,7 +104,7 @@ function nodeToElk(n: ElkNode, nodes: ElkNode[]): PropertiedElkNode {
   const sourcePorts = n.data.sourceHandles.map((s) => ({
     id: s.id,
     labels: [{ text: s.label }],
-    width: 5 * s.label.length,
+    width: 7 * s.label.length,
     properties: {
       side: "EAST",
     },
@@ -117,11 +116,12 @@ function nodeToElk(n: ElkNode, nodes: ElkNode[]): PropertiedElkNode {
 
   return {
     id: n.id,
-    width: n.width ?? 50,
-    height: n.height ?? 50,
-    properties: {
-      "org.eclipse.elk.portConstraints": "FIXED_SIDE",
-    },
+    ...(n.width) && {width: n.width},
+    ...(n.height) && {height: n.height},
+    labels: [{
+      text: n.data.label,
+      ...(n.width) && {width: n.width}
+    }],
     // we are also passing the id, so we can also handle edges without a sourceHandle or targetHandle option
     ports: [...targetPorts, ...sourcePorts],
     children: childNodes,
@@ -134,73 +134,6 @@ function flattenChildren(
   return layoutedGraph.children
     ? layoutedGraph.children.flatMap((c) => [c, ...flattenChildren(c)])
     : [];
-}
-
-/**
- * Create an SVG spline representation of an elk edge
- * This code and below from https://github.com/EmilStenstrom/elkjs-svg/blob/master/elkjs-svg.js
- * @param edge
- * @param routing_style
- */
-function renderEdge(
-  edge: OElkEdge,
-  routing_style: "POLYLINE" | "SPLINES" = "SPLINES",
-): string {
-  if (edge.sections === undefined) {
-    throw new Error("No got dang sections in these edges");
-  }
-  const bends = getBends(edge.sections);
-
-  if (routing_style == "SPLINES") {
-    return bendsToSpline(bends);
-  }
-  return bendsToPolyline(bends);
-}
-
-function getBends(sections: ElkEdgeSection[]): ElkPoint[] {
-  let bends: ElkPoint[] = [];
-  if (sections && sections.length > 0) {
-    sections.forEach((section) => {
-      if (section.startPoint) {
-        bends.push(section.startPoint);
-      }
-      if (section.bendPoints) {
-        bends = bends.concat(section.bendPoints);
-      }
-      if (section.endPoint) {
-        bends.push(section.endPoint);
-      }
-    });
-  }
-  return bends;
-}
-
-function bendsToPolyline(bends: ElkPoint[]) {
-  return bends.map((bend) => `${bend.x},${bend.y}`).join(" ");
-}
-
-function bendsToSpline(bends: ElkPoint[]) {
-  if (!bends.length) {
-    return "";
-  }
-
-  const { x, y } = bends[0];
-  const points = [`M${x} ${y}`];
-
-  for (let i = 1; i < bends.length; i = i + 3) {
-    const left = bends.length - i;
-    if (left == 1) {
-      points.push(`L${bends[i].x + " " + bends[i].y}`);
-    } else if (left == 2) {
-      points.push(`Q${bends[i].x + " " + bends[i].y}`);
-      points.push(bends[i + 1].x + " " + bends[i + 1].y);
-    } else {
-      points.push(`C${bends[i].x + " " + bends[i].y}`);
-      points.push(bends[i + 1].x + " " + bends[i + 1].y);
-      points.push(bends[i + 2].x + " " + bends[i + 2].y);
-    }
-  }
-  return points.join(" ");
 }
 
 interface PropertiedElkNode extends OElkNode {

@@ -15,7 +15,7 @@ input:
     scope: process
     type: int
 nodes:
-  a:
+  aaaaaaaaaverylongname:
     type: noob.testing.count_source
     params:
       start: input.parent_start
@@ -25,7 +25,7 @@ nodes:
     params:
       tube: testing-recursive-child
     depends:
-      - child_multiply_inner: a.index
+      - child_multiply_inner: aaaaaaaaaverylongname.index
       - child_multiply_input: input.child_multiply
 
   c:
@@ -36,6 +36,6 @@ nodes:
   d:
     type: return
     depends:
-      - index: a.index
+      - index: aaaaaaaaaverylongname.index
       - child: b.value
       - parent: c.value
