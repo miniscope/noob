@@ -4,7 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - packages/nobes*/**
   pull_request:
+    paths:
+      - packages/nobes*/**
 
 # restrict GITHUB_ACTIONS token (implicitly sets all other permissions to none)
 permissions:

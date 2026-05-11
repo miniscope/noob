@@ -1,22 +1,18 @@
 // based on
 // https://reactflow.dev/examples/layout/elkjs-multiple-handles
 
-import type {
-  TubeSpecification,
-  ElkNode as ElkNodeType,
-  NoobNode,
-} from "./types.ts";
+import type { TubeSpecification } from "./types.ts";
 import {
-  type Edge,
-  ReactFlow,
   Background,
+  ConnectionMode,
   Controls,
+  ReactFlow,
   useEdgesState,
   useNodesState,
 } from "@xyflow/react";
 import ElkNode from "./node.tsx";
 import useLayoutNodes from "./useLayoutNodes.tsx";
-import "@xyflow/react/dist/style.css";
+import { tubeToFlow } from "./tube.tsx";
 
 interface NoobFlowProps {
   tube: TubeSpecification;
@@ -25,10 +21,16 @@ interface NoobFlowProps {
 
 const nodeTypes = {
   elk: ElkNode,
+  group: ElkNode,
 };
 
+/**
+ * Basic viewer with a static tube
+ * @param props
+ * @constructor
+ */
 export function NoobFlow(props: NoobFlowProps) {
-  const [edgesInit, nodesInit] = tubeToElk(props.tube);
+  const [edgesInit, nodesInit] = tubeToFlow(props.tube);
 
   const [nodes, , onNodesChange] = useNodesState(nodesInit);
   const [edges, , onEdgesChange] = useEdgesState(edgesInit);
@@ -42,86 +44,11 @@ export function NoobFlow(props: NoobFlowProps) {
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       colorMode={props.color}
+      connectionMode={ConnectionMode.Loose} // allow the inputs/returns of nested tubes to connect both ways
       fitView
     >
       <Background />
       <Controls />
     </ReactFlow>
   );
-}
-
-function tubeToElk(tube: TubeSpecification): [Edge[], ElkNodeType[]] {
-  const edges = getEdges(tube.nodes);
-  const nodes = getNodes(tube.nodes, edges);
-  return [edges, nodes];
-}
-
-function getEdges(nodes: Record<string, NoobNode>): Edge[] {
-  return Object.entries(nodes).flatMap<Edge>(([node_id, node]): Edge[] => {
-    if (node.depends === undefined || node.depends === null) {
-      return [];
-    } else {
-      return Array.from(node.depends).map<Edge>((slotsig) => {
-        const slot = Object.keys(slotsig)[0];
-        const signal = slotsig[slot];
-        const sourceHandle = signal;
-        const sourceNode = signal.split(".")[0];
-        const targetHandle = `${node_id}.${slot}`;
-        return {
-          id: `${sourceHandle}-${targetHandle}`,
-          source: sourceNode,
-          sourceHandle,
-          target: node_id,
-          targetHandle,
-        };
-      });
-    }
-  });
-}
-
-function getNodes(
-  nodes: Record<string, NoobNode>,
-  edges: Edge[],
-): ElkNodeType[] {
-  const has_input = edges.some((e) => e.source === "input");
-  if (has_input) {
-    nodes = { ...nodes, input: { type: "input" } };
-  }
-
-  return Object.keys(nodes).map((node_id) => {
-    // Create handle description for node and then filter to unique entries
-    const sourceHandles = edges
-      .filter((e) => e.source === node_id && e.sourceHandle !== undefined)
-      .map((e) => {
-        const label = (e.sourceHandle as string).split(".")[1];
-        return {
-          id: e.sourceHandle as string,
-          label: label,
-          key: e.id,
-        };
-      })
-      .filter(
-        (e, index, self) => self.map((x) => x.id).indexOf(e.id) === index,
-      );
-    const targetHandles = edges
-      .filter((e) => e.target === node_id && e.targetHandle !== undefined)
-      .map((e) => {
-        const label = (e.targetHandle as string).split(".")[1];
-        return { id: e.targetHandle as string, label: label, key: e.id };
-      })
-      .filter(
-        (e, index, self) => self.map((x) => x.id).indexOf(e.id) === index,
-      );
-
-    return {
-      id: node_id,
-      data: {
-        label: node_id,
-        sourceHandles,
-        targetHandles,
-      },
-      position: { x: 0, y: 0 },
-      type: "elk",
-    };
-  });
 }

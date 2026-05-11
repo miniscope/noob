@@ -1,9 +1,9 @@
-import { mergeConfig } from 'vite'
+import { mergeConfig } from "vite";
 
-import PackageConfig from './vite.config.package.dev.ts'
+import PackageConfig from "./vite.config.package.dev.ts";
 
 export default mergeConfig(PackageConfig, {
   build: {
     minify: true,
-  }
-})
+  },
+});

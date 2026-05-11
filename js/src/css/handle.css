@@ -1,11 +1,3 @@
-@import url("./xy-theme.css");
-@import url("./docs.css");
-
-#root {
-  width: 100vw;
-  height: 100vh;
-}
-
 .handles {
   position: absolute;
   display: flex;
@@ -36,14 +28,28 @@
 }
 
 .handles .react-flow__handle {
+  background-color: var(--xy-handle-background-color-default);
   position: relative;
   top: 0;
   left: 0;
   transform: none;
+
+  &.connectionindicator:hover {
+    pointer-events: all;
+    border-color: var(--xy-theme-edge-hover);
+    background-color: white;
+  }
+
+  &.connectionindicator:focus,
+  &.connectingfrom,
+  &.connectingto {
+    border-color: var(--xy-theme-edge-hover);
+  }
 }
 
 .handle-label {
   font-family: var(--font-monospace), monospace;
+  font-size: 0.8em;
   position: absolute;
   top: -50%;
 }

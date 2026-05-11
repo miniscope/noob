@@ -47,13 +47,17 @@ def make_view_app() -> Litestar:
         # yield the initial spec first, then reload whenever it changes
         tube_path = TubeSpecification.path_from_id(tube_id)
         with contextlib.suppress(ValidationError):
-            yield TubeSpecification.from_yaml(tube_path).model_dump_json()
+            yield TubeSpecification.from_yaml(
+                tube_path, context={"recursive": True}
+            ).model_dump_json()
 
         watcher = watchfiles.awatch(tube_path)
         async for _ in watcher:
             # totally fine, the spec is malformed when typing in it sometimes!
             with contextlib.suppress(ValidationError):
-                yield TubeSpecification.from_yaml(tube_path).model_dump_json()
+                yield TubeSpecification.from_yaml(
+                    tube_path, context={"recursive": True}
+                ).model_dump_json()
 
     logging_config = LoggingConfig(
         root={"level": "INFO", "handlers": ["queue_listener"]},

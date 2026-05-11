@@ -113,8 +113,15 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
     HEADER_FIELDS: ClassVar[tuple[str, ...]] = ("noob_id", "noob_model", "noob_version")
 
     @classmethod
-    def from_yaml(cls: type[Self], file_path: str | Path) -> Self:
-        """Instantiate this class by passing the contents of a yaml file as kwargs"""
+    def from_yaml(cls: type[Self], file_path: str | Path, context: dict | None = None) -> Self:
+        """
+        Instantiate this class by passing the contents of a yaml file as kwargs
+
+        Args:
+            file_path: path to yaml file
+            context: Optional context dictionary to pass to the model_validate call.
+                See: https://pydantic.dev/docs/validation/latest/concepts/validators/#validation-context
+        """
         file_path = Path(file_path)
         with open(file_path) as file:
             config_data = yaml.load(file)
@@ -125,7 +132,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         config_data = cls._post_load_yaml(src_data)
 
         try:
-            instance = cls(**config_data)
+            instance = cls.model_validate(config_data, context=context)
             instance._yaml_source = src_data
         except ValidationError:
             if (backup_path := file_path.with_suffix(".yaml.bak")).exists():
@@ -140,7 +147,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         return instance
 
     @classmethod
-    def from_id(cls: type[Self], id: ConfigID) -> Self:
+    def from_id(cls: type[Self], id: ConfigID, context: dict | None = None) -> Self:
         """
         Instantiate a model from a config `id` specified in one of the .yaml configs in
         either the user :attr:`.Config.config_dirs` or the packaged ``config`` dir.
@@ -150,10 +157,10 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             this method does not yet validate that the config matches the model loading it
 
         """
-        return cls.from_yaml(cls.path_from_id(id))
+        return cls.from_yaml(cls.path_from_id(id), context)
 
     @classmethod
-    def from_any(cls: type[Self], source: ConfigSource | Self) -> Self:
+    def from_any(cls: type[Self], source: ConfigSource | Self, context: dict | None = None) -> Self:
         """
         Try and instantiate a config model from any supported constructor.
 
@@ -167,11 +174,13 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
                 * an absolute ``Path`` to a config file
                 * an instance of the class to be constructed (returned unchanged)
 
+            context (dict | None): Context to pass to the model_validate call.
+                See: https://pydantic.dev/docs/validation/latest/concepts/validators/#validation-context
         """
         if isinstance(source, cls):
             return source
         elif isinstance(source, str) and valid_config_id(source):
-            return cls.from_id(source)
+            return cls.from_id(source, context)
         elif isinstance(source, Path | str):
             from noob.config import config
 
@@ -179,11 +188,11 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             if source.suffix in (".yaml", ".yml"):
                 if source.exists():
                     # either relative to cwd or absolute
-                    return cls.from_yaml(source)
+                    return cls.from_yaml(source, context)
                 elif not source.is_absolute():
                     for config_dir in config.config_dirs:
                         if (user_source := config_dir / source).exists():
-                            return cls.from_yaml(user_source)
+                            return cls.from_yaml(user_source, context)
 
         raise ValueError(
             f"Instance of config model {cls.__name__} could not be instantiated from "
