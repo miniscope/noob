@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { type Edge, useNodesInitialized, useReactFlow } from "@xyflow/react";
 
-import {type ElkNode, type NodeUnion} from "./types";
+import { type ElkNode, type NodeUnion } from "./types";
 
 import type {
   ElkNode as OElkNode,
@@ -67,7 +67,10 @@ export const getLayoutedNodes = async (nodes: NodeUnion[], edges: Edge[]) => {
       },
       // the reactflow-generated widths/heights are better for display,
       // but the elk widths/heights are better for nested nodes for some reason.
-      ...(node.type === 'group') &&  {width: layoutedNode?.width, height: layoutedNode?.height},
+      ...(node.type === "group" && {
+        width: layoutedNode?.width,
+        height: layoutedNode?.height,
+      }),
     };
   });
 };
@@ -116,12 +119,14 @@ function nodeToElk(n: NodeUnion, nodes: ElkNode[]): PropertiedElkNode {
 
   return {
     id: n.id,
-    ...(n.width) && {width: n.width},
-    ...(n.height) && {height: n.height},
-    labels: [{
-      text: n.data.label,
-      ...(n.width) && {width: n.width}
-    }],
+    ...(n.width && { width: n.width }),
+    ...(n.height && { height: n.height }),
+    labels: [
+      {
+        text: n.data.label,
+        ...(n.width && { width: n.width }),
+      },
+    ],
     // we are also passing the id, so we can also handle edges without a sourceHandle or targetHandle option
     ports: [...targetPorts, ...sourcePorts],
     children: childNodes,

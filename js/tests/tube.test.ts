@@ -103,16 +103,15 @@ describe("getEdges", () => {
     expect(edges.slice(2).every((e) => e.id.startsWith("tube"))).toBe(true);
   });
 
-
   test("differentiates same-named slots and signals", () => {
     const edges = getEdges({
-      'a': {id: 'a', type: 'test.test', depends: [{value: 'z.value'}]},
-      'b': {id: 'b', type: 'test.test', depends: [{value: 'a.value'}]}
-    })
+      a: { id: "a", type: "test.test", depends: [{ value: "z.value" }] },
+      b: { id: "b", type: "test.test", depends: [{ value: "a.value" }] },
+    });
 
-    expect(edges[0]).toHaveProperty('targetHandle', 'a.slots.value')
-    expect(edges[1]).toHaveProperty('sourceHandle', 'a.signals.value')
-  })
+    expect(edges[0]).toHaveProperty("targetHandle", "a.slots.value");
+    expect(edges[1]).toHaveProperty("sourceHandle", "a.signals.value");
+  });
 });
 
 describe(tubeToFlow, () => {
@@ -151,6 +150,8 @@ describe(tubeToFlow, () => {
     });
 
     // other nodes depend on nested node's returns
-    expect(recursiveEdges.some((e) => e.sourceHandle === "b.signals.value")).toBe(true);
+    expect(
+      recursiveEdges.some((e) => e.sourceHandle === "b.signals.value"),
+    ).toBe(true);
   });
 });
