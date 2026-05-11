@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { type Edge, useNodesInitialized, useReactFlow } from "@xyflow/react";
 
-import { type ElkNode, type NodeUnion } from "./types";
+import { type NodeUnion } from "./types";
 
 import type {
   ElkNode as OElkNode,
@@ -39,7 +39,10 @@ const elk = new ELK();
  * Have to re-nest the graph here - elk uses nested graph, reactflow uses flat node structure
  * https://github.com/xyflow/xyflow/discussions/3495
  */
-export const getLayoutedNodes = async (nodes: NodeUnion[], edges: Edge[]) => {
+export const getLayoutedNodes = async (
+  nodes: NodeUnion[],
+  edges: Edge[],
+): Promise<NodeUnion[]> => {
   const graph = {
     id: "root",
     layoutOptions,
@@ -56,7 +59,7 @@ export const getLayoutedNodes = async (nodes: NodeUnion[], edges: Edge[]) => {
     layoutOptions: layoutOptions,
   });
   const flatChildren = flattenChildren(layoutedGraph);
-  return nodes.map((node) => {
+  return nodes.map<NodeUnion>((node) => {
     const layoutedNode = flatChildren?.find((lgNode) => lgNode.id === node.id);
 
     return {
@@ -77,7 +80,7 @@ export const getLayoutedNodes = async (nodes: NodeUnion[], edges: Edge[]) => {
 
 export default function useLayoutNodes() {
   const nodesInitialized = useNodesInitialized();
-  const { getNodes, getEdges, setNodes, fitView } = useReactFlow<ElkNode>();
+  const { getNodes, getEdges, setNodes, fitView } = useReactFlow<NodeUnion>();
 
   useEffect(() => {
     if (nodesInitialized) {
@@ -94,7 +97,7 @@ export default function useLayoutNodes() {
   return null;
 }
 
-function nodeToElk(n: NodeUnion, nodes: ElkNode[]): PropertiedElkNode {
+function nodeToElk(n: NodeUnion, nodes: NodeUnion[]): PropertiedElkNode {
   const targetPorts = n.data.targetHandles.map((t) => ({
     id: t.id,
     labels: [{ text: t.label }],

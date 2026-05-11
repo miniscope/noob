@@ -1,8 +1,9 @@
-import type { TubeSpecification } from "../types.ts";
+import type { NodeUnion, TubeSpecification } from "../types.ts";
 import {
   Background,
   ConnectionMode,
   Controls,
+  type Edge,
   ReactFlow,
   useEdgesState,
   useNodesState,
@@ -26,8 +27,8 @@ const nodeTypes = {
  * Live viewer that refreshes a tube definition from a websocket
  */
 export default function View(props: ViewProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<NodeUnion>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   useEffect(() => {
     const socket = new WebSocket(`/spec/${props.tube_id}`);
