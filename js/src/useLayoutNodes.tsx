@@ -2,9 +2,13 @@
 
 import { useEffect } from "react";
 import ELK from "elkjs/lib/elk.bundled.js";
-import { type Edge, useNodesInitialized, useReactFlow } from "@xyflow/react";
+import {
+  type Edge,
+  useNodesInitialized,
+  useReactFlow,
+} from "@xyflow/react";
 
-import { type NodeUnion } from "./types";
+import type { NodeUnion } from "./types";
 
 import type {
   ElkNode as OElkNode,
@@ -29,6 +33,7 @@ const layoutOptions = {
   "elk.nodeLabels.placement": "INSIDE H_CENTER V_CENTER",
   "elk.nodeSize.options": "COMPUTE_PADDING",
   "elk.portConstraints": "FIXED_SIDE",
+  "elk.layered.considerModelOrder.crossingCounterPortInfluence": "0.001",
   // "elk.nodeSize.minimum"
 };
 
@@ -55,15 +60,34 @@ export const getLayoutedNodes = async (
       targets: [e.targetHandle || e.target],
     })),
   };
+
   const layoutedGraph = await elk.layout(graph, {
     layoutOptions: layoutOptions,
   });
   const flatChildren = flattenChildren(layoutedGraph);
+
   return nodes.map<NodeUnion>((node) => {
-    const layoutedNode = flatChildren?.find((lgNode) => lgNode.id === node.id);
+    const layoutedNode = flatChildren.find((lgNode) => lgNode.id === node.id);
+
+    // reorder ports by y position
+    if (layoutedNode?.ports === undefined) {
+      // eslint-disable-next-line no-console
+      console.error("Node had no ports!", layoutedNode);
+    } else {
+      const portY = Object.fromEntries(
+        layoutedNode.ports.map((port) => [port.id, port.y || 0]),
+      );
+      node.data.sourceHandles.sort(
+        (a, b) => (portY[a.id] || 0) - (portY[b.id] || 0),
+      );
+      node.data.targetHandles.sort(
+        (a, b) => (portY[a.id] || 0) - (portY[b.id] || 0),
+      );
+    }
 
     return {
       ...node,
+      data: { ...node.data },
       position: {
         x: layoutedNode?.x ?? 0,
         y: layoutedNode?.y ?? 0,
@@ -98,11 +122,11 @@ export default function useLayoutNodes() {
 }
 
 function nodeToElk(n: NodeUnion, nodes: NodeUnion[]): PropertiedElkNode {
-  const targetPorts = n.data.targetHandles.map((t) => ({
+  const targetPorts = n.data.targetHandles.map<OElkPort>((t) => ({
     id: t.id,
     labels: [{ text: t.label }],
     width: 7 * t.label.length,
-    properties: {
+    layoutOptions: {
       side: "WEST",
     },
   }));
@@ -111,7 +135,7 @@ function nodeToElk(n: NodeUnion, nodes: NodeUnion[]): PropertiedElkNode {
     id: s.id,
     labels: [{ text: s.label }],
     width: 7 * s.label.length,
-    properties: {
+    layoutOptions: {
       side: "EAST",
     },
   }));
