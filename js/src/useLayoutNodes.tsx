@@ -2,11 +2,7 @@
 
 import { useEffect } from "react";
 import ELK from "elkjs/lib/elk.bundled.js";
-import {
-  type Edge,
-  useNodesInitialized,
-  useReactFlow,
-} from "@xyflow/react";
+import { type Edge, useNodesInitialized, useReactFlow } from "@xyflow/react";
 
 import type { NodeUnion } from "./types";
 

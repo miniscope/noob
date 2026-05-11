@@ -63,6 +63,7 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
     const signal = slotsig[slot];
     const signalParts = signal.split(".");
     let targetNode, targetHandle, sourceNode, sourceHandle;
+    let edgeType = "default";
     if (typeof prefix !== "string") {
       // Not in a nested tube! handle normally at top level
       sourceNode = signalParts[0];
@@ -79,6 +80,7 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
         // the input is also a slot, not a signal in this case
         sourceNode = prefix;
         sourceHandle = `${prefix}.slots.${signalParts[1]}`;
+        edgeType = "inputEdge";
       } else {
         // Just normal nested depends
         sourceNode = `${prefix}.${signalParts[0]}`;
@@ -89,6 +91,7 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
         // similarly, return values are on the container, and they are signals
         targetNode = prefix;
         targetHandle = `${prefix}.signals.${slot}`;
+        edgeType = "returnEdge";
       } else {
         targetNode = `${prefix}.${node.id}`;
         targetHandle = `${prefix}.${node.id}.slots.${slot}`;
@@ -100,6 +103,7 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
       sourceHandle,
       target: targetNode,
       targetHandle,
+      type: edgeType,
     };
   });
 }

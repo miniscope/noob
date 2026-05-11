@@ -12,6 +12,7 @@ import { useEffect } from "react";
 import { tubeToFlow } from "../tube.tsx";
 import useLayoutNodes from "../useLayoutNodes.tsx";
 import ElkNode from "../node.tsx";
+import { InputEdge, ReturnEdge } from "../edge.tsx";
 
 interface ViewProps {
   tube_id: string;
@@ -21,6 +22,11 @@ interface ViewProps {
 const nodeTypes = {
   elk: ElkNode,
   group: ElkNode,
+};
+
+const edgeTypes = {
+  inputEdge: InputEdge,
+  returnEdge: ReturnEdge,
 };
 
 /**
@@ -48,6 +54,7 @@ export default function View(props: ViewProps) {
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       colorMode={props.color}
