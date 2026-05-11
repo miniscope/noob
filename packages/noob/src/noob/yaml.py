@@ -150,23 +150,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             this method does not yet validate that the config matches the model loading it
 
         """
-        globs = [src.rglob("*.y*ml") for src in cls.config_sources()]
-
-        for config_file in chain(*globs):
-            try:
-                file_id = yaml_peek("noob_id", config_file)
-            except KeyError:
-                continue
-
-            if file_id == id:
-                from noob.logging import init_logger
-
-                init_logger("config").debug(
-                    "Model for %s found at %s", cls._model_name(), config_file
-                )
-                return cls.from_yaml(config_file)
-
-        raise KeyError(f"No config with id {id} found in {cls.config_sources()}")
+        return cls.from_yaml(cls.path_from_id(id))
 
     @classmethod
     def from_any(cls: type[Self], source: ConfigSource | Self) -> Self:
@@ -205,6 +189,25 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             f"Instance of config model {cls.__name__} could not be instantiated from "
             f"{source} - id or file not found, or type not supported"
         )
+
+    @classmethod
+    def path_from_id(cls, id: ConfigID) -> Path:
+        globs = [src.rglob("*.y*ml") for src in cls.config_sources()]
+        for config_file in chain(*globs):
+            try:
+                file_id = yaml_peek("noob_id", config_file)
+            except KeyError:
+                continue
+
+            if file_id == id:
+                from noob.logging import init_logger
+
+                init_logger("config").debug(
+                    "Model fo r%s found at %s", cls._model_name(), config_file
+                )
+                return config_file
+
+        raise KeyError(f"No config with id {id} found in {cls.config_sources()}")
 
     @field_validator("noob_model", mode="before")
     @classmethod

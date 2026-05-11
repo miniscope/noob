@@ -7,6 +7,7 @@ except ImportError as e:
 
 
 from noob.cli.run import run
+from noob.cli.view import view
 
 
 @click.group("noob")
@@ -17,3 +18,4 @@ def main() -> None:
 
 
 main.add_command(run)
+main.add_command(view)

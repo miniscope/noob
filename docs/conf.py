@@ -73,7 +73,7 @@ add_module_names = False
 
 # autodoc-pydantic
 autodoc_pydantic_model_show_json_error_strategy = "coerce"
-autodoc_pydantic_model_show_json = True
+autodoc_pydantic_model_show_json = False
 
 # napoleon
 napoleon_google_docstring = True
