@@ -15,7 +15,7 @@ input:
     scope: process
     type: int
 nodes:
-  ae:
+  a:
     type: noob.testing.count_source
     params:
       start: input.parent_start
