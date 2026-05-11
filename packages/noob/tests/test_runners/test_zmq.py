@@ -44,7 +44,7 @@ def test_message_roundtrip():
             node_id=node.spec.id,
             status=NodeStatus.ready,
             outbox="ipc:///abc/123",
-            signals=[s.name for s in node.signals],
+            signals=list(node.signals),
             slots=[s for s in node.slots],
         ),
     )

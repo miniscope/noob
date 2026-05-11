@@ -71,13 +71,13 @@ class Signal(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
-    def from_callable(cls, func: Callable) -> list["Signal"]:
-        signals = []
+    def from_callable(cls, func: Callable) -> dict[str, "Signal"]:
+        signals = {}
         return_annotation = inspect.signature(func).return_annotation
         for name, type_ in cls._collect_signal_names(return_annotation):
-            signals.append(Signal(name=name, type_=type_))
+            signals[name] = Signal(name=name, type_=type_)
         if not signals:
-            signals = [Signal(name="value", type_=Any)]
+            signals["value"] = Signal(name="value", type_=Any)
         return signals
 
     @classmethod
@@ -196,7 +196,7 @@ class Node(BaseModel):
     * Function nodes are considered stateless
     """
 
-    _signals: list[Signal] | None = None
+    _signals: dict[str, Signal] | None = None
     _slots: dict[str, Slot] | None = None
     _gen: Generator | None = None
     _edges: list[Edge] | None = None
@@ -297,7 +297,7 @@ class Node(BaseModel):
             )
 
     @property
-    def signals(self) -> list[Signal]:
+    def signals(self) -> dict[str, Signal]:
         """
         Cached instance-level accessor for signals.
 
@@ -308,7 +308,7 @@ class Node(BaseModel):
         return self._signals
 
     @classmethod
-    def get_signals(cls, spec: NodeSpecification | None = None) -> list[Signal]:
+    def get_signals(cls, spec: NodeSpecification | None = None) -> dict[str, Signal]:
         """
         Public class method for computing signals from a node class and a specification.
 
@@ -493,7 +493,7 @@ class WrapClassNode(Node):
         self.instance = None
 
     @classmethod
-    def get_signals(cls, spec: NodeSpecification | None = None) -> list[Signal]:
+    def get_signals(cls, spec: NodeSpecification | None = None) -> dict[str, Signal]:
         if spec is None:
             raise ValueError("Must pass a specification to get signals for wrapped nodes")
         wrapped_cls = resolve_python_identifier(spec.type_)
@@ -570,7 +570,7 @@ class WrapFuncNode(Node):
         return value
 
     @classmethod
-    def get_signals(cls, spec: NodeSpecification | None = None) -> list[Signal]:
+    def get_signals(cls, spec: NodeSpecification | None = None) -> dict[str, Signal]:
         if spec is None:
             raise ValueError("Must pass a specification to get signals for wrapped nodes")
         fn = resolve_python_identifier(spec.type_)
