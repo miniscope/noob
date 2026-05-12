@@ -175,7 +175,7 @@ class NodeSpecification(BaseModel):
             seen.add(signal)
         return val
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def nodeinfo(self) -> NodeInfo:
         """Information about the node that this spec is for."""
