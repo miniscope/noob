@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import inspect
-from typing import Annotated, TypeAlias, TypedDict
+import sys
+from typing import Annotated, TypeAlias
 
 from annotated_types import Len
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
@@ -10,6 +11,11 @@ from noob.edge import Signal, Slot
 from noob.types import AbsoluteIdentifier, DependencyIdentifier, PythonIdentifier
 from noob.utils import resolve_python_identifier
 from noob.yaml import id_optional_json_schema
+
+if sys.version_info < (3, 12):
+    from typing_extensions import TypedDict
+else:
+    from typing import TypedDict
 
 _DependsBasic: TypeAlias = Annotated[
     dict[PythonIdentifier, DependencyIdentifier], Len(min_length=1, max_length=1)
