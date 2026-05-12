@@ -20,9 +20,10 @@ from pydantic_core import CoreSchema
 from ruamel.yaml import CommentedMap
 
 from noob.asset import AssetSpecification
+from noob.edge import Edge
 from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope, InputSpecification
-from noob.node import Edge, Node, NodeInfo, NodeSpecification, Return
+from noob.node import Node, NodeInfo, NodeSpecification, Return
 from noob.scheduler import Scheduler
 from noob.state import State
 from noob.types import ConfigSource, NodeSignal, PythonIdentifier
@@ -644,7 +645,12 @@ def _dump_spec(spec: TubeSpecification | Mapping) -> dict:
     if not isinstance(spec, TubeSpecification):
         return dict(spec)
     # dump spec while merging
-    data = spec.model_dump(exclude_unset=True, exclude_defaults=True, by_alias=True)
+    data = spec.model_dump(
+        exclude_unset=True,
+        exclude_defaults=True,
+        by_alias=True,
+        exclude={"nodes": {"__all__": {"nodeinfo"}}},
+    )
     # materialized node specs have `id` fields filled in.
     # treat the keys in the dict as decisive
     for node in data["nodes"].values():

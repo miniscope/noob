@@ -20,6 +20,7 @@ from pydantic import ValidationError
 from noob import init_logger
 from noob.asset import AssetScope, AssetSpecification
 from noob.config import config
+from noob.edge import Edge, Signal
 from noob.event import Event, MetaEvent
 from noob.exceptions import AlreadyDoneError, EpochCompletedError
 from noob.input import InputCollection
@@ -41,7 +42,7 @@ from noob.network.message import (
     StatusMsg,
     StopMsg,
 )
-from noob.node import Edge, Node, NodeSpecification, Signal
+from noob.node import Node, NodeSpecification
 from noob.scheduler import Scheduler
 from noob.state import State
 from noob.store import EventStore

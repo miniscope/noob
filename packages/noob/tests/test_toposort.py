@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from noob.node import Edge
+from noob.edge import Edge
 from noob.toposort import TopoSorter
 from noob.types import NodeSignal
 

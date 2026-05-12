@@ -1,5 +1,8 @@
 import type { TubeSpecification } from "../../src/types";
 
+// placeholder value, not used in tests yet
+const nodeinfo = { node_id: "", type: "", signals: {}, slots: {} };
+
 export const recursiveTube: TubeSpecification = {
   noob_id: "testing-recursive-parent",
   noob_model: "noob.tube.TubeSpecification",
@@ -15,6 +18,7 @@ export const recursiveTube: TubeSpecification = {
       type: "noob.testing.count_source",
       id: "a",
       params: { start: "input.parent_start" },
+      nodeinfo,
     },
     b: {
       type: "tube",
@@ -23,6 +27,7 @@ export const recursiveTube: TubeSpecification = {
         { child_multiply_inner: "a.index" },
         { child_multiply_input: "input.child_multiply" },
       ],
+      nodeinfo,
       params: {
         tube: {
           noob_id: "testing-recursive-child",
@@ -46,6 +51,7 @@ export const recursiveTube: TubeSpecification = {
               type: "noob.testing.count_source",
               id: "a",
               params: { start: "input.child_start" },
+              nodeinfo,
             },
             b: {
               type: "noob.testing.multiply",
@@ -54,6 +60,7 @@ export const recursiveTube: TubeSpecification = {
                 { left: "a.index" },
                 { right: "input.child_multiply_inner" },
               ],
+              nodeinfo,
             },
             c: {
               type: "noob.testing.multiply",
@@ -62,8 +69,9 @@ export const recursiveTube: TubeSpecification = {
                 { left: "b.value" },
                 { right: "input.child_multiply_input" },
               ],
+              nodeinfo,
             },
-            d: { type: "return", id: "d", depends: "c.value" },
+            d: { type: "return", id: "d", depends: "c.value", nodeinfo },
           },
         },
       },
@@ -72,6 +80,7 @@ export const recursiveTube: TubeSpecification = {
       type: "noob.testing.multiply",
       id: "c",
       depends: [{ left: "b.value" }, { right: "input.parent_multiply" }],
+      nodeinfo,
     },
     d: {
       type: "return",
@@ -81,6 +90,7 @@ export const recursiveTube: TubeSpecification = {
         { child: "b.value" },
         { parent: "c.value" },
       ],
+      nodeinfo,
     },
   },
 };

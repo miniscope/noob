@@ -1,6 +1,7 @@
 from typing import Any
 
-from noob.node import NodeSpecification, Signal, Slot
+from noob.edge import Signal, Slot
+from noob.node import NodeSpecification
 
 
 def test_nodeinfo():

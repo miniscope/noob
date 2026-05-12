@@ -3,8 +3,9 @@ from collections.abc import Sequence
 from operator import attrgetter
 from typing import Any, TypeAlias
 
+from noob.edge import Edge
 from noob.exceptions import AlreadyDoneError, NotAddedError
-from noob.node import Edge, NodeSpecification
+from noob.node import NodeSpecification
 from noob.types import NodeID, NodeSignal
 
 GraphItem: TypeAlias = NodeID | NodeSignal

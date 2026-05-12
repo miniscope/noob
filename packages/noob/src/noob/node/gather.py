@@ -6,8 +6,8 @@ from typing import Any, Generic, TypeVar, cast
 
 from pydantic import PrivateAttr
 
+from noob.edge import Slot
 from noob.event import Event, MetaSignal
-from noob.node import Slot
 from noob.node.base import Node
 from noob.node.spec import NodeSpecification
 from noob.types import Epoch

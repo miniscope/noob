@@ -5,9 +5,9 @@ from queue import Empty
 import pytest
 
 from noob import NodeSpecification, SynchronousRunner, Tube
+from noob.edge import Edge
 from noob.event import Event, MetaEventType
 from noob.exceptions import EpochCompletedError
-from noob.node import Edge
 from noob.scheduler import Scheduler
 from noob.toposort import TopoSorter
 from noob.types import Epoch

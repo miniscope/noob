@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import inspect
-from functools import cached_property
-from typing import TYPE_CHECKING, Annotated, TypeAlias, TypedDict
+from typing import Annotated, TypeAlias, TypedDict
 
 from annotated_types import Len
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
+from noob.edge import Signal, Slot
 from noob.types import AbsoluteIdentifier, DependencyIdentifier, PythonIdentifier
 from noob.utils import resolve_python_identifier
 from noob.yaml import id_optional_json_schema
-
-if TYPE_CHECKING:
-    from noob.node.base import Signal, Slot
 
 _DependsBasic: TypeAlias = Annotated[
     dict[PythonIdentifier, DependencyIdentifier], Len(min_length=1, max_length=1)
@@ -92,6 +89,27 @@ Examples:
 """
 
 
+class NodeInfo(TypedDict):
+    """
+    Metadata about the completed spec given the combination of a node spec and a node class.
+
+    The spec if purely static, the node class is *mostly* static,
+    but some important properties - notably signals and slots -
+    can be dynamic: i.e. the signals or slots of the node depend on the spec.
+
+    This metadata is primarily used in visualization or inspection of tubes, rather than at runtime
+    """
+
+    node_id: str
+    """Node ID whose spec this NodeInfo was computed from"""
+    type: str
+    """fully-qualified module.object name for the node type"""
+    signals: dict[str, Signal]
+    """Signals computed from the spec and node class"""
+    slots: dict[str, Slot]
+    """Slots computed from the spec and node class"""
+
+
 class NodeSpecification(BaseModel):
     """
     Specification for a single processing node within a tube .yaml file.
@@ -151,7 +169,8 @@ class NodeSpecification(BaseModel):
             seen.add(signal)
         return val
 
-    @cached_property
+    @computed_field
+    @property
     def nodeinfo(self) -> NodeInfo:
         """Information about the node that this spec is for."""
         from noob.node.base import Node, WrapClassNode, WrapFuncNode
@@ -170,24 +189,3 @@ class NodeSpecification(BaseModel):
         )
 
     __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)  # type: ignore[var-annotated]
-
-
-class NodeInfo(TypedDict):
-    """
-    Metadata about the completed spec given the combination of a node spec and a node class.
-
-    The spec if purely static, the node class is *mostly* static,
-    but some important properties - notably signals and slots -
-    can be dynamic: i.e. the signals or slots of the node depend on the spec.
-
-    This metadata is primarily used in visualization or inspection of tubes, rather than at runtime
-    """
-
-    node_id: str
-    """Node ID whose spec this NodeInfo was computed from"""
-    type: str
-    """fully-qualified module.object name for the node type"""
-    signals: dict[str, Signal]
-    """Signals computed from the spec and node class"""
-    slots: dict[str, Slot]
-    """Slots computed from the spec and node class"""

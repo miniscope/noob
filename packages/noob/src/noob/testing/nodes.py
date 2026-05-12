@@ -12,8 +12,9 @@ from faker import Faker
 from pydantic import Field
 
 from noob import Name, NodeSpecification, process_method
+from noob.edge import Signal, Slot
 from noob.event import MetaSignal
-from noob.node import Node, Signal, Slot
+from noob.node import Node
 from noob.types import Epoch, EventMap
 
 

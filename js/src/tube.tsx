@@ -20,7 +20,30 @@ import type { Edge } from "@xyflow/react";
  */
 export function tubeToFlow(tube: TubeSpecification): [Edge[], NodeUnion[]] {
   const edges = getEdges(tube.nodes);
-  const nodes = getNodes(tube.nodes, edges);
+  let nodes = getNodes(tube.nodes);
+  // TODO: Dedicated representation of inputs
+  if (tube.input) {
+    nodes = [
+      ...nodes,
+      {
+        id: "input",
+        position: { x: 0, y: 0 },
+        type: "elk",
+        data: {
+          label: "input",
+          targetHandles: [],
+          sourceHandles: Object.values(tube.input).map((i) => {
+            return {
+              id: `input.signals.${i.id}`,
+              label: i.id,
+              key: `input.signals.${i.id}`,
+              required: true,
+            };
+          }),
+        },
+      },
+    ];
+  }
   return [edges, nodes];
 }
 
@@ -109,12 +132,8 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
 }
 
 // Get all nodes from a tube spec
-function getNodes(nodes: Record<string, NoobNode>, edges: Edge[]): NodeUnion[] {
-  const has_input = edges.some((e) => e.source === "input");
-  if (has_input) {
-    nodes = { ...nodes, input: { id: "input", type: "input" } };
-  }
-  return Object.values(nodes).flatMap((node) => getNode(node, edges));
+function getNodes(nodes: Record<string, NoobNode>): NodeUnion[] {
+  return Object.values(nodes).flatMap((node) => getNode(node));
 }
 
 /**
@@ -123,27 +142,23 @@ function getNodes(nodes: Record<string, NoobNode>, edges: Edge[]): NodeUnion[] {
  *
  * See: https://reactflow.dev/examples/grouping/sub-flows
  */
-function getNode(node: NoobNode, edges: Edge[], prefix?: string): NodeUnion[] {
+function getNode(node: NoobNode, prefix?: string): NodeUnion[] {
   // Create handle description for node and then filter to unique entries
   if (isTubeNode(node)) {
-    return getTubeNode(node, edges);
+    return getTubeNode(node);
   } else {
-    return getGenericNode(node, edges, prefix);
+    return getGenericNode(node, prefix);
   }
 }
 
-function getGenericNode(
-  node: NoobNode,
-  edges: Edge[],
-  prefix?: string,
-): ElkNodeType[] {
+function getGenericNode(node: NoobNode, prefix?: string): ElkNodeType[] {
   const id = prefix ? `${prefix}.${node.id}` : node.id;
   return [
     {
       id: id,
       data: {
         label: node.id,
-        ...getNodeHandles(node.id, edges, prefix),
+        ...getNodeHandles(node, prefix),
       },
       position: { x: 0, y: 0 },
       type: "elk",
@@ -157,7 +172,7 @@ function getGenericNode(
  *
  * Renders inputs and the return node as handles on the border of an outer grouping node.
  */
-function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
+function getTubeNode(node: TubeNode): NodeUnion[] {
   // Make the outer grouping node
   const innerTube = node.params.tube;
   const targetHandles = innerTube.input
@@ -168,6 +183,7 @@ function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
             id: `${node.id}.slots.${input.id}`,
             label: input.id,
             key: `${node.id}.slots.${input.id}`,
+            required: true,
           };
         })
     : [];
@@ -186,6 +202,7 @@ function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
           id: `${node.id}.signals.${slot}`,
           label: slot,
           key: `${node.id}.signals.${slot}`,
+          required: false, // return node slots are never really required, special case.
         };
       })
     : [];
@@ -205,7 +222,7 @@ function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
   // Then the children that go within it
   let childNodes = Object.values(innerTube.nodes)
     .filter((child) => child.type !== "return")
-    .flatMap<NodeUnion>((child) => getNode(child, edges, node.id));
+    .flatMap<NodeUnion>((child) => getNode(child, node.id));
   childNodes = childNodes.map((child) => {
     return {
       ...child,
@@ -218,40 +235,29 @@ function getTubeNode(node: TubeNode, edges: Edge[]): NodeUnion[] {
 
 /**
  * Infer node handles from edges
- * FIXME - read the actual node's signals and slots rather than relying on the spec.
  */
-function getNodeHandles(
-  node_id: string,
-  edges: Edge[],
-  prefix?: string,
-): Handles {
+function getNodeHandles(node: NoobNode, prefix?: string): Handles {
   // righthand signal handles
-  node_id = prefix ? `${prefix}.${node_id}` : node_id;
-  const sourceHandles = edges
-    .filter((e) => e.source === node_id && e.sourceHandle !== undefined)
-    .map((e) => {
-      const label = (e.sourceHandle as string).split(".").at(-1) as string;
-      const id = e.sourceHandle as string;
-      return {
-        id: id,
-        label: label,
-        key: id,
-      };
-    })
-    .filter((e, index, self) => self.map((x) => x.id).indexOf(e.id) === index);
+  const node_id = prefix ? `${prefix}.${node.id}` : node.id;
+  const sourceHandles = Object.values(node.nodeinfo.signals).map((sig) => {
+    const id = `${node_id}.signals.${sig.name}`;
+    return {
+      id: id,
+      label: sig.name,
+      key: id,
+      required: true, // signals don't really have a requiredness...
+    };
+  });
   // lefthand slot handles
-  const targetHandles = edges
-    .filter((e) => e.target === node_id && e.targetHandle !== undefined)
-    .map((e) => {
-      const label = (e.targetHandle as string).split(".").at(-1) as string;
-      const id = e.targetHandle as string;
-      return {
-        id: id,
-        label: label,
-        key: id,
-      };
-    })
-    .filter((e, index, self) => self.map((x) => x.id).indexOf(e.id) === index);
+  const targetHandles = Object.values(node.nodeinfo.slots).map((slot) => {
+    const id = `${node_id}.slots.${slot.name}`;
+    return {
+      id: id,
+      label: slot.name,
+      key: id,
+      required: slot.required,
+    };
+  });
   return { sourceHandles, targetHandles };
 }
 

@@ -7,9 +7,9 @@ from typing import Self, TypeAlias
 from pydantic import BaseModel, Field
 
 from noob.asset import Asset, AssetScope, AssetSpecification
+from noob.edge import Edge
 from noob.event import Event, MetaEvent, MetaSignal
 from noob.input import InputCollection
-from noob.node.base import Edge
 from noob.types import NodeID, PythonIdentifier
 
 if sys.version_info < (3, 12):
