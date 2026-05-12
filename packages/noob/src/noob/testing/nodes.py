@@ -310,10 +310,14 @@ class DynamicSignals(Node):
 
     @classmethod
     def get_signals(cls, spec: NodeSpecification | None = None) -> dict[str, Signal]:
+        if not spec or not spec.params:
+            return {}
         return {sig: Signal(name=sig, annotation=Any) for sig in spec.params.get("signals_", [])}
 
     @classmethod
     def get_slots(cls, spec: NodeSpecification | None = None) -> dict[str, Slot]:
+        if not spec or not spec.params:
+            return {}
         return {
             sig: Slot(name=sig, annotation=Any, required=True)
             for sig in spec.params.get("slots_", [])
