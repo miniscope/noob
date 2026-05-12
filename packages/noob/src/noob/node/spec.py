@@ -131,7 +131,7 @@ class NodeSpecification(BaseModel):
     description: str | None = None
     """An optional description of the node"""
 
-    model_config = ConfigDict(extra="forbid", serialize_by_alias=True, frozen=True)
+    model_config = ConfigDict(extra="forbid", serialize_by_alias=True)
 
     @field_validator("depends", mode="after")
     @classmethod
