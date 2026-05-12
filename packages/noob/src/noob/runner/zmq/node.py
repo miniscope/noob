@@ -681,7 +681,7 @@ class NodeRunner(EventloopMixin):
                 value = list(combined.values())
             async with self._ready_condition:
                 events = self.store.add_value(
-                    {k: Signal(name=k, type_=None) for k in combined},
+                    {k: Signal(name=k, annotation=None) for k in combined},
                     value,
                     node_id="input",
                     epoch=msg.value["epoch"],

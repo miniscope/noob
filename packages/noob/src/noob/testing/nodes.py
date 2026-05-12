@@ -9,10 +9,11 @@ from typing import Annotated as A
 from typing import Any
 
 from faker import Faker
+from pydantic import Field
 
-from noob import Name, process_method
+from noob import Name, NodeSpecification, process_method
 from noob.event import MetaSignal
-from noob.node import Node
+from noob.node import Node, Signal, Slot
 from noob.types import Epoch, EventMap
 
 
@@ -296,3 +297,24 @@ def this_or_that(
     if the_other is not None:
         ret["the_other"] = the_other
     return ret
+
+
+class DynamicSignals(Node):
+    """Node whose signals and slots are dynamic"""
+
+    signals_: list[str] = Field(default_factory=list)
+    slots_: list[str] = Field(default_factory=list)
+
+    def process(self, **kwargs: Any) -> Any | None:
+        return tuple(v for v in kwargs.values())
+
+    @classmethod
+    def get_signals(cls, spec: NodeSpecification | None = None) -> dict[str, Signal]:
+        return {sig: Signal(name=sig, annotation=Any) for sig in spec.params.get("signals_", [])}
+
+    @classmethod
+    def get_slots(cls, spec: NodeSpecification | None = None) -> dict[str, Slot]:
+        return {
+            sig: Slot(name=sig, annotation=Any, required=True)
+            for sig in spec.params.get("slots_", [])
+        }

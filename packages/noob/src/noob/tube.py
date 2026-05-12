@@ -1,5 +1,6 @@
 from collections import defaultdict
 from collections.abc import Mapping
+from functools import cached_property
 from importlib import resources
 from itertools import permutations
 from typing import Self, cast
@@ -21,7 +22,7 @@ from ruamel.yaml import CommentedMap
 from noob.asset import AssetSpecification
 from noob.exceptions import InputMissingError
 from noob.input import InputCollection, InputScope, InputSpecification
-from noob.node import Edge, Node, NodeSpecification, Return
+from noob.node import Edge, Node, NodeInfo, NodeSpecification, Return
 from noob.scheduler import Scheduler
 from noob.state import State
 from noob.types import ConfigSource, NodeSignal, PythonIdentifier
@@ -170,6 +171,16 @@ class TubeSpecification(ConfigYAMLMixin):
                         node.params = {}
                     node.params["tube"] = TubeSpecification.from_any(node.params["tube"])
         return self
+
+    @cached_property
+    def nodeinfo(self) -> dict[str, NodeInfo]:
+        """
+        Nodeinfo for each node in the tube.
+        Even though NodeInfo typically doesn't vary between multiple instances of the same type,
+        we still create one per node because they *can*,
+        and making that configurable would be bloat compared to the ease of computing it.
+        """
+        return {node_id: spec.nodeinfo for node_id, spec in self.nodes.items()}
 
     @classmethod
     def _post_load_yaml(cls, config: CommentedMap) -> Mapping:

@@ -64,8 +64,8 @@ def test_store_handles_empty_sequences():
     store = EventStore()
     e = store.add_value(
         {
-            "something": Signal(name="something", type_=str),
-            "something_else": Signal(name="something_else", type_=str),
+            "something": Signal(name="something", annotation=str),
+            "something_else": Signal(name="something_else", annotation=str),
         },
         value=[[], []],
         node_id="a",
