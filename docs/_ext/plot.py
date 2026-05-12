@@ -41,7 +41,10 @@ class NoobTubePlot(SphinxDirective):
         section = nodes.container(ids=[f"tube-plot-{tube_id_esc}"], classes=["noob-tube-plot"])
         container += section
         container += ScriptNode(
-            SCRIPT_TEMPLATE.format(tube_id=tube_id_esc, tube_spec=spec.model_dump_json())
+            SCRIPT_TEMPLATE.format(
+                tube_id=tube_id_esc,
+                tube_spec=spec.model_dump_json(exclude={"nodes": {"__all__": {"nodeinfo"}}}),
+            )
         )
 
         return [container]
