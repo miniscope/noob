@@ -6,4 +6,8 @@ export default mergeConfig(PackageConfig, {
   build: {
     minify: true,
   },
+  mode: "production",
+  define: {
+    "process.env.NODE_ENV": '"production"',
+  },
 });
