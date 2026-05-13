@@ -52,4 +52,6 @@
   font-size: 0.8em;
   position: absolute;
   top: -50%;
+  color: var(--color-text-minor);
+  background: var(--color-background);
 }

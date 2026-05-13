@@ -1,9 +1,12 @@
 @import url("vars.css");
 @import url("xy-theme.css");
+@import url("fonts.css");
 
+@import url("base.css");
 @import url("layout.css");
 @import url("edge.css");
 @import url("handle.css");
 @import url("node.css");
+@import url("text.css");
 
 @import url("docs.css");

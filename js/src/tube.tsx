@@ -10,6 +10,7 @@ import type {
   Handles,
   NodeUnion,
   NoobNode,
+  TitleNode,
   TubeNode,
   TubeSpecification,
 } from "./types.ts";
@@ -21,6 +22,7 @@ import type { Edge } from "@xyflow/react";
 export function tubeToFlow(tube: TubeSpecification): [Edge[], NodeUnion[]] {
   const edges = getEdges(tube.nodes);
   let nodes = getNodes(tube.nodes);
+  nodes = [_titleNode(tube.noob_id, tube.description), ...nodes];
   // TODO: Dedicated representation of inputs
   if (tube.input && Object.keys(tube.input).length !== 0) {
     nodes = [
@@ -31,6 +33,7 @@ export function tubeToFlow(tube: TubeSpecification): [Edge[], NodeUnion[]] {
         type: "elk",
         data: {
           label: "input",
+          nodeType: "input",
           targetHandles: [],
           sourceHandles: Object.values(tube.input).map((i) => {
             return {
@@ -158,6 +161,7 @@ function getGenericNode(node: NoobNode, prefix?: string): ElkNodeType[] {
       id: id,
       data: {
         label: node.id,
+        nodeType: node.type,
         ...getNodeHandles(node, prefix),
       },
       position: { x: 0, y: 0 },
@@ -213,6 +217,7 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
     type: "group",
     data: {
       label: node.id,
+      nodeType: node.type,
       sourceHandles,
       targetHandles,
     },
@@ -264,6 +269,20 @@ function getNodeHandles(node: NoobNode, prefix?: string): Handles {
 
 function isTubeNode(node: NoobNode): node is TubeNode {
   return node.type === "tube";
+}
+
+function _titleNode(title: string, description: string): TitleNode {
+  return {
+    id: "__title__",
+    position: { x: 0, y: 0 },
+    data: {
+      label: title,
+      description: description,
+      sourceHandles: [],
+      targetHandles: [],
+    },
+    type: "title",
+  };
 }
 
 export const testExports = {

@@ -12,14 +12,16 @@ import type {
   ElkPort as OElkPort,
 } from "elkjs/lib/elk-api";
 
+const TITLE_SPACING = 10;
+
 // https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html
 // https://eclipse.dev/elk/reference/options/org-eclipse-elk-nodeSize-options.html
 // https://eclipse.dev/elk/blog/posts/2025/25-08-22-node-labels.html
 const layoutOptions = {
   "elk.algorithm": "layered",
   "elk.direction": "RIGHT",
-  "elk.layered.spacing.edgeNodeBetweenLayers": "20",
-  "elk.spacing.nodeNode": "50",
+  "elk.layered.spacing.edgeNodeBetweenLayers": "10",
+  "elk.spacing.nodeNode": "20",
   "elk.edgeRouting": "SPLINES",
   "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
   "elk.layered.nodePlacement.bk.edgeStraightening": "NONE",
@@ -62,6 +64,9 @@ export const getLayoutedNodes = async (
   });
   const flatChildren = flattenChildren(layoutedGraph);
 
+  const titleNode = nodes.filter((n) => n.type === "title")[0];
+  const titleHeight = titleNode?.measured?.height ?? 0;
+
   return nodes.map<NodeUnion>((node) => {
     const layoutedNode = flatChildren.find((lgNode) => lgNode.id === node.id);
 
@@ -81,18 +86,23 @@ export const getLayoutedNodes = async (
       );
     }
 
+    // shift everything by the title node
+    const x = layoutedNode?.x ?? 0;
+    const y =
+      (layoutedNode?.y ?? 0) +
+      (node.type === "title" || node.parentId !== undefined
+        ? 0
+        : titleHeight + TITLE_SPACING);
+
     return {
       ...node,
       data: { ...node.data },
-      position: {
-        x: layoutedNode?.x ?? 0,
-        y: layoutedNode?.y ?? 0,
-      },
+      position: { x, y },
       // the reactflow-generated widths/heights are better for display,
       // but the elk widths/heights are better for nested nodes for some reason.
       ...(node.type === "group" && {
-        width: layoutedNode?.width,
-        height: layoutedNode?.height,
+        width: (layoutedNode?.width ?? 0) + TITLE_SPACING,
+        height: (layoutedNode?.height ?? 0) + TITLE_SPACING,
       }),
     };
   });
@@ -142,12 +152,13 @@ function nodeToElk(n: NodeUnion, nodes: NodeUnion[]): PropertiedElkNode {
 
   return {
     id: n.id,
-    ...(n.width && { width: n.width }),
-    ...(n.height && { height: n.height }),
+    width: n?.measured?.width || 0,
+    height: n?.measured?.height || 0,
     labels: [
       {
         text: n.data.label,
-        ...(n.width && { width: n.width }),
+        width: n?.measured?.width || 0,
+        height: 60,
       },
     ],
     // we are also passing the id, so we can also handle edges without a sourceHandle or targetHandle option

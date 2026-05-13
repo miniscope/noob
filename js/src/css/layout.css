@@ -6,9 +6,12 @@
   left: 0;
 }
 
-#root,
-.react-flow {
+.react-flow__background {
   background: var(--color-background-gradient);
+}
+
+.react-flow__background-pattern.dots {
+  fill: var(--color-background-dots);
 }
 
 .loading {
@@ -18,10 +21,15 @@
 
   p {
     color: var(--color-text);
-    font-family:
-      "Gill Sans", "Gill Sans MT", Calibri, "Lucida Sans", "Noto Sans",
-      sans-serif;
+    font-family: var(--font-sans);
     font-size: 3em;
     margin: auto;
   }
+}
+
+.tube-title {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: 40%;
 }
