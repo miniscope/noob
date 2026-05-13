@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import inspect
 from collections.abc import Callable, Generator
 from types import GenericAlias, UnionType
 from typing import (  # type: ignore[attr-defined]
+    TYPE_CHECKING,
     Annotated,
     Any,
     _UnionGenericAlias,
@@ -14,6 +17,9 @@ from pydantic import BaseModel, ConfigDict
 from noob.introspection import is_optional, is_union
 from noob.types import JsonStringable
 
+if TYPE_CHECKING:
+    from noob.node.spec import NodeSpecification
+
 
 class Slot(BaseModel):
     name: str
@@ -21,18 +27,26 @@ class Slot(BaseModel):
     required: bool = True
 
     @classmethod
-    def from_callable(cls, func: Callable) -> dict[str, "Slot"]:
+    def from_callable(
+        cls, func: Callable, spec: NodeSpecification | None = None
+    ) -> dict[str, Slot]:
         slots = {}
         sig = inspect.signature(func)
 
         for i, (name, param) in enumerate(sig.parameters.items()):
             if i == 0 and name == "self":
                 continue
-            slots[name] = Slot(
-                name=name,
-                annotation=param.annotation,
-                required=not (is_optional(param.annotation) and param.default is None),
-            )
+            if param.kind == inspect.Parameter.VAR_KEYWORD and spec is not None and spec.depends:
+                # **kwargs - get slots from spec dependencies
+                for dep in spec.depends:
+                    name = next(iter(dep.keys()))
+                    slots[name] = Slot(name=name, annotation=param.annotation, required=False)
+            else:
+                slots[name] = Slot(
+                    name=name,
+                    annotation=param.annotation,
+                    required=not (is_optional(param.annotation) and param.default is None),
+                )
         return slots
 
 
@@ -44,7 +58,9 @@ class Signal(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
-    def from_callable(cls, func: Callable) -> dict[str, "Signal"]:
+    def from_callable(
+        cls, func: Callable, spec: NodeSpecification | None = None
+    ) -> dict[str, Signal]:
         signals = {}
         return_annotation = inspect.signature(func).return_annotation
         for name, type_ in cls._collect_signal_names(return_annotation):
