@@ -22,7 +22,7 @@ export function tubeToFlow(tube: TubeSpecification): [Edge[], NodeUnion[]] {
   const edges = getEdges(tube.nodes);
   let nodes = getNodes(tube.nodes);
   // TODO: Dedicated representation of inputs
-  if (tube.input) {
+  if (tube.input && Object.keys(tube.input).length !== 0) {
     nodes = [
       ...nodes,
       {
@@ -177,7 +177,6 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
   const innerTube = node.params.tube;
   const targetHandles = innerTube.input
     ? Object.values(innerTube.input)
-        .filter((input) => input.scope === "process")
         .map<Handle>((input) => {
           return {
             id: `${node.id}.slots.${input.id}`,
@@ -191,12 +190,14 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
   const returnNode = Object.values(innerTube.nodes).filter(
     (node) => node.type === "return",
   )[0];
-  returnNode.depends =
-    typeof returnNode?.depends === "string"
-      ? [{ value: returnNode.depends }]
-      : returnNode?.depends;
-  const sourceHandles = returnNode?.depends
-    ? Array.from(returnNode.depends).map<Handle>((slotsig) => {
+  let sourceHandles: Handle[] = [];
+  if (returnNode !== undefined) {
+    returnNode.depends =
+      typeof returnNode?.depends === "string"
+        ? [{value: returnNode.depends}]
+        : returnNode?.depends;
+    sourceHandles = returnNode?.depends
+      ? Array.from(returnNode.depends).map<Handle>((slotsig) => {
         const slot = Object.keys(slotsig)[0];
         return {
           id: `${node.id}.signals.${slot}`,
@@ -205,7 +206,8 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
           required: false, // return node slots are never really required, special case.
         };
       })
-    : [];
+      : [];
+  }
 
   const groupNode = {
     id: node.id,
