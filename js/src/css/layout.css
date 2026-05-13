@@ -5,3 +5,23 @@
   bottom: 0;
   left: 0;
 }
+
+#root,
+.react-flow {
+  background: var(--color-background-gradient);
+}
+
+.loading {
+  position: relative;
+  width: 100%;
+  height: 100%;
+
+  p {
+    color: var(--color-text);
+    font-family:
+      "Gill Sans", "Gill Sans MT", Calibri, "Lucida Sans", "Noto Sans",
+      sans-serif;
+    font-size: 3em;
+    margin: auto;
+  }
+}

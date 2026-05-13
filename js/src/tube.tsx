@@ -176,15 +176,14 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
   // Make the outer grouping node
   const innerTube = node.params.tube;
   const targetHandles = innerTube.input
-    ? Object.values(innerTube.input)
-        .map<Handle>((input) => {
-          return {
-            id: `${node.id}.slots.${input.id}`,
-            label: input.id,
-            key: `${node.id}.slots.${input.id}`,
-            required: true,
-          };
-        })
+    ? Object.values(innerTube.input).map<Handle>((input) => {
+        return {
+          id: `${node.id}.slots.${input.id}`,
+          label: input.id,
+          key: `${node.id}.slots.${input.id}`,
+          required: true,
+        };
+      })
     : [];
 
   const returnNode = Object.values(innerTube.nodes).filter(
@@ -194,18 +193,18 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
   if (returnNode !== undefined) {
     returnNode.depends =
       typeof returnNode?.depends === "string"
-        ? [{value: returnNode.depends}]
+        ? [{ value: returnNode.depends }]
         : returnNode?.depends;
     sourceHandles = returnNode?.depends
       ? Array.from(returnNode.depends).map<Handle>((slotsig) => {
-        const slot = Object.keys(slotsig)[0];
-        return {
-          id: `${node.id}.signals.${slot}`,
-          label: slot,
-          key: `${node.id}.signals.${slot}`,
-          required: false, // return node slots are never really required, special case.
-        };
-      })
+          const slot = Object.keys(slotsig)[0];
+          return {
+            id: `${node.id}.signals.${slot}`,
+            label: slot,
+            key: `${node.id}.signals.${slot}`,
+            required: false, // return node slots are never really required, special case.
+          };
+        })
       : [];
   }
 
@@ -230,7 +229,7 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
       ...child,
       extent: "parent",
       parentId: node.id,
-    } as NodeUnion;
+    };
   });
   return [groupNode, ...childNodes];
 }

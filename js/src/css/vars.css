@@ -1,7 +1,9 @@
 :root {
   --color-primary: #ff0073;
-  --color-background: #fefefe;
+  --color-background: #141414;
+  --color-background-gradient: linear-gradient(315deg, #141414, #1f1f1f);
   --color-hover-bg: #f6f6f6;
+  --color-text: #f6f6f6;
   --color-disabled: #76797e;
 }
 
@@ -12,6 +14,7 @@
   --xy-theme-hover: #c5c5c5;
   --xy-theme-edge-hover: black;
   --xy-theme-color-focus: #e8e8e8;
+  --xy-background-color: var(--color-background);
 
   /* Built-in Variables see https://reactflow.dev/learn/customization/theming */
   --xy-node-border-default: 1px solid #ededed;

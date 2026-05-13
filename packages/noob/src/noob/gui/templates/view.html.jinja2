@@ -3,13 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <title>noob viewer - {{ tube_id }}</title>
-    <script src="/static/js/noob-js.js"></script>
     <link rel="stylesheet" type="text/css" href="/static/css/noob-js.css">
+    <script type="module" src="/static/js/noob-js.js"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="loading">
+        <p>loadimg</p>
+      </div>
+    </div>
     <script>
-      initView("#root", "{{ tube_id }}");
+      window.addEventListener("load", () => initView("#root", "{{ tube_id }}"));
     </script>
   </body>
 </html>
