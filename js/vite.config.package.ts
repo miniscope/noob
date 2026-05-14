@@ -4,7 +4,9 @@ import PackageConfig from "./vite.config.package.dev.ts";
 
 export default mergeConfig(PackageConfig, {
   build: {
+    emptyOutDir: true,
     minify: true,
+    sourcemap: false,
   },
   mode: "production",
   define: {

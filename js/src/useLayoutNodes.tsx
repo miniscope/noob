@@ -32,7 +32,6 @@ const layoutOptions = {
   "elk.nodeSize.options": "COMPUTE_PADDING",
   "elk.portConstraints": "FIXED_SIDE",
   "elk.layered.considerModelOrder.crossingCounterPortInfluence": "0.001",
-  // "elk.nodeSize.minimum"
 };
 
 const elk = new ELK();
