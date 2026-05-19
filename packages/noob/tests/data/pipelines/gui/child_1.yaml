@@ -16,14 +16,19 @@ nodes:
   cycle:
     type: noob.testing.cycle
     params:
-      start: 0
-      stop: 6.28
-      step: 0.1
+      start: -100
+      stop: 100
+      step: 1
+  rescale:
+    type: nobes.core.rescale
+    params:
+      input_range: [-100, 100]
+      output_range: [-3.14, 3.14]
   rotate:
     type: nobes.video.rotate_hue
     depends:
       - frame: read.array
-      - rotate: cycle.value
+      - rotate: rescale.value
   display:
     type: nobes.video.display
     depends:

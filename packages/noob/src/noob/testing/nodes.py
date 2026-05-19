@@ -326,6 +326,6 @@ class DynamicSignals(Node):
         }
 
 
-def cycle(start: 0, stop: 100, step: 1) -> float:
+def cycle(start: int = 0, stop: int = 100, step: int = 1) -> Generator[float]:
     while True:
         yield from range(start, stop, step)

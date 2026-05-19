@@ -39,7 +39,13 @@ class Slot(BaseModel):
             if param.kind == inspect.Parameter.VAR_KEYWORD and spec is not None and spec.depends:
                 # **kwargs - get slots from spec dependencies
                 for dep in spec.depends:
+                    if isinstance(dep, str):
+                        # positional-only deps don't get attributed to kwargs
+                        continue
                     name = next(iter(dep.keys()))
+                    if name in slots:
+                        # already defined by the signature, don't override
+                        continue
                     slots[name] = Slot(name=name, annotation=param.annotation, required=False)
             else:
                 slots[name] = Slot(
