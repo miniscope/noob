@@ -7,7 +7,7 @@ import pytest
 from faker import Faker
 
 from noob import Name
-from noob.node.base import Signal
+from noob.edge import Signal
 
 
 def one_return(name: str) -> A[str, Name("hey")]:

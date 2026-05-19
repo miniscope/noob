@@ -1,7 +1,7 @@
 import { recursiveTube } from "./data/tubes";
 import { test, beforeAll, describe, expect } from "vitest";
 import { tubeToFlow, testExports } from "../src/tube";
-import type { TubeNode, NodeUnion } from "../src/types.ts";
+import type { TubeNode, NodeUnion, NoobNode } from "../src/types.ts";
 import type { Edge } from "@xyflow/react";
 
 const { getNodeEdges, getTubeNode, getEdges } = testExports;
@@ -15,7 +15,8 @@ beforeAll(() => {
   ) as TubeNode;
 });
 
-const baseNode = { id: "test", type: "module.function" };
+const nodeinfo = { node_id: "", type: "", signals: {}, slots: {} };
+const baseNode = { id: "test", type: "module.function", nodeinfo };
 
 describe("getNodeEdges", () => {
   test("handles string dependencies as value signals", () => {
@@ -54,7 +55,12 @@ describe("getNodeEdges", () => {
 
     test("unnests return targets with prefix", () => {
       const edges = getNodeEdges(
-        { id: "test", type: "return", depends: [{ slot: "b.something" }] },
+        {
+          id: "test",
+          type: "return",
+          depends: [{ slot: "b.something" }],
+          nodeinfo,
+        },
         "prefix",
       );
 
@@ -68,13 +74,13 @@ describe("getTubeNode", () => {
   let nodes: NodeUnion[];
 
   beforeAll(() => {
-    nodes = getTubeNode(tubeNode, recursiveEdges);
+    nodes = getTubeNode(tubeNode);
   });
 
   test("removes a return node", () => {
     const return_node = Object.values(tubeNode.params.tube.nodes).find(
       (n) => n.type === "return",
-    ) as NodeUnion;
+    ) as NoobNode;
 
     expect(return_node).toBeDefined();
     expect(nodes).length(4);
@@ -105,8 +111,18 @@ describe("getEdges", () => {
 
   test("differentiates same-named slots and signals", () => {
     const edges = getEdges({
-      a: { id: "a", type: "test.test", depends: [{ value: "z.value" }] },
-      b: { id: "b", type: "test.test", depends: [{ value: "a.value" }] },
+      a: {
+        id: "a",
+        type: "test.test",
+        depends: [{ value: "z.value" }],
+        nodeinfo,
+      },
+      b: {
+        id: "b",
+        type: "test.test",
+        depends: [{ value: "a.value" }],
+        nodeinfo,
+      },
     });
 
     expect(edges[0]).toHaveProperty("targetHandle", "a.slots.value");

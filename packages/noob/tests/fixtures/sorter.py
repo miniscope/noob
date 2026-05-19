@@ -1,6 +1,6 @@
 import pytest
 
-from noob.node import Edge
+from noob.edge import Edge
 
 
 @pytest.fixture()

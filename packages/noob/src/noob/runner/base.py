@@ -17,10 +17,11 @@ from typing import TYPE_CHECKING, Any, ParamSpec, Self, TypeVar, overload
 
 from noob import Tube, init_logger
 from noob.asset import AssetScope
+from noob.edge import Edge
 from noob.event import Event, MetaEvent
 from noob.exceptions import InputMissingError
 from noob.input import InputScope
-from noob.node import Edge, Node, Return
+from noob.node import Node, Return
 from noob.store import EventStore
 from noob.types import Epoch, PythonIdentifier, ReturnNodeType, RunnerContext
 from noob.utils import iscoroutinefunction_partial

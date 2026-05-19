@@ -7,8 +7,9 @@ from typing import Any
 
 from pydantic import PrivateAttr
 
+from noob.edge import Slot
 from noob.event import MetaSignal
-from noob.node.base import Node, Slot
+from noob.node.base import Node
 from noob.node.spec import NodeSpecification
 from noob.types import Epoch, EventMap
 

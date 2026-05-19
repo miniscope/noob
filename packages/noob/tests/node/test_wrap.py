@@ -3,8 +3,9 @@ from typing import Any
 
 import pytest
 
+from noob.edge import Signal
 from noob.node import NodeSpecification
-from noob.node.base import Node, Signal
+from noob.node.base import Node
 
 
 @pytest.mark.parametrize(

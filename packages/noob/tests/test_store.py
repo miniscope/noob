@@ -2,8 +2,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from noob.edge import Signal
 from noob.event import Event
-from noob.node import Signal
 from noob.store import EventStore
 from noob.types import Epoch
 

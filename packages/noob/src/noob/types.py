@@ -164,6 +164,12 @@ Picklable = Annotated[
     BeforeValidator(_from_jsonable_pickle),
     WrapSerializer(_to_jsonable_pickle, when_used="json"),
 ]
+TStr = TypeVar("TStr")
+JsonStringable = Annotated[
+    TStr,
+    PlainSerializer(str, when_used="json"),
+]
+"""Generic type that casts the inner type to a string when serializing as JSON"""
 
 # type aliases, mostly for documentation's sake
 NodeID: TypeAlias = Annotated[str, AfterValidator(_is_identifier), AfterValidator(_not_reserved)]

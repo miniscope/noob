@@ -10,10 +10,11 @@ from itertools import count
 from typing import Self
 from uuid import uuid4
 
+from noob.edge import Edge
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
 from noob.exceptions import AlreadyDoneError, EpochCompletedError, EpochExistsError, NotAddedError
 from noob.logging import init_logger
-from noob.node import Edge, NodeSpecification
+from noob.node import NodeSpecification
 from noob.toposort import GraphItem, NodeSignal, TopoSorter
 from noob.types import Epoch, NodeID, SignalName
 

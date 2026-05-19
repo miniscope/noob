@@ -7,8 +7,8 @@ from typing import Any, ClassVar, overload
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from noob.edge import Edge
 from noob.exceptions import ExtraInputWarning, InputMissingError
-from noob.node.base import Edge
 from noob.types import AbsoluteIdentifier, PythonIdentifier
 from noob.yaml import id_optional_json_schema
 

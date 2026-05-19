@@ -8,6 +8,13 @@ export interface TubeSpecification {
   input?: Record<string, InputSpecification>;
 }
 
+export interface NodeInfo {
+  node_id: string;
+  type: string;
+  signals: Record<string, Signal>;
+  slots: Record<string, Slot>;
+}
+
 export interface InputSpecification {
   id: string;
   type: string;
@@ -27,6 +34,18 @@ export interface NoobNode {
   type: string;
   depends?: Record<string, string>[] | string;
   params?: Record<string, string | object>;
+  nodeinfo: NodeInfo;
+}
+
+export interface Signal {
+  name: string;
+  annotation: string;
+}
+
+export interface Slot {
+  name: string;
+  annotation: string;
+  required: boolean;
 }
 
 export interface TubeNode extends NoobNode {
@@ -38,6 +57,7 @@ export interface Handle {
   id: string;
   label: string;
   key: string;
+  required: boolean;
 }
 
 // Same as below - node class expects type with string keys

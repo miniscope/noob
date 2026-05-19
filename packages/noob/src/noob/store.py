@@ -11,9 +11,8 @@ from itertools import count
 from threading import Condition
 from typing import Any, Literal, TypeAlias, overload
 
+from noob.edge import Edge, Signal
 from noob.event import Event, is_event
-from noob.node import Edge
-from noob.node.base import Signal
 from noob.types import Epoch, EventMap, NodeID, SignalName
 
 EventDict: TypeAlias = dict[Epoch, dict[NodeID, dict[SignalName, list[Event]]]]

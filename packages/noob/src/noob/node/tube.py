@@ -3,9 +3,10 @@ import warnings
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Union
 
+from noob.edge import Slot
 from noob.event import Event
 from noob.exceptions import ExtraInputWarning
-from noob.node.base import Node, Slot
+from noob.node.base import Node
 from noob.node.spec import NodeSpecification
 from noob.types import ConfigSource, Epoch, RunnerContext
 
