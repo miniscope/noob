@@ -65,7 +65,7 @@ class Slot(BaseModel):
 
 class Signal(BaseModel):
     name: str
-    type_: type | None | UnionType | GenericAlias | _UnionGenericAlias
+    annotation: type | None | UnionType | GenericAlias | _UnionGenericAlias
 
     # Unable to generate pydantic-core schema for <class 'types.UnionType'>
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -75,9 +75,9 @@ class Signal(BaseModel):
         signals = {}
         return_annotation = inspect.signature(func).return_annotation
         for name, type_ in cls._collect_signal_names(return_annotation):
-            signals[name] = Signal(name=name, type_=type_)
+            signals[name] = Signal(name=name, annotation=type_)
         if not signals:
-            signals["value"] = Signal(name="value", type_=Any)
+            signals["value"] = Signal(name="value", annotation=Any)
         return signals
 
     @classmethod

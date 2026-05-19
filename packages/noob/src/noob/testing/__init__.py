@@ -2,6 +2,7 @@ from noob.testing.assets import AnyAsset, Initializer, counter
 from noob.testing.nodes import (
     CountSource,
     CountSourceDecor,
+    DynamicSignals,
     InitCounter,
     Multiply,
     Now,
@@ -43,6 +44,7 @@ from noob.testing.nodes import (
 
 __all__ = [
     "AnyAsset",
+    "DynamicSignals",
     "async_error",
     "concat",
     "count_source",
