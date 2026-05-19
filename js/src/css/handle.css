@@ -3,41 +3,51 @@
   display: flex;
   flex-direction: column;
   justify-content: space-around;
+
+  --label-padding: 1em;
 }
 
 .handles.sources {
-  right: 0;
+  left: 100%;
   top: 0;
   height: 100%;
-  transform: translate(50%, 0);
+
+  .react-flow__handle {
+    border-radius: 0 40% 40% 0;
+    border-left: unset;
+  }
 
   .handle-label {
-    left: 0.75em;
+    left: var(--label-padding);
   }
 }
 
 .handles.targets {
-  left: 0;
+  right: 100%;
   top: 0;
   height: 100%;
-  transform: translate(-50%, 0);
+
+  .react-flow__handle {
+    border-radius: 40% 0 0 40%;
+    border-right: unset;
+  }
 
   .handle-label {
-    right: 0.75em;
+    right: var(--label-padding);
   }
 }
 
 .handles .react-flow__handle {
-  background-color: var(--xy-handle-background-color-default);
+  background-color: var(--color-background);
   position: relative;
   top: 0;
   left: 0;
   transform: none;
+  border: 2px solid var(--color-node-border);
 
   &.connectionindicator:hover {
     pointer-events: all;
     border-color: var(--xy-theme-edge-hover);
-    background-color: white;
   }
 
   &.connectionindicator:focus,
@@ -53,5 +63,10 @@
   position: absolute;
   top: -50%;
   color: var(--color-text-minor);
-  background: var(--color-background);
+  -webkit-text-stroke: 3px var(--color-background);
+  paint-order: stroke fill;
+}
+
+.react-flow__node-group .handles .react-flow__handle {
+  border-color: var(--color-border-group);
 }

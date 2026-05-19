@@ -95,6 +95,7 @@ export const getLayoutedNodes = async (
 
     return {
       ...node,
+      ...(node.type !== "title" && { data: { ...node.data } }), // create a new object to alert reactflow to update internals
       position: { x, y },
       // the reactflow-generated widths/heights are better for display,
       // but the elk widths/heights are better for nested nodes for some reason.

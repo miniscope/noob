@@ -24,6 +24,8 @@ nodes:
     params:
       input_range: [-100, 100]
       output_range: [-3.14, 3.14]
+    depends:
+      - value: cycle.value
   rotate:
     type: nobes.video.rotate_hue
     depends:

@@ -55,6 +55,10 @@
     bottom: 100%;
     left: 1em;
   }
+
+  .nodeType {
+    display: none;
+  }
 }
 
 .react-flow__node-title {
