@@ -9,6 +9,7 @@ from pydantic import PrivateAttr
 from noob.event import Event, MetaSignal
 from noob.node import Slot
 from noob.node.base import Node
+from noob.node.spec import NodeSpecification
 from noob.types import Epoch
 
 _TInput = TypeVar("_TInput")
@@ -89,18 +90,17 @@ class Gather(Node, Generic[_TInput]):
                     self._items = []
             return MetaSignal.NoEvent
 
-    def _collect_slots(self) -> dict[str, Slot]:
+    @classmethod
+    def get_slots(cls, spec: NodeSpecification | None = None) -> dict[str, Slot]:
         slots = {
             "value": Slot(name="value", annotation=Any),
             "epoch": Slot(name="epoch", annotation=Epoch),
             "trigger": Slot(name="trigger", annotation=Any | None, required=False),
         }
         if (
-            self.spec
-            and self.spec.depends
-            and any(
-                next(iter(dep.keys())) == "n" for dep in self.spec.depends if isinstance(dep, dict)
-            )
+            spec
+            and spec.depends
+            and any(next(iter(dep.keys())) == "n" for dep in spec.depends if isinstance(dep, dict))
         ):
             slots["n"] = Slot(name="n", annotation=int | None, required=True)
         else:

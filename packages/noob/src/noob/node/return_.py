@@ -9,6 +9,7 @@ from pydantic import PrivateAttr
 
 from noob.event import MetaSignal
 from noob.node.base import Node, Slot
+from noob.node.spec import NodeSpecification
 from noob.types import Epoch, EventMap
 
 
@@ -73,13 +74,14 @@ class Return(Node):
                 self._kwargs = defaultdict(list)
                 self._seen_epochs = set()
 
-    def _collect_slots(self) -> dict[str, Slot]:
-        if self.spec is None or not self.spec.depends:
+    @classmethod
+    def get_slots(cls, spec: NodeSpecification | None = None) -> dict[str, Slot]:
+        if spec is None or not spec.depends:
             raise ValueError("Return nodes must have a specification that defines what they return")
-        if isinstance(self.spec.depends, str):
+        if isinstance(spec.depends, str):
             return {}
         slots = {}
-        for dep in self.spec.depends:
+        for dep in spec.depends:
             if isinstance(dep, str):
                 continue
             name = list(dep.keys())[0]

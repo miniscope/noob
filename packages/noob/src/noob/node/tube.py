@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Union
 from noob.event import Event
 from noob.exceptions import ExtraInputWarning
 from noob.node.base import Node, Slot
+from noob.node.spec import NodeSpecification
 from noob.types import ConfigSource, Epoch, RunnerContext
 
 if TYPE_CHECKING:
@@ -71,11 +72,20 @@ class TubeNode(Node):
         else:
             return res
 
-    def _collect_slots(self) -> dict[str, Slot]:
+    @classmethod
+    def get_slots(cls, spec: NodeSpecification | None = None) -> dict[str, Slot]:
+        if spec is None:
+            raise ValueError("Must pass a spec to get slots for a tube node")
+
         from noob.input import InputScope
+        from noob.tube import TubeSpecification
+
+        if not spec.params or "tube" not in spec.params:
+            raise ValueError("Tube node specifications must have a `tube` in their params")
+        tube_spec = TubeSpecification.from_any(spec.params["tube"])
 
         slots = {}
-        for in_key, in_val in self.tube_spec.input.items():
+        for in_key, in_val in tube_spec.input.items():
             if in_val.scope == InputScope.process:
                 slots[in_key] = Slot(name=in_key, annotation=Any)
         return slots
