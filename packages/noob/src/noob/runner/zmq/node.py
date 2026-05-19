@@ -479,7 +479,7 @@ class NodeRunner(EventloopMixin):
                     node_id=self.spec.id,
                     status=self.status,
                     outbox=self.outbox_address,
-                    signals=[s.name for s in self._node.signals] if self._node.signals else None,
+                    signals=list(self._node.signals) if self._node.signals else None,
                     slots=(
                         [slot_name for slot_name in self._node.slots] if self._node.slots else None
                     ),
@@ -681,7 +681,7 @@ class NodeRunner(EventloopMixin):
                 value = list(combined.values())
             async with self._ready_condition:
                 events = self.store.add_value(
-                    [Signal(name=k, type_=None) for k in combined],
+                    {k: Signal(name=k, type_=None) for k in combined},
                     value,
                     node_id="input",
                     epoch=msg.value["epoch"],

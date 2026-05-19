@@ -69,7 +69,7 @@ class EventStore:
         return event
 
     def add_value(
-        self, signals: list[Signal], value: Any, node_id: str, epoch: Epoch
+        self, signals: dict[str, Signal], value: Any, node_id: str, epoch: Epoch
     ) -> list[Event]:
         """
         Add the result of a :meth:`.Node.process` call to the event store.
@@ -86,7 +86,7 @@ class EventStore:
             if the emitted events have incorrect epochs, signals, etc.
 
         Args:
-            signals (list[Signal]): Signals from which the value was emitted by
+            signals (dict[str, Signal]): Signals from which the value was emitted by
                 a :meth:`.Node.process` call
             value (Any): Value emitted by a :meth:`.Node.process` call. Gets wrapped
                 with a list in case the length of signals is 1. Otherwise, it's zipped
@@ -115,7 +115,7 @@ class EventStore:
                         timestamp=timestamp,
                         node_id=node_id,
                         epoch=epoch,
-                        signal=signal.name,
+                        signal=signal,
                         value=val,
                     )
                     self.add(new_event)

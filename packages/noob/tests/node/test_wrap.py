@@ -13,14 +13,14 @@ from noob.node.base import Node, Signal
         (
             "noob.testing.CountSource",
             {"limit": 10, "start": 5},
-            [Signal(name="index", type_=int)],
+            {"index": Signal(name="index", type_=int)},
         ),
         (
             "noob.testing.UnannotatedGenerator",
             {"limit": 10, "start": 5},
-            [Signal(name="value", type_=Any)],
+            {"value": Signal(name="value", type_=Any)},
         ),
-        ("noob.testing.Multiply", {}, [Signal(name="product", type_=int)]),
+        ("noob.testing.Multiply", {}, {"product": Signal(name="product", type_=int)}),
     ],
 )
 def test_subclass(type_, params, expected):
@@ -44,7 +44,7 @@ def test_class_with_process():
     node.init()
     assert node.process(width=2, depth=3) == 5 * 2 * 3
     assert set(node.slots) == {"width", "depth"}
-    assert node.signals == [Signal(name="volume", type_=int)]
+    assert node.signals == {"volume": Signal(name="volume", type_=int)}
 
 
 def test_class_without_process():
