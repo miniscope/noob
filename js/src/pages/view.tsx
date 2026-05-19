@@ -11,7 +11,8 @@ import {
 import { useEffect } from "react";
 import { tubeToFlow } from "../tube.tsx";
 import useLayoutNodes from "../useLayoutNodes.tsx";
-import ElkNode from "../node.tsx";
+import ElkNode from "../nodes/elk.tsx";
+import TitleNode from "../nodes/title.tsx";
 import { InputEdge, ReturnEdge } from "../edge.tsx";
 
 interface ViewProps {
@@ -21,6 +22,7 @@ interface ViewProps {
 
 const nodeTypes = {
   elk: ElkNode,
+  title: TitleNode,
   group: ElkNode,
 };
 
@@ -59,6 +61,8 @@ export default function View(props: ViewProps) {
       onEdgesChange={onEdgesChange}
       colorMode={props.color}
       connectionMode={ConnectionMode.Loose} // allow the inputs/returns of nested tubes to connect both ways
+      minZoom={0.1}
+      maxZoom={10}
       fitView
     >
       <Background />

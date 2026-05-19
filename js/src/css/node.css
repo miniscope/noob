@@ -1,16 +1,25 @@
 .react-flow__node {
-  box-shadow: var(--xy-node-boxshadow-default);
+  box-shadow: 2px 2px var(--color-node-shadow);
+  border: 2px solid var(--color-node-border);
   border-radius: var(--xy-node-border-radius-default);
-  background-color: var(--xy-node-background-color-default);
+  background-color: var(--color-background);
   display: flex;
   justify-content: center;
-  align-items: center;
-  text-align: center;
+  align-items: baseline;
   padding: 10px;
   font-size: 12px;
   flex-direction: column;
-  border: var(--xy-node-border-default);
   color: var(--xy-node-color, var(--xy-node-color-default));
+
+  .nodeID {
+    margin: 0;
+    font-weight: 700;
+  }
+  .nodeType {
+    color: var(--color-text-minor);
+    font-size: 0.8em;
+    font-style: italic;
+  }
 }
 
 .react-flow__node.selectable:focus {
@@ -33,6 +42,29 @@
 }
 
 .react-flow__node-group {
-  background-color: rgba(207, 182, 255, 0.4);
-  border-color: #9e86ed;
+  background-color: color-mix(
+    in srgb,
+    var(--color-background) 80%,
+    transparent
+  );
+  border-color: var(--color-border-group);
+  padding: 3em;
+
+  .nodeID {
+    position: absolute;
+    bottom: 100%;
+    left: 1em;
+  }
+
+  .nodeType {
+    display: none;
+  }
+}
+
+.react-flow__node-title {
+  box-shadow: unset;
+  border: unset;
+  background: transparent;
+
+  max-width: 30%;
 }

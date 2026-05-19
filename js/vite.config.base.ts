@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import babel from "@rolldown/plugin-babel";
 import { resolve } from "node:path";
 
 export default defineConfig({
@@ -16,15 +17,29 @@ export default defineConfig({
     emptyOutDir: false,
     minify: false,
     sourcemap: true,
-  },
-  plugins: [
-    react({
-      babel: {
-        plugins: [["babel-plugin-react-compiler"]],
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              test: /node_modules\/react.*/,
+              name: "js/react",
+            },
+            {
+              test: /node_modules\/elkjs/,
+              name: "js/elkjs",
+            },
+            {
+              test: /node_modules\/@xyflow/,
+              name: "js/reactflow",
+            },
+          ],
+        },
       },
-    }),
-  ],
+    },
+  },
+  plugins: [react(), babel({ presets: [reactCompilerPreset()] })],
   define: {
-    "process.env": {},
+    "process.env.NODE_ENV": '"production"',
   },
 });

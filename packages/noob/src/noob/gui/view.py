@@ -37,6 +37,16 @@ def _open_browser(
     webbrowser.open(url, 2)
 
 
+def _tube_node_ids(spec: TubeSpecification) -> list[str]:
+    tube_ids = []
+
+    for node in spec.nodes.values():
+        if node.type_ == "tube" and node.params:
+            tube_ids.append(node.params["tube"].noob_id)
+            tube_ids.extend(_tube_node_ids(node.params["tube"]))
+    return tube_ids
+
+
 def make_view_app() -> Litestar:
     @get(path="/view/{tube_id: str}")
     async def view(tube_id: str) -> Template:
@@ -46,12 +56,18 @@ def make_view_app() -> Litestar:
     async def stream_spec(tube_id: str) -> AsyncGenerator[str, None]:
         # yield the initial spec first, then reload whenever it changes
         tube_path = TubeSpecification.path_from_id(tube_id)
+        spec = None
         with contextlib.suppress(ValidationError):
-            yield TubeSpecification.from_yaml(
-                tube_path, context={"recursive": True}
-            ).model_dump_json()
+            spec = TubeSpecification.from_yaml(tube_path, context={"recursive": True})
+            yield spec.model_dump_json()
 
-        watcher = watchfiles.awatch(tube_path)
+        watch_paths = [tube_path]
+        if spec is not None:
+            # watch any nested tubes
+            nested_tubes = set(_tube_node_ids(spec))
+            watch_paths.extend([TubeSpecification.path_from_id(i) for i in nested_tubes])
+
+        watcher = watchfiles.awatch(*watch_paths)
         async for _ in watcher:
             # totally fine, the spec is malformed when typing in it sometimes!
             with contextlib.suppress(ValidationError):

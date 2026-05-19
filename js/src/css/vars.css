@@ -1,8 +1,34 @@
 :root {
-  --color-primary: #ff0073;
-  --color-background: #fefefe;
+  --color-primary: hsl(53deg, 98%, 50%);
+  --color-background: #141414;
+  --color-background-gradient: linear-gradient(315deg, #0a0a0a, #141414);
+  --color-background-dots: #666;
+  --color-border: #ccc;
+  --color-border-group: var(--color-border);
+  --color-edge: hsl(from var(--color-primary) h s 40%);
+  --color-node-border: color-mix(
+    in srgb,
+    var(--color-border) 60%,
+    var(--color-background)
+  );
+  --color-node-shadow: color-mix(
+    in srgb,
+    var(--color-border) 50%,
+    var(--color-background)
+  );
+
   --color-hover-bg: #f6f6f6;
+  --color-text: #f6f6f6;
+  --color-text-minor: color-mix(
+    in srgb,
+    var(--color-text) 80%,
+    var(--color-background)
+  );
   --color-disabled: #76797e;
+
+  --font-heading: "Lexend Deca", sans;
+  --font-body: "Helvetica Neue", sans;
+  --font-monospace: "Fira Code", Courier, monospace;
 }
 
 .react-flow {
@@ -10,8 +36,8 @@
   /* Custom Variables */
   --xy-theme-selected: #f57dbd;
   --xy-theme-hover: #c5c5c5;
-  --xy-theme-edge-hover: black;
   --xy-theme-color-focus: #e8e8e8;
+  --xy-background-color: var(--color-background);
 
   /* Built-in Variables see https://reactflow.dev/learn/customization/theming */
   --xy-node-border-default: 1px solid #ededed;
@@ -25,9 +51,9 @@
   --xy-handle-background-color-default: #ffffff;
   --xy-handle-border-color-default: #aaaaaa;
 
+  --xy-edge-stroke: var(--color-edge);
+  --xy-theme-edge-hover: var(--color-primary);
   --xy-edge-label-color-default: #505050;
-
-  --font-monospace: "Courier New", Courier, monospace;
 }
 
 .react-flow.dark {

@@ -3,7 +3,8 @@ import random
 import string
 from collections.abc import Generator, Iterator
 from datetime import datetime
-from itertools import count, cycle
+from itertools import count
+from itertools import cycle as cycle_
 from time import sleep
 from typing import Annotated as A
 from typing import Any
@@ -31,7 +32,7 @@ def count_source(
 
 
 def letter_source() -> Generator[A[str, Name("letter")]]:
-    yield from cycle(string.ascii_lowercase)
+    yield from cycle_(string.ascii_lowercase)
 
 
 def word_source() -> Generator[A[str, Name("word")]]:
@@ -276,9 +277,9 @@ def switch() -> (
     Generator[tuple[A[str, Name("fruits")], A[str, Name("vegetables")], A[str, Name("minerals")]]]
 ):
     """Yield in a cycle from different signals, noeventing in the others"""
-    fruits = cycle(["apple", "banana", "cherry"])
-    vegetables = cycle(["daikon", "eggplant", "fiddlehead"])
-    minerals = cycle(["galaxite", "halite", "iolite"])
+    fruits = cycle_(["apple", "banana", "cherry"])
+    vegetables = cycle_(["daikon", "eggplant", "fiddlehead"])
+    minerals = cycle_(["galaxite", "halite", "iolite"])
 
     while True:
         yield next(fruits), MetaSignal.NoEvent, MetaSignal.NoEvent
@@ -323,3 +324,8 @@ class DynamicSignals(Node):
             sig: Slot(name=sig, annotation=Any, required=True)
             for sig in spec.params.get("slots_", [])
         }
+
+
+def cycle(start: int = 0, stop: int = 100, step: int = 1) -> Generator[float]:
+    while True:
+        yield from range(start, stop, step)

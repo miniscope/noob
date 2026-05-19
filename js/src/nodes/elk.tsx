@@ -1,16 +1,15 @@
 // Custom node class with labeled handles
 
 import {
-  Handle,
   type NodeProps,
   Position,
   useNodesData,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { type HandleProps } from "@xyflow/system";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
-import { type ElkNode as ElkNodeType, type NodeUnion } from "./types";
+import { type ElkNode as ElkNodeType, type NodeUnion } from "../types.ts";
+import { LabeledHandle } from "../handle.tsx";
 
 export default function ElkNode({ id, data }: NodeProps<ElkNodeType>) {
   const nodeData = useNodesData<NodeUnion>(id);
@@ -48,7 +47,8 @@ export default function ElkNode({ id, data }: NodeProps<ElkNodeType>) {
           />
         ))}
       </div>
-      <div className="label">{data.label}</div>
+      <h2 className="nodeID">{data.label}</h2>
+      <span className="nodeType">{data.nodeType}</span>
       <div className="handles sources">
         {sourceHandles.map((handle) => (
           <LabeledHandle
@@ -61,19 +61,5 @@ export default function ElkNode({ id, data }: NodeProps<ElkNodeType>) {
         ))}
       </div>
     </>
-  );
-}
-
-export type LabeledHandleProps = HandleProps & {
-  label: string;
-};
-
-function LabeledHandle(props: LabeledHandleProps) {
-  const posClass =
-    props.position === Position.Left ? "label-left" : "label-right";
-  return (
-    <Handle {...props}>
-      <div className={"handle-label " + posClass}>{props.label}</div>
-    </Handle>
   );
 }

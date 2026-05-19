@@ -1,6 +1,8 @@
 # Changelog
 
-## Upcoming
+## v1000.*
+
+### v1000.1.0 - 26-05-18
 
 **Added**
 
@@ -11,8 +13,25 @@
   build bigger tubes out of smaller tube fragments.
 - [`#196`](https://github.com/miniscope/noob/pull/196) -
   `NoEventable[]` convenience generic that indicates that a return type can also be NoEvent.
+- [`#207`](https://github.com/miniscope/noob/pull/207),
+  [`#209`](https://github.com/miniscope/noob/pull/209),
+  [`#214`](https://github.com/miniscope/noob/pull/214),
+  [`#222`](https://github.com/miniscope/noob/pull/222) - 
+  Big improvements to the display of tubes. 
+  A `noob view` cli command to show a live-updating display of a tube as it is edited on disk.
+  Better representations of tube specs: nested tubes, correct signals and slots from inspecting nodes,
+  better use of the ELK layout engine.
 
-## v1000.*
+**Changed**
+
+- [`#211`](https://github.com/miniscope/noob/pull/211) - 
+  Allow accessing a node's signals and slots from a classmethod,
+  avoids needing to instantiate a node in order to inspect its edge properties
+- [`#212`](https://github.com/miniscope/noob/pull/212) - 
+  Make the `signals` and `slots` accessors have the same type: dicts rather than dicts and lists
+- [`#213`](https://github.com/miniscope/noob/pull/213) - 
+  An additional `NodeInfo` dictionary contains metadata about signals and slots
+  derived from the combination of the node specification and the node class.
 
 ### v1000.0.1 - 26-03-15
 

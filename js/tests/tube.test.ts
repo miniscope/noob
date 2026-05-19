@@ -141,14 +141,22 @@ describe(tubeToFlow, () => {
     ]);
     expect(groupNode.data.targetHandles).toMatchObject([
       {
+        id: "b.slots.child_start",
+        key: "b.slots.child_start",
+        label: "child_start",
+        required: true,
+      },
+      {
         id: "b.slots.child_multiply_inner",
         label: "child_multiply_inner",
         key: "b.slots.child_multiply_inner",
+        required: true,
       },
       {
         id: "b.slots.child_multiply_input",
         label: "child_multiply_input",
         key: "b.slots.child_multiply_input",
+        required: true,
       },
     ]);
 

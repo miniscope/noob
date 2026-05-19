@@ -10,6 +10,7 @@ import type {
   Handles,
   NodeUnion,
   NoobNode,
+  TitleNode,
   TubeNode,
   TubeSpecification,
 } from "./types.ts";
@@ -21,8 +22,9 @@ import type { Edge } from "@xyflow/react";
 export function tubeToFlow(tube: TubeSpecification): [Edge[], NodeUnion[]] {
   const edges = getEdges(tube.nodes);
   let nodes = getNodes(tube.nodes);
+  nodes = [_titleNode(tube.noob_id, tube.description ?? ""), ...nodes];
   // TODO: Dedicated representation of inputs
-  if (tube.input) {
+  if (tube.input && Object.keys(tube.input).length !== 0) {
     nodes = [
       ...nodes,
       {
@@ -31,6 +33,7 @@ export function tubeToFlow(tube: TubeSpecification): [Edge[], NodeUnion[]] {
         type: "elk",
         data: {
           label: "input",
+          nodeType: "input",
           targetHandles: [],
           sourceHandles: Object.values(tube.input).map((i) => {
             return {
@@ -158,6 +161,7 @@ function getGenericNode(node: NoobNode, prefix?: string): ElkNodeType[] {
       id: id,
       data: {
         label: node.id,
+        nodeType: node.type,
         ...getNodeHandles(node, prefix),
       },
       position: { x: 0, y: 0 },
@@ -176,42 +180,44 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
   // Make the outer grouping node
   const innerTube = node.params.tube;
   const targetHandles = innerTube.input
-    ? Object.values(innerTube.input)
-        .filter((input) => input.scope === "process")
-        .map<Handle>((input) => {
-          return {
-            id: `${node.id}.slots.${input.id}`,
-            label: input.id,
-            key: `${node.id}.slots.${input.id}`,
-            required: true,
-          };
-        })
+    ? Object.values(innerTube.input).map<Handle>((input) => {
+        return {
+          id: `${node.id}.slots.${input.id}`,
+          label: input.id,
+          key: `${node.id}.slots.${input.id}`,
+          required: true,
+        };
+      })
     : [];
 
   const returnNode = Object.values(innerTube.nodes).filter(
     (node) => node.type === "return",
   )[0];
-  returnNode.depends =
-    typeof returnNode?.depends === "string"
-      ? [{ value: returnNode.depends }]
-      : returnNode?.depends;
-  const sourceHandles = returnNode?.depends
-    ? Array.from(returnNode.depends).map<Handle>((slotsig) => {
-        const slot = Object.keys(slotsig)[0];
-        return {
-          id: `${node.id}.signals.${slot}`,
-          label: slot,
-          key: `${node.id}.signals.${slot}`,
-          required: false, // return node slots are never really required, special case.
-        };
-      })
-    : [];
+  let sourceHandles: Handle[] = [];
+  if (returnNode !== undefined) {
+    returnNode.depends =
+      typeof returnNode?.depends === "string"
+        ? [{ value: returnNode.depends }]
+        : returnNode?.depends;
+    sourceHandles = returnNode?.depends
+      ? Array.from(returnNode.depends).map<Handle>((slotsig) => {
+          const slot = Object.keys(slotsig)[0];
+          return {
+            id: `${node.id}.signals.${slot}`,
+            label: slot,
+            key: `${node.id}.signals.${slot}`,
+            required: false, // return node slots are never really required, special case.
+          };
+        })
+      : [];
+  }
 
   const groupNode = {
     id: node.id,
     type: "group",
     data: {
       label: node.id,
+      nodeType: node.type,
       sourceHandles,
       targetHandles,
     },
@@ -228,7 +234,7 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
       ...child,
       extent: "parent",
       parentId: node.id,
-    } as NodeUnion;
+    };
   });
   return [groupNode, ...childNodes];
 }
@@ -263,6 +269,20 @@ function getNodeHandles(node: NoobNode, prefix?: string): Handles {
 
 function isTubeNode(node: NoobNode): node is TubeNode {
   return node.type === "tube";
+}
+
+function _titleNode(title: string, description: string): TitleNode {
+  return {
+    id: "__title__",
+    position: { x: 0, y: 0 },
+    data: {
+      label: title,
+      description: description,
+      sourceHandles: [],
+      targetHandles: [],
+    },
+    type: "title",
+  };
 }
 
 export const testExports = {

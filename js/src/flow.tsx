@@ -10,7 +10,7 @@ import {
   useEdgesState,
   useNodesState,
 } from "@xyflow/react";
-import ElkNode from "./node.tsx";
+import ElkNode from "./nodes/elk.tsx";
 import useLayoutNodes from "./useLayoutNodes.tsx";
 import { tubeToFlow } from "./tube.tsx";
 

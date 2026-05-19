@@ -1,0 +1,21 @@
+noob_id: testing-gui-child-2
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: Write to a file
+
+input:
+  path:
+    type: pathlib.Path
+    scope: tube
+  frame:
+    type: numpy.ndarray
+    scope: process
+
+nodes:
+  writer:
+    type: nobes.video.FFMpegWriter
+    params:
+      output_path: input.path
+    depends:
+      - frame: input.frame
+

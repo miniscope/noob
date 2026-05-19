@@ -227,7 +227,7 @@ class Node(BaseModel):
     @classmethod
     def get_slots(cls, spec: NodeSpecification | None = None) -> dict[str, Slot]:
         """Similar to :meth:`.get_signals`, but for slots!"""
-        return Slot.from_callable(cls.process)
+        return Slot.from_callable(cls.process, spec)
 
     @property
     def edges(self) -> list[Edge]:
@@ -401,7 +401,7 @@ class WrapClassNode(Node):
         wrapped_cls = resolve_python_identifier(spec.type_)
         fn_name = cls._get_process_method(wrapped_cls)
         fn = getattr(wrapped_cls, fn_name)
-        return Slot.from_callable(fn)
+        return Slot.from_callable(fn, spec)
 
     @staticmethod
     def _get_process_method(cls: type) -> str:
@@ -474,4 +474,4 @@ class WrapFuncNode(Node):
         if spec is None:
             raise ValueError("Must pass a specification to get slots for wrapped nodes")
         fn = resolve_python_identifier(spec.type_)
-        return Slot.from_callable(fn)
+        return Slot.from_callable(fn, spec)

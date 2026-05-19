@@ -20,8 +20,10 @@ jobs:
         python-version: "3.13"
     - name: Install pdm
       run: python -m pip install pdm
-    - name: Install deps
+    - name: Install python deps
       run: pdm install
+    - name: Install JS deps
+      run: npm --prefix js/ ci
     - name: Build
       working-directory: packages/noob
       run: pdm build

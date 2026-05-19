@@ -10,4 +10,5 @@ export default mergeConfig(baseConfig, {
     },
     outDir: resolve(__dirname, "../packages/noob/src/noob/_js"),
   },
+  mode: "development",
 });

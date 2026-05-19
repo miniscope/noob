@@ -1,0 +1,41 @@
+noob_id: testing-gui-child-1
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: A child that does something with an image
+
+input:
+  image_path:
+    type: pathlib.Path
+    scope: process
+
+nodes:
+  read:
+    type: nobes.image.read_image
+    depends:
+      - path: input.image_path
+  cycle:
+    type: noob.testing.cycle
+    params:
+      start: -100
+      stop: 100
+      step: 1
+  rescale:
+    type: nobes.core.rescale
+    params:
+      input_range: [-100, 100]
+      output_range: [-3.14, 3.14]
+    depends:
+      - value: cycle.value
+  rotate:
+    type: nobes.video.rotate_hue
+    depends:
+      - frame: read.array
+      - rotate: rescale.value
+  display:
+    type: nobes.video.display
+    depends:
+      - frame: rotate.frame
+  return:
+    type: return
+    depends:
+      - frame: rotate.frame
