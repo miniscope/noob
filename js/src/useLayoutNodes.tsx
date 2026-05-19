@@ -95,7 +95,6 @@ export const getLayoutedNodes = async (
 
     return {
       ...node,
-      data: { ...node.data },
       position: { x, y },
       // the reactflow-generated widths/heights are better for display,
       // but the elk widths/heights are better for nested nodes for some reason.

@@ -4,7 +4,7 @@ export interface TubeSpecification {
   noob_id: string;
   noob_model: string;
   noob_version: string;
-  description: string;
+  description?: string;
   nodes: Record<string, NoobNode>;
   input?: Record<string, InputSpecification>;
 }
@@ -76,7 +76,7 @@ export type ElkNodeData = {
 } & Handles;
 
 export type TitleNodeData = {
-  description: string;
+  description?: string;
 } & Omit<ElkNodeData, "nodeType">;
 
 export type ElkNode = Node<ElkNodeData, "elk">;

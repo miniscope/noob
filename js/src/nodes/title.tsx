@@ -1,9 +1,6 @@
 // Custom node class with labeled handles
 
-import {
-  type NodeProps,
-  useNodesData,
-} from "@xyflow/react";
+import { type NodeProps, useNodesData } from "@xyflow/react";
 
 import { type TitleNode as TitleNodeType, type NodeUnion } from "../types.ts";
 

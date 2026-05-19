@@ -22,7 +22,7 @@ import type { Edge } from "@xyflow/react";
 export function tubeToFlow(tube: TubeSpecification): [Edge[], NodeUnion[]] {
   const edges = getEdges(tube.nodes);
   let nodes = getNodes(tube.nodes);
-  nodes = [_titleNode(tube.noob_id, tube.description), ...nodes];
+  nodes = [_titleNode(tube.noob_id, tube.description ?? ""), ...nodes];
   // TODO: Dedicated representation of inputs
   if (tube.input && Object.keys(tube.input).length !== 0) {
     nodes = [
