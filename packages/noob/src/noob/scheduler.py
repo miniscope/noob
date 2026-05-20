@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import cached_property
-from typing import Self
+from typing import Self, cast
 from uuid import uuid4
 
 from noob.edge import Edge
@@ -252,6 +252,7 @@ class Scheduler:
     def __getitem__(self, epoch: Epoch | int) -> TopoSorter:
         # O(1) fast exit - we are given an epoch and we already have it
         if epoch in self._epochs:
+            epoch = cast(Epoch, epoch)
             return self._epochs[epoch]
 
         # otherwise, find or create the epoch
