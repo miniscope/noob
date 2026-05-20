@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/miniscope/noob/tree/v1000.0.2/schema/node.schema.json",
+  "$id": "https://github.com/miniscope/noob/tree/v1000.1.1/schema/node.schema.json",
   "additionalProperties": false,
   "description": "Specification for a single processing node within a tube .yaml file.",
   "properties": {
