@@ -6,7 +6,6 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import cached_property
-from itertools import count
 from typing import Self
 from uuid import uuid4
 
@@ -33,7 +32,7 @@ class Scheduler:
     source_nodes: list[NodeID] = field(default_factory=list)
     _logger: logging.Logger = field(default_factory=lambda: init_logger("noob.scheduler"))
 
-    _clock: count = field(default_factory=count)
+    _last_epoch: int = -1
     _epochs: dict[Epoch, TopoSorter] = field(default_factory=dict)
     _subepochs: dict[Epoch, set[Epoch]] = field(default_factory=lambda: defaultdict(set))
     _epoch_log: deque[int] = field(default_factory=lambda: deque(maxlen=100))
@@ -95,19 +94,20 @@ class Scheduler:
                 this_epoch = epoch
             else:
                 raise TypeError("Can only create an epoch from an epoch or integer")
+
+            # only need to check if already run when explicitly setting epoch
+            # otherwise, internal counter keeps us fresh
+            if this_epoch in self._epochs:
+                raise EpochExistsError(f"Epoch {this_epoch} is already scheduled")
+            elif this_epoch in self._epoch_log:
+                raise EpochCompletedError(f"Epoch {this_epoch} has already been completed!")
+
             # ensure that the next iteration of the clock will return the next number
             # if we create epochs out of order
-            self._clock = count(
-                max([this_epoch[0].epoch, *[ep[0].epoch for ep in self._epochs], *self._epoch_log])
-                + 1
-            )
+            self._last_epoch = max(self._last_epoch, this_epoch[0].epoch)
         else:
-            this_epoch = Epoch(next(self._clock))
-
-        if this_epoch in self._epochs:
-            raise EpochExistsError(f"Epoch {this_epoch} is already scheduled")
-        elif this_epoch in self._epoch_log:
-            raise EpochCompletedError(f"Epoch {this_epoch} has already been completed!")
+            self._last_epoch += 1
+            this_epoch = Epoch(self._last_epoch)
 
         graph = self._init_graph(epoch=this_epoch)
         self._epochs[this_epoch] = graph
@@ -250,6 +250,11 @@ class Scheduler:
             return node in self._epochs[epoch].done_nodes
 
     def __getitem__(self, epoch: Epoch | int) -> TopoSorter:
+        # O(1) fast exit - we are given an epoch and we already have it
+        if epoch in self._epochs:
+            return self._epochs[epoch]
+
+        # otherwise, find or create the epoch
         if epoch == -1:
             if len(self._epochs) == 1:
                 return next(iter(self._epochs.values()))
@@ -408,14 +413,14 @@ class Scheduler:
         return previously_completed or active_completed
 
     def end_epoch(self, epoch: Epoch | int | None = None) -> MetaEvent | None:
-        if epoch is None or epoch == -1:
+        if isinstance(epoch, Epoch):
+            ep = epoch
+        elif isinstance(epoch, int):
+            ep = Epoch(epoch)
+        elif epoch is None or epoch == -1:
             if len(self._epochs) == 0:
                 return None
             ep = list(self._epochs)[-1]
-        elif isinstance(epoch, int):
-            ep = Epoch(epoch)
-        elif isinstance(epoch, Epoch):
-            ep = epoch
         else:
             raise TypeError("Can only end an epoch with an integer or Epoch")
         self._logger.debug("Ending epoch %s", ep)
