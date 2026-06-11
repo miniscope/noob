@@ -27,11 +27,13 @@ const layoutOptions = {
   "elk.layered.nodePlacement.bk.edgeStraightening": "NONE",
   "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
   "elk.layered.crossingMinimization.strategy": "MEDIAN_LAYER_SWEEP",
+  "elk.layered.considerModelOrder.crossingCounterPortInfluence": "0.001",
+  "elk.layered.wrapping.strategy": "MULTI_EDGE",
   "elk.nodeSize.constraints": "NODE_LABELS PORT_LABELS PORTS",
   "elk.nodeLabels.placement": "INSIDE H_CENTER V_CENTER",
   "elk.nodeSize.options": "COMPUTE_PADDING",
   "elk.portConstraints": "FIXED_SIDE",
-  "elk.layered.considerModelOrder.crossingCounterPortInfluence": "0.001",
+
 };
 
 const elk = new ELK();
@@ -45,9 +47,11 @@ export const getLayoutedNodes = async (
   nodes: NodeUnion[],
   edges: Edge[],
 ): Promise<NodeUnion[]> => {
+  const aspectRatio = window.screen.width / window.screen.height;
+  const layoutOpts = {...layoutOptions, 'elk.aspectRatio': String(aspectRatio)};
   const graph = {
     id: "root",
-    layoutOptions,
+    layoutOptions: layoutOpts,
     children: nodes
       .filter((n) => n.parentId === undefined)
       .map((n) => nodeToElk(n, nodes)),
@@ -58,10 +62,14 @@ export const getLayoutedNodes = async (
     })),
   };
 
+
+  console.log(layoutOpts)
+
   const layoutedGraph = await elk.layout(graph, {
-    layoutOptions: layoutOptions,
+    layoutOptions: layoutOpts,
   });
   const flatChildren = flattenChildren(layoutedGraph);
+  console.log(flatChildren, layoutedGraph);
 
   const titleNode = nodes.filter((n) => n.type === "title")[0];
   const titleHeight = titleNode?.measured?.height ?? 0;
@@ -163,6 +171,7 @@ function nodeToElk(n: NodeUnion, nodes: NodeUnion[]): PropertiedElkNode {
     // we are also passing the id, so we can also handle edges without a sourceHandle or targetHandle option
     ports: [...targetPorts, ...sourcePorts],
     children: childNodes,
+    ...childNodes.length != 0 && {layoutOptions: {"elk.layered.wrapping.strategy": "OFF"}}
   };
 }
 

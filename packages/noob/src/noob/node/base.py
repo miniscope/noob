@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import functools
 import inspect
+import logging
 from collections.abc import Callable, Generator, Mapping
 from types import GeneratorType
 from typing import (
@@ -22,6 +25,7 @@ from pydantic import (
 )
 
 from noob.edge import Edge, Signal, Slot
+from noob.logging import init_logger
 from noob.node.spec import NodeSpecification
 from noob.types import Epoch, EventMap
 from noob.utils import iscoroutinefunction_partial, resolve_python_identifier
@@ -146,8 +150,8 @@ class Node(BaseModel):
 
     @classmethod
     def from_specification(
-        cls, spec: "NodeSpecification", input_collection: Union["InputCollection", None] = None
-    ) -> "Node":
+        cls, spec: NodeSpecification, input_collection: Union[InputCollection, None] = None
+    ) -> Node | None:
         """
         Create a node from its spec
 
@@ -170,6 +174,19 @@ class Node(BaseModel):
             ):
                 raise ValueError("No input collection supplied, but inputs specified in params")
 
+        # determine enabledness
+        if isinstance(spec.enabled, str):
+            if not input_collection:
+                raise ValueError("No input collection supplied, but inputs specified in enabled")
+
+            enabled = bool(input_collection.get(spec.enabled.split('.', 1)[-1]))
+        else:
+            enabled = spec.enabled
+
+        # FIXME: Temporary hack to get things running
+        if not enabled:
+            return None
+
         # additional kwargs that can be present or absent without default
         kwargs = {}
         if spec.stateful is not None:
@@ -179,14 +196,14 @@ class Node(BaseModel):
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec, enabled=spec.enabled, **params, **kwargs)
+                return obj(id=spec.id, spec=spec, enabled=enabled, **params, **kwargs)
             else:
                 return WrapClassNode(
-                    id=spec.id, cls=obj, spec=spec, params=params, enabled=spec.enabled, **kwargs
+                    id=spec.id, cls=obj, spec=spec, params=params, enabled=enabled, **kwargs
                 )
         else:
             return WrapFuncNode(
-                id=spec.id, fn=obj, spec=spec, params=params, enabled=spec.enabled, **kwargs
+                id=spec.id, fn=obj, spec=spec, params=params, enabled=enabled, **kwargs
             )
 
     @property
@@ -317,6 +334,10 @@ class Node(BaseModel):
         (checking this on every call proves to be surprisingly expensive)
         """
         return iscoroutinefunction_partial(self.process)
+
+    @functools.cached_property
+    def logger(self) -> logging.Logger:
+        return init_logger(f"node.{self.id}")
 
     def _wrap_generator(self, proc: Callable[[], GeneratorType]) -> None:
         """

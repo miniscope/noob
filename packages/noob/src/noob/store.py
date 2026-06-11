@@ -99,26 +99,29 @@ class EventStore:
             values = [value] if len(signals) == 1 else value
 
             new_events = []
-            for signal, val in zip(signals, values):
-                # Nodes can emit explicit events or collections of events
-                if is_event(val):
-                    self.add(val)
-                    new_events.append(val)
-                elif isinstance(val, Sequence) and len(val) > 0 and is_event(val[0]):
-                    for e in val:
-                        self.add(e)
-                    new_events.extend(val)
-                else:
-                    new_event = Event(
-                        id=next(self.counter),
-                        timestamp=timestamp,
-                        node_id=node_id,
-                        epoch=epoch,
-                        signal=signal,
-                        value=val,
-                    )
-                    self.add(new_event)
-                    new_events.append(new_event)
+            try:
+                for signal, val in zip(signals, values):
+                    # Nodes can emit explicit events or collections of events
+                    if is_event(val):
+                        self.add(val)
+                        new_events.append(val)
+                    elif isinstance(val, Sequence) and len(val) > 0 and is_event(val[0]):
+                        for e in val:
+                            self.add(e)
+                        new_events.extend(val)
+                    else:
+                        new_event = Event(
+                            id=next(self.counter),
+                            timestamp=timestamp,
+                            node_id=node_id,
+                            epoch=epoch,
+                            signal=signal,
+                            value=val,
+                        )
+                        self.add(new_event)
+                        new_events.append(new_event)
+            except:
+                breakpoint()
 
             self._event_condition.notify_all()
         return new_events

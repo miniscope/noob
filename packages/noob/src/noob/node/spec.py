@@ -141,10 +141,12 @@ class NodeSpecification(BaseModel):
     parameterized the signature of a function node, or
     by a TypedDict for a class node.
     """
-    enabled: bool = True
+    enabled: bool | AbsoluteIdentifier = True
     """
     If this flag is False, the node will not be initialized 
     or included in the `:meth:.Tube.graph`.
+    
+    Can also accept an `input` signal, and its truthiness determines whether the node is enabled.
     """
     stateful: bool | None = None
     """
@@ -175,6 +177,14 @@ class NodeSpecification(BaseModel):
             seen.add(signal)
         return val
 
+    @field_validator("enabled", mode="after")
+    @classmethod
+    def enabled_is_bool_or_input(cls, val: bool | AbsoluteIdentifier) -> bool | AbsoluteIdentifier:
+        """If the "enabled" value is a string, it must be a reference to an input value"""
+        if isinstance(val, str):
+            assert val.startswith('input.'), "Dynamic computation of enabled can only be performed from a tube-scoped input"
+        return val
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def nodeinfo(self) -> NodeInfo:
@@ -193,5 +203,7 @@ class NodeSpecification(BaseModel):
             signals=node_cls.get_signals(self),
             slots=node_cls.get_slots(self),
         )
+
+
 
     __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)  # type: ignore[var-annotated]

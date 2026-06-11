@@ -29,6 +29,7 @@ class Return(Node):
         """
         Store the incoming value to retrieve later with :meth:`.get`
         """
+        self.logger.debug("RETURN GOT %s, %s", args, kwargs)
         if self._args is None:
             self._args = args
         else:

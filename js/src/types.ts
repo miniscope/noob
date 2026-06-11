@@ -6,7 +6,8 @@ export interface TubeSpecification {
   noob_version: string;
   description?: string;
   nodes: Record<string, NoobNode>;
-  input?: Record<string, InputSpecification>;
+  input: Record<string, InputSpecification>;
+  assets: Record<string, AssetSpecification>;
 }
 
 export interface NodeInfo {
@@ -29,6 +30,20 @@ const InputScope = {
   process: "process",
 } as const;
 export type InputScope = (typeof InputScope)[keyof typeof InputScope];
+
+export interface AssetSpecification {
+  id: string;
+  type: string;
+  scope: AssetScope;
+  depends?: string;
+}
+
+const AssetScope = {
+  runner: "runner",
+  process: "process",
+  node: "node"
+} as const;
+export type AssetScope = (typeof AssetScope)[keyof typeof AssetScope];
 
 export interface NoobNode {
   id: string;

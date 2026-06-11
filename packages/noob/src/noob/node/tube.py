@@ -3,8 +3,10 @@ import warnings
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Union
 
+from pydantic import ConfigDict
+
 from noob.edge import Slot
-from noob.event import Event
+from noob.event import Event, MetaSignal
 from noob.exceptions import ExtraInputWarning
 from noob.node.base import Node
 from noob.node.spec import NodeSpecification
@@ -26,6 +28,8 @@ class TubeNode(Node):
     _tube_spec: Union["TubeSpecification", None] = None
     _runner: Union["TubeRunner", None] = None
 
+    model_config = ConfigDict(extra="allow")
+
     @property
     def tube_spec(self) -> "TubeSpecification":
         from noob.tube import TubeSpecification
@@ -38,9 +42,14 @@ class TubeNode(Node):
     def init(self, context: RunnerContext) -> None:  # type: ignore[override]
         from noob import SynchronousRunner, Tube
 
+        input_collection = context['input_collection']
+        input_params = input_collection.get_node_params({k:v for k,v in self.spec.params.items() if k != 'tube'})
+        extra_params = {k:v for k,v in self.__pydantic_extra__.items() if k not in input_params}
+        self.logger.info("input_params: %s\nextra_params: %s", input_params, extra_params)
+
         with warnings.catch_warnings(action="ignore", category=ExtraInputWarning):
             self._tube = Tube.from_specification(
-                self.tube, input={**context["tube"].input_collection.chain}
+                self.tube, input={**input_collection.chain, **input_params, **extra_params}
             )
         self._runner = SynchronousRunner(tube=self._tube)
         self._runner.init()
@@ -50,13 +59,23 @@ class TubeNode(Node):
             self._runner.deinit()
 
     def process(self, epoch: Epoch, **kwargs: Any) -> Any:
+        self.logger.debug("PROCESS")
         if self._runner is None:
             raise RuntimeError(
                 "TubeNode must be initialized within a Runner "
                 "to receive the outer runner's context. "
                 "It doesn't make sense to run a TubeNode on its own."
             )
+        # FIXME: Ugly hack - properly handle noevents in zmq runner
+        res = None
+        # iters = 0
+        # while res is None:
+        #     self.logger.debug('process iter: %s', iters)
         res = self._runner.process(**kwargs)
+            # iters += 1
+        if res is None:
+            return MetaSignal.NoEvent
+
         if isinstance(res, dict):
             now = datetime.now(UTC)
             return [

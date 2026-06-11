@@ -1,6 +1,8 @@
 import asyncio
+import base64
 import concurrent.futures
 import contextlib
+import inspect
 import multiprocessing as mp
 import os
 import signal
@@ -12,7 +14,7 @@ from datetime import UTC, datetime
 from functools import cached_property, partial
 from itertools import count
 from types import FrameType
-from typing import Any, cast
+from typing import Any, cast, Callable
 
 import zmq
 from pydantic import ValidationError
@@ -46,7 +48,7 @@ from noob.node import Node, NodeSpecification
 from noob.scheduler import Scheduler
 from noob.state import State
 from noob.store import EventStore
-from noob.types import Epoch
+from noob.types import Epoch, RunnerContext
 from noob.utils import iscoroutinefunction_partial
 
 
@@ -281,7 +283,12 @@ class NodeRunner(EventloopMixin):
                 raise KeyboardInterrupt()
 
             signal.signal(signal.SIGTERM, _handler)
-            await self.init()
+            try:
+                await self.init()
+            except RuntimeError:
+                logger = init_logger(f'noderunner.{self.spec.id}')
+                logger.exception('quitting early')
+                return
             self._node = cast(Node, self._node)
             self._freerun.clear()
             self._process_one.clear()
@@ -351,7 +358,9 @@ class NodeRunner(EventloopMixin):
                 )
             ):
                 self._process_one.clear()
+                self.logger.debug("WAITING")
                 await self._process_one.wait()
+                self.logger.debug("AFTER WAITING")
                 if (
                     len(self._epochs_todo) > 0
                     and self._node.stateful
@@ -371,7 +380,9 @@ class NodeRunner(EventloopMixin):
                 if self._node.stateful:
                     expected_epoch = Epoch(epoch[0].epoch + 1)
 
+            self.logger.debug("WAITING NODE")
             readies = await self.await_node(epoch=epoch)
+            self.logger.debug("AFTER WAITING NODE")
 
             if epoch is None:
                 # stateless nodes - run the given epoch to completion
@@ -427,14 +438,16 @@ class NodeRunner(EventloopMixin):
             else:
                 asset_evt = self.store.get("assets", asset, epoch)
             events.append(asset_evt)
-
+        # if isinstance(events[0]['value'], list):
+            # self.logger.debug("SENDING EVENTS: %s", [base64.b64encode(v).decode('utf-8') for e in events for v in e['value']])
         msg = EventMsg(node_id=self.spec.id, value=events)
         await self.sockets["outbox"].send_multipart([b"event", msg.to_bytes()])
 
     async def init(self) -> None:
         self.logger.debug("Initializing")
-        await self.init_node()
         self._init_sockets()
+        await self.init_node()
+
         self._quitting.clear()
         self.status = (
             NodeStatus.waiting
@@ -500,7 +513,10 @@ class NodeRunner(EventloopMixin):
 
     async def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
-        self._node.init()
+        if self._node is None:
+            raise RuntimeError() # FIXME: Temporary hack - more graceful handling of disabled nodes
+
+        self.inject_context(self._node.init)()
         self.state = State.from_specification(
             specs={asset: self.asset_specs[asset] for asset in self.inits_assets}
         )
@@ -527,6 +543,21 @@ class NodeRunner(EventloopMixin):
             ):
                 self.scheduler.done(ep, "assets")
             self._ready_condition.notify_all()
+
+    def get_context(self) -> RunnerContext:
+        return RunnerContext(runner=self, input_collection=self.input_collection)
+
+    def inject_context(self, fn: Callable) -> Callable:
+        """Wrap function in a partial with the runner context injected, if requested"""
+        sig = inspect.signature(fn)
+        ctx_key = [
+            k for k, v in sig.parameters.items() if
+            v.annotation and v.annotation is RunnerContext
+        ]
+        if ctx_key:
+            return partial(fn, **{ctx_key[0]: self.get_context()})
+        else:
+            return fn
 
     def _init_sockets(self) -> None:
         self._init_loop()
@@ -655,6 +686,9 @@ class NodeRunner(EventloopMixin):
         else:
             self._epochs_todo.extend(Epoch(next(self._counter)) for _ in range(msg.value))
         self._process_one.set()
+        self.scheduler.add_epoch()
+        async with self._ready_condition:
+            self._ready_condition.notify_all()
 
     async def on_process(self, msg: ProcessMsg) -> None:
         """
@@ -769,6 +803,9 @@ class NodeRunner(EventloopMixin):
                 node_done = (
                     False if epoch is None else self.scheduler.node_is_done(self.spec.id, epoch)
                 )
+                self.logger.debug("node ready: %s, node done: %s, epoch: %s", node_ready, node_done, epoch)
+                sorter = self.scheduler[epoch]
+                self.logger.debug('ready: %s\nout: %s\ninfo: %s', sorter.ready_nodes, sorter.out_nodes, sorter.node_info)
                 return node_ready or node_done
 
             await self._ready_condition.wait_for(_wait_for)

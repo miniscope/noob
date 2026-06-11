@@ -179,7 +179,7 @@ class Scheduler:
         if epoch is not None:
             graphs = [
                 (ep, self._epochs[ep])
-                for ep in {*self._subepochs.get(epoch, set()), epoch}
+                for ep in {*self._subepochs.get(epoch, []), epoch}
                 if ep in self._epochs
             ]
         else:

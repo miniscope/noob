@@ -81,6 +81,40 @@ class AsyncRunner(TubeRunner):
             result = self.collect_return()
         return result
 
+    async def run(self, n: int | None = None) -> None | list[ReturnNodeType]:
+        """
+        Run the tube infinitely or for a fixed number of iterations in a row.
+
+        Returns results if ``n`` is not ``None`` -
+        If ``n`` is ``None`` , we assume we are going to be running for a very long time,
+        and don't want to have an infinitely-growing collection in memory.
+        """
+        try:
+            _ = self.tube.input_collection.validate_input(InputScope.process, {})
+        except InputMissingError as e:
+            raise InputMissingError(
+                "Can't use the `run` method with tubes with process-scoped input "
+                "that was not provided when instantiating the tube! "
+                "Use `process()` directly, providing required inputs to each call."
+            ) from e
+        outputs = []
+        current_iter = 0
+        if not self.running:
+            await self.init()
+        try:
+            while n is None or current_iter < n:
+                out = await self.process()
+                if out is not None:
+                    outputs.append(out)
+                current_iter += 1
+        except (KeyboardInterrupt, StopIteration):
+            # fine, just return
+            pass
+        finally:
+            await self.deinit()
+
+        return outputs if outputs else None
+
     async def iter(self, n: int | None = None) -> AsyncGenerator[ReturnNodeType]:  # type: ignore[override]
         try:
             _ = self.tube.input_collection.validate_input(InputScope.process, {})

@@ -6,7 +6,7 @@ from collections.abc import Generator, MutableSequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from multiprocessing.synchronize import Event as EventType
-from time import time
+from time import time, sleep
 from typing import Any, cast, overload
 from uuid import uuid4
 
@@ -322,6 +322,12 @@ class ZMQRunner(TubeRunner):
         self.command.stop()
         self._running.clear()
 
+    def join(self) -> None:
+        """Block until stopped"""
+        # FIXME: temporary hack - reverse the event and wait on it
+        while self._running.is_set():
+            sleep(1)
+
     async def on_event(self, msg: Message) -> None:
         self._logger.debug("EVENT received: %s", msg)
         if msg.type_ != MessageType.event:
@@ -403,7 +409,7 @@ class ZMQRunner(TubeRunner):
 
     def _handle_error(self, msg: ErrorMsg) -> None:
         """Cancel current epoch, stash error for process method to throw"""
-        self._logger.error("Received error from node: %s", msg)
+        self._logger.error("Received error from node: %s\n%s\n%s", msg.value['err_type'], msg.value['err_args'], msg.value['traceback'])
         exception = msg.to_exception()
         self._to_throw = msg.value
         if self._current_epoch is not None:

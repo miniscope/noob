@@ -170,7 +170,7 @@ class TubeSpecification(ConfigYAMLMixin):
                 if node.type_ == "tube":
                     if node.params is None:
                         node.params = {}
-                    node.params["tube"] = TubeSpecification.from_any(node.params["tube"])
+                    node.params["tube"] = TubeSpecification.from_any(node.params["tube"], context={"recursive": True})
         return self
 
     @cached_property
@@ -336,6 +336,10 @@ class Tube(BaseModel):
         input_collection.add_input(InputScope.tube, input)
 
         nodes = cls._init_nodes(spec, input_collection)
+        # FIXME
+        for node_id in spec.nodes:
+            if node_id not in nodes:
+                spec.nodes[node_id].enabled = False
         edges = cls._init_edges(spec.nodes, nodes)
         scheduler = cls._init_scheduler(spec.nodes, edges)
 
@@ -368,7 +372,8 @@ class Tube(BaseModel):
             spec.id: Node.from_specification(spec, input_collection)
             for spec in specs.nodes.values()
         }
-        return nodes
+
+        return {k:v for k,v in nodes.items() if v}
 
     @classmethod
     def _init_edges(

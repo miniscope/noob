@@ -2,7 +2,6 @@
 View a noob tube!
 """
 
-import contextlib
 import threading
 import time
 import webbrowser
@@ -28,6 +27,8 @@ from litestar.response import Template
 from litestar.static_files import create_static_files_router
 from litestar.template.config import TemplateConfig
 
+from noob.logging import init_logger
+
 
 def _open_browser(
     url: str,
@@ -48,6 +49,8 @@ def _tube_node_ids(spec: TubeSpecification) -> list[str]:
 
 
 def make_view_app() -> Litestar:
+    logger = init_logger("gui.view")
+
     @get(path="/view/{tube_id: str}")
     async def view(tube_id: str) -> Template:
         return Template(template_name="view.html.jinja2", context={"tube_id": tube_id})
@@ -57,9 +60,12 @@ def make_view_app() -> Litestar:
         # yield the initial spec first, then reload whenever it changes
         tube_path = TubeSpecification.path_from_id(tube_id)
         spec = None
-        with contextlib.suppress(ValidationError):
+        try:
             spec = TubeSpecification.from_yaml(tube_path, context={"recursive": True})
+            logger.debug("Loaded spec: %s", spec)
             yield spec.model_dump_json()
+        except ValidationError as e:
+            logger.error("Validation error for tube: %s", e)
 
         watch_paths = [tube_path]
         if spec is not None:
@@ -67,13 +73,17 @@ def make_view_app() -> Litestar:
             nested_tubes = set(_tube_node_ids(spec))
             watch_paths.extend([TubeSpecification.path_from_id(i) for i in nested_tubes])
 
+        logger.debug("watching paths: %s", watch_paths)
+
         watcher = watchfiles.awatch(*watch_paths)
         async for _ in watcher:
             # totally fine, the spec is malformed when typing in it sometimes!
-            with contextlib.suppress(ValidationError):
+            try:
                 yield TubeSpecification.from_yaml(
                     tube_path, context={"recursive": True}
                 ).model_dump_json()
+            except ValidationError as e:
+                logger.error("Validation error for tube: %s", e)
 
     logging_config = LoggingConfig(
         root={"level": "INFO", "handlers": ["queue_listener"]},

@@ -15,6 +15,7 @@ from pydantic import (
 
 from noob.event import EventUnion
 from noob.types import Epoch, Picklable
+from noob.logging import init_logger
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
@@ -67,7 +68,12 @@ class Message(BaseModel):
         return MessageAdapter.validate_json(msg[-1].decode("utf-8"))
 
     def to_bytes(self) -> bytes:
-        return self.model_dump_json().encode("utf-8")
+        try:
+            return self.model_dump_json().encode("utf-8")
+        except:
+            logger = init_logger('message')
+            logger.exception("failed to serialize message: %s, %s", type(self), self)
+            raise
 
 
 class IdentifyValue(TypedDict):

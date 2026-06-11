@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from noob import Tube
     from noob.event import Event
     from noob.runner import TubeRunner
+    from noob.input import InputCollection
 
 CONFIG_ID_PATTERN = r"[\w\-\/#]+"
 """
@@ -109,12 +110,23 @@ def _to_isoformat(val: datetime) -> str:
 
 
 def _to_jsonable_pickle(val: Any, handler: SerializerFunctionWrapHandler) -> Any:
+    from noob.logging import init_logger
+    logger = init_logger('types.pickling')
     try:
+        logger.debug("TRYING TO PICKLE")
         if isinstance(val, Iterator | AsyncIterator) and not isinstance(val, Sized):
             raise TypeError("Pickling the generator")
-        return handler(val)
-    except (TypeError, PydanticSerializationError):
-        return "pck__" + base64.b64encode(pickle.dumps(val)).decode("utf-8")
+        res = handler(val)
+        logger.debug("PICKLE RES %s", res)
+        return res
+    except (UnicodeDecodeError, TypeError, PydanticSerializationError):
+        stringform =  "pck__" + base64.b64encode(pickle.dumps(val)).decode("utf-8")
+
+        # logger.debug("SERIALIZING PICKLE: %s, %s", val, stringform)
+        return stringform
+    except Exception as e:
+        logger.exception("UNHANDLED EXCEPTION TYPE: %s", type(e))
+        raise
 
 
 def _from_jsonable_pickle(val: Any) -> Any:
@@ -223,6 +235,7 @@ AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)
 class RunnerContext(TypedDict):
     runner: TubeRunner
     tube: Tube
+    input_collection: InputCollection
 
 
 class EpochSegment(NamedTuple):
