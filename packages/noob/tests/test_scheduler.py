@@ -3,7 +3,7 @@ from multiprocessing import Queue
 from queue import Empty
 
 import pytest
-
+from noob.types import Epoch
 from noob import NodeSpecification, SynchronousRunner, Tube
 from noob.edge import Edge
 from noob.event import Event, MetaEventType
@@ -214,6 +214,69 @@ def test_metaevents():
 
 
 @pytest.mark.xfail(raises=NotImplementedError)
+def test_epoch_log_is_set_like():
+    """
+    _epoch_log must support O(1) membership testing.
+    After completing epochs, completed epochs must be present in the log
+    and upcoming epochs must not be.
+    """
+    tube = Tube.from_specification("testing-basic")
+    scheduler = tube.scheduler
+
+    for epoch in range(5):
+        scheduler.add_epoch()
+        for node in scheduler.nodes:
+            scheduler.get_ready(epoch=Epoch(epoch))
+            scheduler.done(epoch=Epoch(epoch), node_id=node)
+
+    for epoch in range(5):
+        assert epoch in scheduler._epoch_log
+
+    assert 999 not in scheduler._epoch_log
+
+
+def test_epoch_log_trim_keeps_recent_epochs():
+    """
+    When the log is trimmed, the most recent (highest-numbered) epochs must
+    be retained, and older epochs must be removed.
+    """
+    tube = Tube.from_specification("testing-basic")
+    scheduler = tube.scheduler
+    scheduler._epoch_log_trim_interval = 10
+    scheduler._epoch_log_keep = 5
+
+    for epoch in range(10):
+        scheduler.add_epoch(epoch)
+        for node in scheduler.nodes:
+            scheduler.get_ready(epoch=Epoch(epoch))
+            scheduler.done(epoch=Epoch(epoch), node_id=node)
+
+    remaining = set(scheduler._epoch_log.keys())
+    assert remaining == {5, 6, 7, 8, 9}, f"Expected {{5..9}}, got {remaining}"
+    for old_epoch in range(5):
+        assert old_epoch not in scheduler._epoch_log
+
+
+def test_epoch_log_out_of_order_trim():
+    """
+    Epochs that arrive out of order must not cause higher-numbered epochs
+    to be cleared when trimming older ones.
+    """
+    tube = Tube.from_specification("testing-basic")
+    scheduler = tube.scheduler
+    scheduler._epoch_log_trim_interval = 10
+    scheduler._epoch_log_keep = 5
+
+    order = list(range(9)) + [9]
+    for epoch in order:
+        scheduler.add_epoch(epoch)
+        for node in scheduler.nodes:
+            scheduler.get_ready(epoch=Epoch(epoch))
+            scheduler.done(epoch=Epoch(epoch), node_id=node)
+    remaining = set(scheduler._epoch_log.keys())
+    assert 9 in remaining, f"Epoch 9 (late arrival) was incorrectly evicted: {remaining}"
+    assert len(remaining) == 5
+
 def test_noevent_ends_epoch():
     """If a node in the middle of a tube emits a noevent, the epoch should no longer be active"""
     raise NotImplementedError("Write this test!")
