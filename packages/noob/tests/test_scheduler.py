@@ -3,7 +3,7 @@ from multiprocessing import Queue
 from queue import Empty
 
 import pytest
-from noob.types import Epoch
+
 from noob import NodeSpecification, SynchronousRunner, Tube
 from noob.edge import Edge
 from noob.event import Event, MetaEventType
@@ -213,7 +213,6 @@ def test_metaevents():
     assert all(event["node_id"] != "meta" for event in runner.store.flat_events)
 
 
-@pytest.mark.xfail(raises=NotImplementedError)
 def test_epoch_log_is_set_like():
     """
     _epoch_log must support O(1) membership testing.
@@ -277,6 +276,20 @@ def test_epoch_log_out_of_order_trim():
     assert 9 in remaining, f"Epoch 9 (late arrival) was incorrectly evicted: {remaining}"
     assert len(remaining) == 5
 
+
+def test_epoch_completed_out_of_order():
+    """When epochs are completed out of order, we can still correctly test for completion"""
+    tube = Tube.from_specification("testing-basic")
+    scheduler = tube.scheduler
+    scheduler.add_epoch(1)
+    scheduler.add_epoch(10)
+    scheduler.end_epoch(10)
+    scheduler.end_epoch(1)
+
+    assert not scheduler.epoch_completed(Epoch(2))
+
+
+@pytest.mark.xfail(raises=NotImplementedError)
 def test_noevent_ends_epoch():
     """If a node in the middle of a tube emits a noevent, the epoch should no longer be active"""
     raise NotImplementedError("Write this test!")

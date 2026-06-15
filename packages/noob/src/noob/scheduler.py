@@ -35,7 +35,7 @@ class Scheduler:
     _last_epoch: int = -1
     _epochs: dict[Epoch, TopoSorter] = field(default_factory=dict)
     _subepochs: dict[Epoch, set[Epoch]] = field(default_factory=lambda: defaultdict(set))
-    _epoch_log: dict = field(default_factory=dict)
+    _epoch_log: dict[int, None] = field(default_factory=dict)
     _epoch_log_trim_interval: int = field(default=1000)
     _epoch_log_keep: int = field(default=100)
     _subgraphs: dict[NodeID, tuple[dict[str, NodeSpecification], list[Edge]]] = field(
@@ -406,7 +406,7 @@ class Scheduler:
         """
         Check if the epoch has been completed.
         """
-        epoch_int = epoch[0].epoch if isinstance(epoch, Epoch) else int(epoch)
+        epoch_int = epoch[0].epoch
         previously_completed = (
             len(self._epoch_log) > 0
             and epoch not in self._epochs
@@ -430,12 +430,11 @@ class Scheduler:
             raise TypeError("Can only end an epoch with an integer or Epoch")
         self._logger.debug("Ending epoch %s", ep)
         if len(ep) == 1:
-            self._epoch_log[ep[0].epoch] = True
-            if len(self._epoch_log) % self._epoch_log_trim_interval == 0:
-                keep = self._epoch_log_keep
-                keys_to_remove = list(self._epoch_log.keys())[:-keep] if keep else list(self._epoch_log.keys())
-                for k in keys_to_remove:
-                    del self._epoch_log[k]
+            self._epoch_log[ep[0].epoch] = None
+            if len(self._epoch_log) >= self._epoch_log_trim_interval:
+                self._epoch_log = {
+                    k: None for k in sorted(self._epoch_log)[-self._epoch_log_keep :]
+                }
             for subep in {ep, *self._subepochs[ep]}:
                 with contextlib.suppress(KeyError):
                     del self._epochs[subep]
@@ -475,7 +474,6 @@ class Scheduler:
         """
         self._epochs = {}
         self._epoch_log = {}
-
 
     def _init_graph(self, epoch: Epoch | None = None) -> TopoSorter:
         """
