@@ -250,7 +250,7 @@ def test_epoch_log_trim_keeps_recent_epochs():
             scheduler.get_ready(epoch=Epoch(epoch))
             scheduler.done(epoch=Epoch(epoch), node_id=node)
 
-    remaining = set(scheduler._epoch_log.keys())
+    remaining = scheduler._epoch_log
     assert remaining == {5, 6, 7, 8, 9}, f"Expected {{5..9}}, got {remaining}"
     for old_epoch in range(5):
         assert old_epoch not in scheduler._epoch_log
@@ -271,7 +271,7 @@ def test_epoch_log_out_of_order_trim():
         for node in scheduler.nodes:
             scheduler.get_ready(epoch=Epoch(epoch))
             scheduler.done(epoch=Epoch(epoch), node_id=node)
-    remaining = set(scheduler._epoch_log.keys())
+    remaining = scheduler._epoch_log
     assert remaining == {5, 6, 7, 8, 9}, "Early arriving, high epoch keys incorrectly evicted"
 
 
