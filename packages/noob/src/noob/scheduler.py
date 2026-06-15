@@ -431,9 +431,7 @@ class Scheduler:
         if len(ep) == 1:
             self._epoch_log.add(ep[0].epoch)
             if len(self._epoch_log) >= self._epoch_log_trim_interval:
-                self._epoch_log = {
-                    k for k in sorted(self._epoch_log)[-self._epoch_log_keep :]
-                }
+                self._epoch_log = {k for k in sorted(self._epoch_log)[-self._epoch_log_keep :]}
             for subep in {ep, *self._subepochs[ep]}:
                 with contextlib.suppress(KeyError):
                     del self._epochs[subep]
