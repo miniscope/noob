@@ -266,15 +266,13 @@ def test_epoch_log_out_of_order_trim():
     scheduler._epoch_log_trim_interval = 10
     scheduler._epoch_log_keep = 5
 
-    order = list(range(9)) + [9]
-    for epoch in order:
+    for epoch in reversed(range(10)):
         scheduler.add_epoch(epoch)
         for node in scheduler.nodes:
             scheduler.get_ready(epoch=Epoch(epoch))
             scheduler.done(epoch=Epoch(epoch), node_id=node)
     remaining = set(scheduler._epoch_log.keys())
-    assert 9 in remaining, f"Epoch 9 (late arrival) was incorrectly evicted: {remaining}"
-    assert len(remaining) == 5
+    assert remaining == {5, 6, 7, 8, 9}, "Early arriving, high epoch keys incorrectly evicted"
 
 
 def test_epoch_completed_out_of_order():

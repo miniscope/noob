@@ -230,7 +230,7 @@ class Scheduler:
         # which marks them as "out" in the TopoSorter
 
         # if we've already run this, the node is ready - don't create another epoch
-        if epoch in self._epoch_log:
+        if epoch and epoch[0].epoch in self._epoch_log:
             return True
 
         graphs = (
@@ -243,7 +243,7 @@ class Scheduler:
 
     def node_is_done(self, node: NodeID, epoch: Epoch) -> bool:
         """Node is expired or done in specified epoch"""
-        if epoch in self._epoch_log:
+        if epoch[0].epoch in self._epoch_log:
             return True
 
         if self._subepochs[epoch]:
@@ -346,8 +346,7 @@ class Scheduler:
         Args:
             with_signals (bool): When marking this node as done, also mark all its signals as done.
         """
-        epoch_int = epoch[0].epoch if isinstance(epoch, Epoch) else epoch
-        if epoch_int in self._epoch_log:
+        if epoch[0].epoch in self._epoch_log:
             self._logger.debug(
                 "Marking node %s as done in epoch %s, " "but epoch was already completed. ignoring",
                 node_id,
@@ -410,7 +409,7 @@ class Scheduler:
         previously_completed = (
             len(self._epoch_log) > 0
             and epoch not in self._epochs
-            and (epoch_int in self._epoch_log or epoch_int < next(iter(self._epoch_log)))
+            and (epoch_int in self._epoch_log or epoch_int < min(self._epoch_log))
         )
         active_completed = epoch in self._epochs and not any(
             self._epochs[ep].is_active() for ep in [epoch, *self._subepochs[epoch]]
