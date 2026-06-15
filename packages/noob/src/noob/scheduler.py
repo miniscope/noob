@@ -472,7 +472,7 @@ class Scheduler:
         Remove epoch records, restarting the scheduler
         """
         self._epochs = {}
-        self._epoch_log = {}
+        self._epoch_log = set()
 
     def _init_graph(self, epoch: Epoch | None = None) -> TopoSorter:
         """
