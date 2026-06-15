@@ -1,5 +1,19 @@
 # Changelog
 
+## Upcoming
+
+**Perf**
+
+- [`#224`](https://github.com/miniscope/noob/pull/224) - 
+  Avoid calls to `Epoch.__eq__` when unnecessary.
+  6-7% performance improvement on whole runner benchmark
+- [`#226`](https://github.com/miniscope/noob/pull/226) -
+  Cache `Node.edges`.
+  2.5% performance improvement on whole runner benchmark.
+- [`#230`](https://github.com/miniscope/noob/pull/230) ([@vaishnavidesai09](https://github.com/vaishnavidesai09)) -
+  Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
+  ~6% scheduler performance improvement.
+
 ## v1000.*
 
 ### v1000.1.0 - 26-05-18

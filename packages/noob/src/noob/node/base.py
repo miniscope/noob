@@ -246,7 +246,7 @@ class Node(BaseModel):
         """Similar to :meth:`.get_signals`, but for slots!"""
         return Slot.from_callable(cls.process, spec)
 
-    @property
+    @functools.cached_property
     def edges(self) -> list[Edge]:
         """
         The dependencies this node has declared, express as edges between
