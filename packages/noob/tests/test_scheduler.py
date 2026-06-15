@@ -213,6 +213,80 @@ def test_metaevents():
     assert all(event["node_id"] != "meta" for event in runner.store.flat_events)
 
 
+def test_epoch_log_is_set_like():
+    """
+    _epoch_log must support O(1) membership testing.
+    After completing epochs, completed epochs must be present in the log
+    and upcoming epochs must not be.
+    """
+    tube = Tube.from_specification("testing-basic")
+    scheduler = tube.scheduler
+
+    for epoch in range(5):
+        scheduler.add_epoch()
+        for node in scheduler.nodes:
+            scheduler.get_ready(epoch=Epoch(epoch))
+            scheduler.done(epoch=Epoch(epoch), node_id=node)
+
+    for epoch in range(5):
+        assert epoch in scheduler._epoch_log
+
+    assert 999 not in scheduler._epoch_log
+
+
+def test_epoch_log_trim_keeps_recent_epochs():
+    """
+    When the log is trimmed, the most recent (highest-numbered) epochs must
+    be retained, and older epochs must be removed.
+    """
+    tube = Tube.from_specification("testing-basic")
+    scheduler = tube.scheduler
+    scheduler._epoch_log_trim_interval = 10
+    scheduler._epoch_log_keep = 5
+
+    for epoch in range(10):
+        scheduler.add_epoch(epoch)
+        for node in scheduler.nodes:
+            scheduler.get_ready(epoch=Epoch(epoch))
+            scheduler.done(epoch=Epoch(epoch), node_id=node)
+
+    remaining = scheduler._epoch_log
+    assert remaining == {5, 6, 7, 8, 9}, f"Expected {{5..9}}, got {remaining}"
+    for old_epoch in range(5):
+        assert old_epoch not in scheduler._epoch_log
+
+
+def test_epoch_log_out_of_order_trim():
+    """
+    Epochs that arrive out of order must not cause higher-numbered epochs
+    to be cleared when trimming older ones.
+    """
+    tube = Tube.from_specification("testing-basic")
+    scheduler = tube.scheduler
+    scheduler._epoch_log_trim_interval = 10
+    scheduler._epoch_log_keep = 5
+
+    for epoch in reversed(range(10)):
+        scheduler.add_epoch(epoch)
+        for node in scheduler.nodes:
+            scheduler.get_ready(epoch=Epoch(epoch))
+            scheduler.done(epoch=Epoch(epoch), node_id=node)
+    remaining = scheduler._epoch_log
+    assert remaining == {5, 6, 7, 8, 9}, "Early arriving, high epoch keys incorrectly evicted"
+
+
+def test_epoch_completed_out_of_order():
+    """When epochs are completed out of order, we can still correctly test for completion"""
+    tube = Tube.from_specification("testing-basic")
+    scheduler = tube.scheduler
+    scheduler.add_epoch(1)
+    scheduler.add_epoch(10)
+    scheduler.end_epoch(10)
+    scheduler.end_epoch(1)
+
+    assert not scheduler.epoch_completed(Epoch(2))
+
+
 @pytest.mark.xfail(raises=NotImplementedError)
 def test_noevent_ends_epoch():
     """If a node in the middle of a tube emits a noevent, the epoch should no longer be active"""
