@@ -35,8 +35,8 @@ class Scheduler:
     _last_epoch: int = -1
     _epochs: dict[Epoch, TopoSorter] = field(default_factory=dict)
     _subepochs: dict[Epoch, set[Epoch]] = field(default_factory=lambda: defaultdict(set))
-    _epoch_log: dict[int, None] = field(default_factory=dict)
-    _epoch_log_trim_interval: int = field(default=1000)
+    _epoch_log: set[int] = field(default_factory=set)
+    _epoch_log_trim_interval: int = field(default=200)
     _epoch_log_keep: int = field(default=100)
     _subgraphs: dict[NodeID, tuple[dict[str, NodeSpecification], list[Edge]]] = field(
         default_factory=dict
@@ -429,10 +429,10 @@ class Scheduler:
             raise TypeError("Can only end an epoch with an integer or Epoch")
         self._logger.debug("Ending epoch %s", ep)
         if len(ep) == 1:
-            self._epoch_log[ep[0].epoch] = None
+            self._epoch_log.add(ep[0].epoch)
             if len(self._epoch_log) >= self._epoch_log_trim_interval:
                 self._epoch_log = {
-                    k: None for k in sorted(self._epoch_log)[-self._epoch_log_keep :]
+                    k for k in sorted(self._epoch_log)[-self._epoch_log_keep :]
                 }
             for subep in {ep, *self._subepochs[ep]}:
                 with contextlib.suppress(KeyError):
