@@ -179,15 +179,19 @@ class Node(BaseModel):
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec, enabled=spec.enabled, **params, **kwargs)
+                node = obj(id=spec.id, spec=spec, enabled=spec.enabled, **params, **kwargs)
             else:
-                return WrapClassNode(
+                node = WrapClassNode(
                     id=spec.id, cls=obj, spec=spec, params=params, enabled=spec.enabled, **kwargs
                 )
         else:
-            return WrapFuncNode(
+            node = WrapFuncNode(
                 id=spec.id, fn=obj, spec=spec, params=params, enabled=spec.enabled, **kwargs
             )
+
+        # update the spec's statefulness, which can be determined dynamically by a node
+        spec.stateful = node.stateful
+        return node
 
     @property
     def signals(self) -> dict[str, Signal]:

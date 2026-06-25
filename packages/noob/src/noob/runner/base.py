@@ -108,8 +108,7 @@ class TubeRunner(ABC):
         with self._asset_context(AssetScope.process):
             self._before_process()
 
-            while self.tube.scheduler.is_active():
-                ready = self._get_ready()
+            for ready in self._get_ready():
                 ready = self._filter_ready(ready, self.tube.scheduler)
                 for node_info in ready:
                     self._process_node(node_info=node_info, input=input)
@@ -265,8 +264,8 @@ class TubeRunner(ABC):
         """
         return
 
-    def _get_ready(self, epoch: Epoch | None = None) -> list[MetaEvent]:
-        return self.tube.scheduler.get_ready(epoch=epoch)
+    def _get_ready(self, epoch: Epoch | None = None) -> Iterator[list[MetaEvent]]:
+        yield from self.tube.scheduler.iter_epoch(epoch)
 
     def _filter_ready(self, nodes: list[MetaEvent], scheduler: Scheduler) -> list[MetaEvent]:
         """

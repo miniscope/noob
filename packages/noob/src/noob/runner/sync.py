@@ -79,7 +79,6 @@ class SynchronousRunner(TubeRunner):
         Initialize if not already done.
         """
         self.store.clear()
-        self.tube.scheduler.add_epoch()
         if not self._running.is_set():
             self.init()
 

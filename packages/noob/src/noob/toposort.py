@@ -10,6 +10,8 @@ from noob.types import NodeID, NodeSignal
 
 GraphItem: TypeAlias = NodeID | NodeSignal
 
+PREVIOUS_EPOCH = NodeSignal("meta", "previous_epoch")
+
 
 class _NodeInfo:
     __slots__ = (
@@ -81,6 +83,15 @@ class TopoSorter:
     Based on graphlib.TopologicalSorter, with some minor changes
     to allow querying nodes at different stages,
     and modifying graph mid-iteration.
+
+    The graph model is bipartite, where nodes depend only on :class:`.NodeSignal` s
+    emitted by previous nodes, and :class:`.NodeSignal` s only depend on nodes.
+
+    Special "meta dependencies" are added to control runs:
+
+    - ``input`` s prevent nodes from running until inputs are present
+    - ``meta.previous_epoch`` prevent stateful nodes from running until the prior epoch has run,
+      (TopoSorter is naive to epoch, so the scheduler must control this signal)
     """
 
     __slots__ = (
@@ -125,6 +136,8 @@ class TopoSorter:
         for node_id, node in nodes.items():
             if node.enabled and node_id not in self._node2info:
                 self.add(node_id)
+            if node.stateful:
+                self.add(node.id, PREVIOUS_EPOCH)
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, self.__class__):
@@ -197,7 +210,12 @@ class TopoSorter:
                     else:
                         self.mark_ready(successor)
 
-    def add(self, node: GraphItem, *predecessors: GraphItem, required: bool = True) -> None:
+    def add(
+        self,
+        node: GraphItem,
+        *predecessors: GraphItem,
+        required: bool = True,
+    ) -> None:
         """
         Add a new node and its predecessors to the graph.
 
@@ -252,7 +270,7 @@ class TopoSorter:
             new_predecessors.append(pred)
             pred_info.successors.add(node)
 
-            if isinstance(pred, NodeSignal):
+            if isinstance(pred, NodeSignal) and pred != PREVIOUS_EPOCH:
                 # (node, signal) predecessors must always depend on the node
                 self.signals[pred[0]].add(pred)
                 self.add(pred, pred[0])
@@ -291,10 +309,19 @@ class TopoSorter:
         """
         # Get the nodes that are ready and mark them
         if node_id is None:
-            result = tuple(self.ready_nodes)
+            result = tuple(r for r in self.ready_nodes if isinstance(r, str))
         else:
             result = tuple(node for node in self.ready_nodes if node == node_id)
-        self.mark_out(*result)
+
+        # mark all the node's signals as out, but don't return them as "ready" -
+        # signals are included in the graph for dependency bookkeeping,
+        # but can't be "run" which is what we are trying to get here.
+        signals = []
+        for r in result:
+            if isinstance(r, str):
+                signals.extend(self._get_nodeinfo(r).successors)
+
+        self.mark_out(*result, *signals)
 
         return result
 
@@ -306,7 +333,10 @@ class TopoSorter:
         number of nodes marked "done" is less than the number that have been returned
         by "get_ready".
         """
-        return self._nfinished < self._npassedout or bool(self.ready_nodes)
+        active = self._nfinished < self._npassedout or bool(self.ready_nodes)
+        # if active:
+        #     breakpoint()
+        return active
 
     def done(self, *nodes: GraphItem) -> None:
         """Marks a set of nodes returned by "get_ready" as processed.
