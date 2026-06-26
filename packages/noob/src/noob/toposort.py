@@ -92,6 +92,29 @@ class TopoSorter:
     - ``input`` s prevent nodes from running until inputs are present
     - ``meta.previous_epoch`` prevent stateful nodes from running until the prior epoch has run,
       (TopoSorter is naive to epoch, so the scheduler must control this signal)
+
+
+    .. note::
+
+        Since the `get_ready` method doesn't return node signal tuples,
+        when iterating over the topo sorter in e.g. testing conditions,
+        you need to mark all the ``out_nodes`` as ``done`` ,
+        i.e. instead of this::
+
+            while sorter.is_active():
+                ready = sorter.get_ready()
+                sorter.done(*ready)
+
+        do this::
+
+            while sorter.is_active():
+                ready = sorter.get_ready()
+                sorter.done(*sorter.out_nodes)
+
+        In normal usage, this should be handled by the runner via the scheduler,
+        which explicitly marks the signals as done or expired,
+        depending on whether or not they are emitted
+
     """
 
     __slots__ = (
@@ -319,7 +342,7 @@ class TopoSorter:
         signals = []
         for r in result:
             if isinstance(r, str):
-                signals.extend(self._get_nodeinfo(r).successors)
+                signals.extend([s for s in self._get_nodeinfo(r).successors if isinstance(s, tuple)])
 
         self.mark_out(*result, *signals)
 
