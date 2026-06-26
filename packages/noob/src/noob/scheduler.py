@@ -130,8 +130,7 @@ class Scheduler:
                 break
             yield ready
 
-            if self.sources_finished() or len(self._epochs) == 0:
-                self.add_epoch()
+
 
     def add_epoch(self, epoch: int | Epoch | None = None) -> Epoch:
         """
@@ -167,7 +166,8 @@ class Scheduler:
         # mark the meta "previous_epoch" signal as completed
         # otherwise, this gets marked as epochs are completed
         if this_epoch.root[0].epoch == 0 or this_epoch.root[0].epoch - 1 in self._epoch_log:
-            self._epochs[this_epoch].done(PREVIOUS_EPOCH)
+            with contextlib.suppress(NotAddedError):
+                self._epochs[this_epoch].done(PREVIOUS_EPOCH)
 
         return this_epoch
 
@@ -424,6 +424,10 @@ class Scheduler:
         if signal is None and with_signals:
             self[epoch].done(*self[epoch].signals[node_id].difference(self[epoch].done_nodes))
 
+        # eagerly add the next epoch if this is a source node
+        if node_id in self.source_nodes and len(epoch) == 1 and self.sources_finished(epoch) and epoch + 1 not in self._epochs:
+            self.add_epoch(epoch + 1)
+
         if not self.is_active(epoch):
             return self.end_epoch(epoch)
         return None
@@ -574,6 +578,8 @@ class Scheduler:
         """
         sorter = self._init_graph()
         generations = []
+        if PREVIOUS_EPOCH in sorter.ready_nodes:
+            sorter.done(PREVIOUS_EPOCH)
         while sorter.is_active():
             ready = sorter.get_ready()
             if ready:
