@@ -22,7 +22,7 @@ from noob.asset import AssetScope, AssetSpecification
 from noob.config import config
 from noob.edge import Edge, Signal
 from noob.event import Event, MetaEvent
-from noob.exceptions import AlreadyDoneError, EpochCompletedError
+from noob.exceptions import AlreadyDoneError, EpochCompletedError, EpochExistsError
 from noob.input import InputCollection
 from noob.network.loop import EventloopMixin
 from noob.network.message import (
@@ -136,7 +136,6 @@ class NodeRunner(EventloopMixin):
         self._depends: tuple[tuple[str, str], ...] | None = None
         self._has_input: bool | None = None
         self._nodes: dict[str, IdentifyValue] = {}
-        self._counter = count()
         self._epochs_todo: deque[Epoch] = deque()
         self._freerun = asyncio.Event()
         self._status: NodeStatus = NodeStatus.stopped
@@ -308,13 +307,17 @@ class NodeRunner(EventloopMixin):
                     value = await loop.run_in_executor(executor, part)
                 events = self.store.add_value(self._node.signals, value, self._node.id, epoch)
                 async with self._ready_condition:
-                    self.scheduler.add_epoch()
 
                     # nodes don't report epoch endings since they don't know about the full tube
                     events = [e for e in events if e["node_id"] != "meta"]
                     if events:
                         self.scheduler.update(events)
                         await self.publish_events(events, epoch)
+                    if self.scheduler.node_is_done(self._node.id, epoch.root):
+                        self.scheduler.end_epoch(epoch.root)
+                        if epoch.root in self._epochs_todo:
+                            self._epochs_todo.remove(epoch.root)
+
                     self._ready_condition.notify_all()
 
     async def await_inputs(self) -> AsyncGenerator[tuple[tuple[Any], dict[str, Any], Epoch]]:
@@ -363,30 +366,29 @@ class NodeRunner(EventloopMixin):
                     readies.extend([r for r in ready if r['value'] == self.spec.id])
 
             readies = sorted(readies, key=lambda r: r["epoch"])
-
+            self.logger.debug("readies: %s", readies)
             # if we're freerunning, just run it all
             if self._freerun.is_set():
                 for r in readies:
                     yield r
+                if not readies:
+                    async with self._ready_condition:
+                        await self._ready_condition.wait()
                 readies = []
 
             # otherwise, we only run from epochs that have been requested
             elif len(self._epochs_todo) > 0:
                 async with self._ready_condition:
-                    next_epoch = self._epochs_todo.popleft()
-                    # run the epoch or any of its subepochs
-                    epoch_ready = [r for r in readies if r["epoch"].root == next_epoch]
-                    # filter the readies list
-                    readies = [r for r in readies if r["epoch"].root != next_epoch]
-                    # if we aren't ready in this epoch yet, put it back on the queue
-                    if not epoch_ready:
-                        self._epochs_todo.appendleft(next_epoch)
+                    valid_ready = [r for r in readies if r['epoch'].root in self._epochs_todo]
+                    readies = [r for r in readies if r["epoch"].root not in self._epochs_todo]
+
+                    if not valid_ready:
                         # wait here, we continue from the top whenever we get another process cmd
                         await self._ready_condition.wait()
 
                 # if we have anything ready in this epoch, yield it
                 # (separated from the above to release the condition)
-                for r in epoch_ready:
+                for r in valid_ready:
                     yield r
 
             else:
@@ -636,7 +638,13 @@ class NodeRunner(EventloopMixin):
         if msg.value is None:
             self._freerun.set()
         else:
-            self._epochs_todo.extend(Epoch(next(self._counter)) for _ in range(msg.value))
+            next_epoch = max(self._epochs_todo) + 1 if self._epochs_todo else max(self.scheduler._epochs)
+            to_run = [Epoch(i) for i in range(next_epoch[0].epoch, msg.value + next_epoch[0].epoch)]
+            self.logger.debug("ADding epochs to scheduler: %s", to_run)
+            with contextlib.suppress(EpochExistsError):
+                for ep in to_run:
+                    self.scheduler.add_epoch(ep)
+            self._epochs_todo.extend(to_run)
         async with self._ready_condition:
             self._ready_condition.notify_all()
 
@@ -731,7 +739,8 @@ class NodeRunner(EventloopMixin):
 
         if not self.scheduler.epoch_completed(msg.value):
             async with self._ready_condition:
-                self.scheduler.end_epoch(msg.value)
+                with contextlib.suppress(EpochCompletedError):
+                    self.scheduler.end_epoch(msg.value)
                 self._ready_condition.notify_all()
 
         if self.state.dependencies and not self._assets_done(msg.value + 1):

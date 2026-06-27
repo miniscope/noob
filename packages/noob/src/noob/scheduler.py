@@ -88,6 +88,18 @@ class Scheduler:
         """
         return {(e.source_node, e.source_signal) for e in self.edges}
 
+    @property
+    def epoch(self) -> Epoch:
+        """The current epoch that would run next/is running"""
+        if self._epochs:
+            for ep in sorted(self._epochs.keys()):
+                if self._epochs[ep].is_active():
+                    return ep
+        elif self._epoch_log:
+            return Epoch(max(self._epoch_log) + 1)
+        else:
+            return Epoch(0)
+
     def iter_epoch(self, epoch: Epoch | None = None) -> Iterator[list[MetaEvent]]:
         """
         Iter batches of ready events from an epoch until it's completed.
@@ -101,8 +113,14 @@ class Scheduler:
         """
         if epoch is None:
             if len(self._epochs) > 0:
-                max_ep = max(self._epochs)
-                epoch = max_ep if self.is_active(max_ep) else self.add_epoch()
+                # minimum active epoch
+                active_ep = None
+                for ep in sorted(self._epochs):
+                    if self.is_active(ep.root):
+                        active_ep = ep.root
+                        break
+
+                epoch = active_ep if active_ep else self.add_epoch()
             else:
                 epoch = self.add_epoch()
         elif epoch not in self._epochs:
@@ -359,7 +377,7 @@ class Scheduler:
         # process subepochs first so they're created when we handle parent epochs
         events = sorted(events, key=lambda ee: len(ee["epoch"]), reverse=True)
         for e in events:
-            if e["node_id"] == "meta":
+            if e["node_id"] == "meta" and e['signal'] != 'previous_epoch':
                 continue
             elif (node_done := (e["epoch"], e["node_id"])) not in nodes_done:
                 nodes_done.add(node_done)
@@ -425,7 +443,8 @@ class Scheduler:
             self[epoch].done(*self[epoch].signals[node_id].difference(self[epoch].done_nodes))
 
         # eagerly add the next epoch if this is a source node
-        if node_id in self.source_nodes and len(epoch) == 1 and self.sources_finished(epoch) and epoch + 1 not in self._epochs:
+        next_ep = epoch + 1
+        if node_id in self.source_nodes and len(epoch) == 1 and self.sources_finished(epoch) and next_ep not in self._epochs and next_ep[0].epoch not in self._epoch_log:
             self.add_epoch(epoch + 1)
 
         if not self.is_active(epoch):
@@ -489,6 +508,19 @@ class Scheduler:
             raise TypeError("Can only end an epoch with an integer or Epoch")
         self._logger.debug("Ending epoch %s", ep)
 
+        # signal this epoch has been completed to any successive epochs
+        # we create root epoch graphs here -
+        # the most common place to do so for tubes with stateful nodes.
+        # epochs are created elsewhere when explicitly iterating epochs with `iter_epoch`
+        # or when we receive out of order events e.g. in `update`
+        next = ep + 1
+        if len(next) == 1 and next not in self._epochs and next.root[0].epoch not in self._epoch_log:
+            self.add_epoch(next)
+
+        with contextlib.suppress(AlreadyDoneError, NotAddedError, EpochCompletedError):
+            if len(ep) == 1 or next in self._epochs:
+                self[next].done(PREVIOUS_EPOCH)
+
         if len(ep) == 1:
             self._epoch_log.add(ep[0].epoch)
             if len(self._epoch_log) >= self._epoch_log_trim_interval:
@@ -496,17 +528,12 @@ class Scheduler:
             for subep in {ep, *self._subepochs[ep]}:
                 with contextlib.suppress(KeyError):
                     del self._epochs[subep]
-
-        # signal this epoch has been completed to any successive epochs
-        # we create root epoch graphs here -
-        # the most common place to do so for tubes with stateful nodes.
-        # epochs are created elsewhere when explicitly iterating epochs with `iter_epoch`
-        # or when we receive out of order events e.g. in `update`
-        with contextlib.suppress(AlreadyDoneError, NotAddedError):
-            if len(ep) == 1 and ep[0].epoch + 1 not in self._epoch_log:
-                self[ep + 1].done(PREVIOUS_EPOCH)
-            elif (successor := ep + 1) in self._epochs:
-                self[successor].done(PREVIOUS_EPOCH)
+        else:
+            # for parent in ep.parents:
+            #     self._subepochs[parent].remove(ep)
+            # del self._epochs[ep]
+            if not self.is_active(ep.parent):
+                return self.end_epoch(ep.parent)
 
         return MetaEvent(
             id=uuid4().int,
@@ -520,11 +547,17 @@ class Scheduler:
     def enable_node(self, node_id: str) -> None:
         """
         Enable edges attached to the node and the
-        NodeSpecification enable switches to True
-
+        NodeSpecification enable switches to True.
+        Enabling a node clears any existing epochs, so it should only be done
+        between process calls.
         """
         self.nodes[node_id].enabled = True
+        # recreate any existing epochs
+        existing = list(self._epochs.keys())
+        self._epochs = {}
         self._frozen_sorters = {}
+        for e in existing:
+            self.add_epoch(e)
 
     def disable_node(self, node_id: str) -> None:
         """

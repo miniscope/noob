@@ -462,6 +462,16 @@ class TopoSorter:
                     break
         return None
 
+    def get_state(self) -> dict:
+        """
+        Get a printable representation of the state of the toposort.
+        """
+        return {
+            'done': self.done_nodes.copy(),
+            'out': self.out_nodes.copy(),
+            'ready': self.ready_nodes.copy(),
+        }
+
     def _get_nodeinfo(self, node: GraphItem) -> _NodeInfo:
         if (result := self._node2info.get(node)) is None:
             self._node2info[node] = result = _NodeInfo(node)
@@ -480,6 +490,7 @@ class TopoSorter:
                 self._npassedout += 1
         self._done_nodes.update(expired)
         self._nfinished += len(expired)
+
 
     def _update_optionals(
         self, node: GraphItem, predecessors: Sequence[GraphItem], required: bool

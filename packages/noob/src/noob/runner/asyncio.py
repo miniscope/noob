@@ -166,6 +166,8 @@ class AsyncRunner(TubeRunner):
                 # if none are ready, wait until another node is complete and check again
                 self._node_ready.clear()
                 await self._node_ready.wait()
+                if self._exception:
+                    await self._raise_exception()
                 continue
             yield ready
 

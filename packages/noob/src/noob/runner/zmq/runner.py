@@ -11,7 +11,7 @@ from typing import Any, cast, overload
 from uuid import uuid4
 
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import InputMissingError
+from noob.exceptions import InputMissingError, EpochCompletedError
 from noob.input import InputScope
 from noob.network.message import ErrorMsg, ErrorValue, EventMsg, Message, MessageType
 from noob.node import Return
@@ -62,6 +62,12 @@ class ZMQRunner(TubeRunner):
     _to_throw: ErrorValue | None = None
     _current_epoch: Epoch = Epoch(0)
     _epoch_futures: dict[Epoch, concurrent.futures.Future] = field(default_factory=dict)
+    _epoch_condition: threading.Condition = field(default_factory=threading.Condition)
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.tube.scheduler.stateful = False
+        self.tube.scheduler._frozen_sorters = {}
 
     @property
     def running(self) -> bool:
@@ -227,7 +233,7 @@ class ZMQRunner(TubeRunner):
             raise RuntimeError("Already Running!")
         self.command = cast(CommandNode, self.command)
 
-        epoch = self._current_epoch[0].epoch
+        epoch = self.tube.scheduler.epoch[0].epoch
         start_epoch = epoch
         stop_epoch = epoch + n if n is not None else epoch
         # start running without a limit - we'll check as we go.
@@ -239,6 +245,8 @@ class ZMQRunner(TubeRunner):
                 ret = MetaSignal.NoEvent
                 loop = 0
                 while ret is MetaSignal.NoEvent:
+                    with self._epoch_condition:
+                        self._epoch_condition.wait_for(lambda: self.tube.scheduler.epoch_completed(Epoch(epoch)))
                     self._get_epoch_future(Epoch(epoch)).result()
                     ret = self.collect_return(Epoch(epoch))
                     epoch += 1
@@ -339,7 +347,10 @@ class ZMQRunner(TubeRunner):
             for event in msg.value:
                 event = cast(Event, event)
                 self.store.add(event)
-        events = self.tube.scheduler.update([e for e in msg.value if e["node_id"] != "assets"])
+
+        with self._epoch_condition:
+            events = [e for e in msg.value if not self.tube.scheduler.epoch_completed(e['epoch'])]
+            events = self.tube.scheduler.update([e for e in events if e["node_id"] != "assets"])
         events = cast(MutableSequence[Event | MetaEvent], events)
         epochs = set(e["epoch"] for e in msg.value)
         if self._return_node is not None:
@@ -347,12 +358,25 @@ class ZMQRunner(TubeRunner):
             # do it here since we don't really run the return node like a real node
             # to avoid an unnecessary pickling/unpickling across the network
             for epoch in epochs:
-                ready_epochs = self.tube.scheduler.get_ready(epoch, self._return_node.id)
-                for ready in ready_epochs:
-                    self._logger.debug("Marking return node ready in epoch %s", ready["epoch"])
-                    ep_ended = self.tube.scheduler.expire(ready["epoch"], self._return_node.id)
-                    if ep_ended is not None:
-                        events.append(ep_ended)
+                if self.tube.scheduler.node_is_ready(self._return_node.id, epoch):
+                    self._logger.debug("Marking return node ready in epoch %s", epoch)
+                    try:
+                        with self._epoch_condition:
+                            ep_ended = self.tube.scheduler.expire(epoch, self._return_node.id)
+                            if ep_ended is not None:
+                                events.append(ep_ended)
+                            # if self.tube.scheduler.epoch_completed(epoch.root):
+                            if len(epoch) == 1:
+                                self.tube.scheduler.end_epoch(epoch.root)
+                    except EpochCompletedError:
+                        pass
+
+        with self._epoch_condition:
+            self._epoch_condition.notify_all()
+
+                # ready_epochs = self.tube.scheduler.get_ready(epoch, self._return_node.id)
+                # for ready in ready_epochs:
+
         roots = set(e.root for e in epochs)
         for root in roots:
             if self.tube.scheduler.epoch_completed(root):
@@ -375,6 +399,7 @@ class ZMQRunner(TubeRunner):
                     if not self._epoch_futures[e["value"]].done():
                         self._epoch_futures[e["value"]].set_result(e["value"])
                     del self._epoch_futures[e["value"]]
+
 
     def on_router(self, msg: Message) -> None:
         if isinstance(msg, ErrorMsg):

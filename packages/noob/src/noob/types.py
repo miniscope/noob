@@ -234,6 +234,8 @@ class Epoch(tuple[EpochSegment, ...]):
     def __new__(cls, epoch: int | Iterable[EpochSegment]):
         if isinstance(epoch, int):
             epoch = (EpochSegment("tube", epoch),)
+        else:
+            epoch = (EpochSegment(*e) for e in epoch)
         return super().__new__(cls, epoch)
 
     def make_subepochs(self, node_id: NodeID, n: int) -> list[Epoch]:
