@@ -148,8 +148,6 @@ class Scheduler:
                 break
             yield ready
 
-
-
     def add_epoch(self, epoch: int | Epoch | None = None) -> Epoch:
         """
         Add another epoch with a prepared graph to the scheduler.
@@ -377,7 +375,7 @@ class Scheduler:
         # process subepochs first so they're created when we handle parent epochs
         events = sorted(events, key=lambda ee: len(ee["epoch"]), reverse=True)
         for e in events:
-            if e["node_id"] == "meta" and e['signal'] != 'previous_epoch':
+            if e["node_id"] == "meta" and e["signal"] != "previous_epoch":
                 continue
             elif (node_done := (e["epoch"], e["node_id"])) not in nodes_done:
                 nodes_done.add(node_done)
@@ -444,7 +442,13 @@ class Scheduler:
 
         # eagerly add the next epoch if this is a source node
         next_ep = epoch + 1
-        if node_id in self.source_nodes and len(epoch) == 1 and self.sources_finished(epoch) and next_ep not in self._epochs and next_ep[0].epoch not in self._epoch_log:
+        if (
+            node_id in self.source_nodes
+            and len(epoch) == 1
+            and self.sources_finished(epoch)
+            and next_ep not in self._epochs
+            and next_ep[0].epoch not in self._epoch_log
+        ):
             self.add_epoch(epoch + 1)
 
         if not self.is_active(epoch):
@@ -514,7 +518,11 @@ class Scheduler:
         # epochs are created elsewhere when explicitly iterating epochs with `iter_epoch`
         # or when we receive out of order events e.g. in `update`
         next = ep + 1
-        if len(next) == 1 and next not in self._epochs and next.root[0].epoch not in self._epoch_log:
+        if (
+            len(next) == 1
+            and next not in self._epochs
+            and next.root[0].epoch not in self._epoch_log
+        ):
             self.add_epoch(next)
 
         with contextlib.suppress(AlreadyDoneError, NotAddedError, EpochCompletedError):

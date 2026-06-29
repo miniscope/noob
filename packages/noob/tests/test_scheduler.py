@@ -324,7 +324,7 @@ def test_disable_nodes():
     scheduler.done(epoch=epoch, node_id="a")
 
     # b is not ready
-    assert 'b' not in [r['value'] for r in scheduler.get_ready()]
+    assert "b" not in [r["value"] for r in scheduler.get_ready()]
 
 
 @pytest.mark.map
@@ -416,7 +416,10 @@ def test_is_active_when_subepochs_active():
     assert scheduler.is_active(ep)
     for i in range(3):
         scheduler.expire(ep / ("b", i), node_id="return")
-        assert not scheduler._epochs[ep / ("b", i)].is_active()
+        if i != 2:
+            # once all the subepochs are done, the parent epoch is done
+            assert scheduler.is_active(ep)
+        assert not scheduler.is_active(ep / ("b", i))
     assert not scheduler.is_active(ep)
 
 
@@ -605,7 +608,7 @@ def test_statelessness():
             scheduler.done(epoch=ready[0]["epoch"], node_id=ready[0]["value"])
         elif i == 1:
             assert len(ready) == 1
-            assert ready[0]['value'] == 'input'
+            assert ready[0]["value"] == "input"
         if i >= 2:
             break
 
@@ -653,13 +656,13 @@ def test_statelessness_source():
 
     # this shouldn't really happen, but would technically be correct -
     # a stateless node should be able to run in parallel like this
-    i = -1
-    for i, ready in enumerate(scheduler.iter_ready()):
+    _i = -1
+    for _i, ready in enumerate(scheduler.iter_ready()):
         all_ready.extend(ready)
         assert len(ready) == 5
         assert all(r["value"] == "a" for r in ready)
         break
-    assert i!=-1, 'did not iterate!'
+    assert _i != -1, "did not iterate!"
 
     # marking the source ready out of order does not ready the stateful node
     scheduler.done(epoch=Epoch(2), node_id="a")
@@ -668,7 +671,7 @@ def test_statelessness_source():
 
     # marking the source node completed in the max epoch adds another epoch and yields it as ready
     scheduler.done(epoch=Epoch(4), node_id="a")
-    i=-1
+    i = -1
     for i, ready in enumerate(scheduler.iter_ready()):
         all_ready.extend(ready)
         assert len(ready) == 1
@@ -676,7 +679,7 @@ def test_statelessness_source():
         assert ready[0]["epoch"] == Epoch(5)
         if i >= 1:
             raise RuntimeError("Should only have iterated once")
-    assert i!=-1, 'did not iterate!'
+    assert i != -1, "did not iterate!"
 
     # now marking the source node complete in order readies the stateful dependent one by one
     for i in range(6):
@@ -696,17 +699,17 @@ def test_statelessness_source():
 
             # when we reach epoch 1 and 3, epoch 2 and 4 have already been done, so we iter twice
             if i in (1, 3):
-                assert ready[0]['epoch'] in (Epoch(i), Epoch(i+1))
-                assert j <= 1, 'should have iterated at most twice'
+                assert ready[0]["epoch"] in (Epoch(i), Epoch(i + 1))
+                assert j <= 1, "should have iterated at most twice"
             else:
                 assert ready[0]["epoch"] == Epoch(i)
-                assert j<=0, 'should have only iterated once!'
+                assert j <= 0, "should have only iterated once!"
 
-            scheduler.done(epoch=Epoch(ready[0]['epoch']), node_id="b")
-        assert j != -1 or i in (2, 4), 'did not iterate!'
+            scheduler.done(epoch=Epoch(ready[0]["epoch"]), node_id="b")
+        assert j != -1 or i in (2, 4), "did not iterate!"
 
     # finally, assert that we got all the readies we expect
-    expected = {(node_id, Epoch(i)) for node_id, i in product(('a', 'b'), range(6))}
-    expected.add(('a', Epoch(6)))
-    actual = {(r['value'], r['epoch']) for r in all_ready}
+    expected = {(node_id, Epoch(i)) for node_id, i in product(("a", "b"), range(6))}
+    expected.add(("a", Epoch(6)))
+    actual = {(r["value"], r["epoch"]) for r in all_ready}
     assert actual == expected

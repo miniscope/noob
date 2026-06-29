@@ -435,7 +435,7 @@ def test_optional_dependencies(optional_graph):
     ready = ts.get_ready()
     assert set(ready) == {"only_optional", "mixed", "b"}
     ts.done("only_optional", "mixed")
-    assert set(ts.out_nodes) == {'b', NodeSignal('b', 'b1'), NodeSignal("mixed", "value")}
+    assert set(ts.out_nodes) == {"b", NodeSignal("b", "b1"), NodeSignal("mixed", "value")}
     ts.mark_expired(NodeSignal("mixed", "value"))
     ready = ts.get_ready()
     assert set(ready) == {"two_hop"}

@@ -342,7 +342,9 @@ class TopoSorter:
         signals = []
         for r in result:
             if isinstance(r, str):
-                signals.extend([s for s in self._get_nodeinfo(r).successors if isinstance(s, tuple)])
+                signals.extend(
+                    [s for s in self._get_nodeinfo(r).successors if isinstance(s, tuple)]
+                )
 
         self.mark_out(*result, *signals)
 
@@ -467,9 +469,9 @@ class TopoSorter:
         Get a printable representation of the state of the toposort.
         """
         return {
-            'done': self.done_nodes.copy(),
-            'out': self.out_nodes.copy(),
-            'ready': self.ready_nodes.copy(),
+            "done": self.done_nodes.copy(),
+            "out": self.out_nodes.copy(),
+            "ready": self.ready_nodes.copy(),
         }
 
     def _get_nodeinfo(self, node: GraphItem) -> _NodeInfo:
@@ -490,7 +492,6 @@ class TopoSorter:
                 self._npassedout += 1
         self._done_nodes.update(expired)
         self._nfinished += len(expired)
-
 
     def _update_optionals(
         self, node: GraphItem, predecessors: Sequence[GraphItem], required: bool

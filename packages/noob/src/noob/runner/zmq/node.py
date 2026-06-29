@@ -10,7 +10,6 @@ from collections import deque
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from functools import cached_property, partial
-from itertools import count
 from types import FrameType
 from typing import Any, cast
 
@@ -337,9 +336,7 @@ class NodeRunner(EventloopMixin):
 
         async for ready in self.iter_ready():
             epoch = ready["epoch"]
-            inputs = self.store.collect(
-                edges, epoch, eventmap=self._node.injections.get("events")
-            )
+            inputs = self.store.collect(edges, epoch, eventmap=self._node.injections.get("events"))
             if inputs is None:
                 inputs = {}
 
@@ -363,7 +360,7 @@ class NodeRunner(EventloopMixin):
             # collect all epoch's we're ready in now
             async with self._ready_condition:
                 for ready in self.scheduler.iter_ready():
-                    readies.extend([r for r in ready if r['value'] == self.spec.id])
+                    readies.extend([r for r in ready if r["value"] == self.spec.id])
 
             readies = sorted(readies, key=lambda r: r["epoch"])
             self.logger.debug("readies: %s", readies)
@@ -379,7 +376,7 @@ class NodeRunner(EventloopMixin):
             # otherwise, we only run from epochs that have been requested
             elif len(self._epochs_todo) > 0:
                 async with self._ready_condition:
-                    valid_ready = [r for r in readies if r['epoch'].root in self._epochs_todo]
+                    valid_ready = [r for r in readies if r["epoch"].root in self._epochs_todo]
                     readies = [r for r in readies if r["epoch"].root not in self._epochs_todo]
 
                     if not valid_ready:
@@ -638,7 +635,9 @@ class NodeRunner(EventloopMixin):
         if msg.value is None:
             self._freerun.set()
         else:
-            next_epoch = max(self._epochs_todo) + 1 if self._epochs_todo else max(self.scheduler._epochs)
+            next_epoch = (
+                max(self._epochs_todo) + 1 if self._epochs_todo else max(self.scheduler._epochs)
+            )
             to_run = [Epoch(i) for i in range(next_epoch[0].epoch, msg.value + next_epoch[0].epoch)]
             self.logger.debug("ADding epochs to scheduler: %s", to_run)
             with contextlib.suppress(EpochExistsError):
@@ -661,7 +660,7 @@ class NodeRunner(EventloopMixin):
 
             if self.has_input and self.depends:  # for mypy - depends is always true if has_input is
                 # combine with any tube-scoped input and store as events
-                # when calling the node, we get inputs from the eventstore rather than input collection
+                # when calling the node, we get inputs from the store rather than input collection
                 process_input = msg.value["input"] if msg.value["input"] else {}
                 # filter to only the input that we depend on
                 combined = {

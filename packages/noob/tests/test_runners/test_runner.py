@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from noob import SynchronousRunner, Tube
 from noob.node import NodeSpecification
 from noob.tube import TubeSpecification

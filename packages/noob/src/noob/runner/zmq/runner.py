@@ -5,13 +5,14 @@ import threading
 from collections.abc import Generator, MutableSequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import partial
 from multiprocessing.synchronize import Event as EventType
 from time import time
 from typing import Any, cast, overload
 from uuid import uuid4
 
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import InputMissingError, EpochCompletedError
+from noob.exceptions import EpochCompletedError, InputMissingError
 from noob.input import InputScope
 from noob.network.message import ErrorMsg, ErrorValue, EventMsg, Message, MessageType
 from noob.node import Return
@@ -233,6 +234,9 @@ class ZMQRunner(TubeRunner):
             raise RuntimeError("Already Running!")
         self.command = cast(CommandNode, self.command)
 
+        def _wait_for_epoch(ep: int) -> bool:
+            return self.tube.scheduler.epoch_completed(Epoch(ep))
+
         epoch = self.tube.scheduler.epoch[0].epoch
         start_epoch = epoch
         stop_epoch = epoch + n if n is not None else epoch
@@ -246,7 +250,7 @@ class ZMQRunner(TubeRunner):
                 loop = 0
                 while ret is MetaSignal.NoEvent:
                     with self._epoch_condition:
-                        self._epoch_condition.wait_for(lambda: self.tube.scheduler.epoch_completed(Epoch(epoch)))
+                        self._epoch_condition.wait_for(partial(_wait_for_epoch, epoch))
                     self._get_epoch_future(Epoch(epoch)).result()
                     ret = self.collect_return(Epoch(epoch))
                     epoch += 1
@@ -349,7 +353,7 @@ class ZMQRunner(TubeRunner):
                 self.store.add(event)
 
         with self._epoch_condition:
-            events = [e for e in msg.value if not self.tube.scheduler.epoch_completed(e['epoch'])]
+            events = [e for e in msg.value if not self.tube.scheduler.epoch_completed(e["epoch"])]
             events = self.tube.scheduler.update([e for e in events if e["node_id"] != "assets"])
         events = cast(MutableSequence[Event | MetaEvent], events)
         epochs = set(e["epoch"] for e in msg.value)
@@ -374,8 +378,8 @@ class ZMQRunner(TubeRunner):
         with self._epoch_condition:
             self._epoch_condition.notify_all()
 
-                # ready_epochs = self.tube.scheduler.get_ready(epoch, self._return_node.id)
-                # for ready in ready_epochs:
+            # ready_epochs = self.tube.scheduler.get_ready(epoch, self._return_node.id)
+            # for ready in ready_epochs:
 
         roots = set(e.root for e in epochs)
         for root in roots:
@@ -399,7 +403,6 @@ class ZMQRunner(TubeRunner):
                     if not self._epoch_futures[e["value"]].done():
                         self._epoch_futures[e["value"]].set_result(e["value"])
                     del self._epoch_futures[e["value"]]
-
 
     def on_router(self, msg: Message) -> None:
         if isinstance(msg, ErrorMsg):
