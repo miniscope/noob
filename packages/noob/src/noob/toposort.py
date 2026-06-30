@@ -340,9 +340,7 @@ class TopoSorter:
         signals = []
         for r in result:
             if isinstance(r, str):
-                signals.extend(
-                    [s for s in self._get_nodeinfo(r).successors if isinstance(s, tuple)]
-                )
+                signals.extend(self.signals[r])
 
         self.mark_out(*result, *signals)
 
