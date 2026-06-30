@@ -446,7 +446,7 @@ class Scheduler:
             and next_ep not in self._epochs
             and next_ep[0].epoch not in self._epoch_log
         ):
-            self.add_epoch(epoch + 1)
+            self.add_epoch(next_ep)
 
         if not self.is_active(epoch):
             return self.end_epoch(epoch)
