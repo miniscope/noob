@@ -78,11 +78,6 @@ class ZMQRunner(TubeRunner):
         with self._init_lock:
             self._logger.debug("Initializing ZMQ runner")
             self.command = CommandNode(runner_id=self.runner_id)
-            threading.Thread(target=self.command.run, daemon=True).start()
-            self.command._init.wait()
-            self.command.add_callback("inbox", self.on_event)
-            self.command.add_callback("router", self.on_router)
-            self._logger.debug("Command node initialized")
 
             for node_id, node in self.tube.nodes.items():
                 if isinstance(node, Return):
@@ -104,6 +99,12 @@ class ZMQRunner(TubeRunner):
                     daemon=True,
                 )
                 self.node_procs[node_id].start()
+
+            threading.Thread(target=self.command.run, daemon=True).start()
+            self.command._init.wait()
+            self.command.add_callback("inbox", self.on_event)
+            self.command.add_callback("router", self.on_router)
+            self._logger.debug("Command node initialized")
             self._logger.debug("Started node processes, awaiting ready")
             try:
                 self.command.await_ready(
@@ -361,10 +362,8 @@ class ZMQRunner(TubeRunner):
             for e in ended:
                 if len(e["value"]) == 1:
                     await self.command.epoch_ended(e["value"])
-                if e["value"] in self._epoch_futures:
-                    if not self._epoch_futures[e["value"]].done():
-                        self._epoch_futures[e["value"]].set_result(e["value"])
-                    del self._epoch_futures[e["value"]]
+                if (future := self._epoch_futures.get(e["value"])) and not future.done():
+                    future.set_result(e["value"])
             self._epoch_condition.notify_all()
 
     def on_router(self, msg: Message) -> None:
