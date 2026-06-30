@@ -223,9 +223,6 @@ class ZMQRunner(TubeRunner):
             raise RuntimeError("Already Running!")
         self.command = cast(CommandNode, self.command)
 
-        # def _wait_for_epoch(ep: int) -> bool:
-        #     return self.tube.scheduler.epoch_completed(Epoch(ep))
-
         epoch = self.tube.scheduler.epoch[0].epoch
         start_epoch = epoch
         stop_epoch = epoch + n if n is not None else epoch
