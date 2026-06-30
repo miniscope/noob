@@ -233,12 +233,7 @@ class TopoSorter:
                     else:
                         self.mark_ready(successor)
 
-    def add(
-        self,
-        node: GraphItem,
-        *predecessors: GraphItem,
-        required: bool = True,
-    ) -> None:
+    def add(self, node: GraphItem, *predecessors: GraphItem, required: bool = True) -> None:
         """
         Add a new node and its predecessors to the graph.
 

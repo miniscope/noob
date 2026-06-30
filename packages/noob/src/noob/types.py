@@ -278,14 +278,14 @@ class Epoch(tuple[EpochSegment, ...]):
             steps=[tuple_schema, core_schema.no_info_plain_validator_function(_cast)],
         )
 
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, int):
-            if len(self) == 1:
-                return self[0].epoch == other
-            else:
-                return False
-        else:
-            return tuple.__eq__(self, other)
+    # def __eq__(self, other: Any) -> bool:
+    #     if isinstance(other, int):
+    #         if len(self) == 1:
+    #             return self[0].epoch == other
+    #         else:
+    #             return False
+    #     else:
+    #         return tuple.__eq__(self, other)
 
     __hash__ = tuple.__hash__
 

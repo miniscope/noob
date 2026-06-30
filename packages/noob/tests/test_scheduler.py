@@ -25,12 +25,12 @@ def test_epoch_increment():
     assert isinstance(scheduler[0], TopoSorter)
 
     for i in range(5):
-        assert scheduler.add_epoch() == i + 1
+        assert scheduler.add_epoch() == Epoch(i + 1)
         assert isinstance(scheduler[i], TopoSorter)
 
     # if we create an epoch out of order, the next call without epoch specified increments
-    assert scheduler.add_epoch(10) == 10
-    assert scheduler.add_epoch() == 11
+    assert scheduler.add_epoch(10) == Epoch(10)
+    assert scheduler.add_epoch() == Epoch(11)
 
 
 def test_tube_increments_epoch(basic_tubes):
@@ -45,7 +45,7 @@ def test_tube_increments_epoch(basic_tubes):
         events = runner.store.events
         # we haven't cleared events
         assert len(events) == 1
-        assert list(events.keys())[0] == i
+        assert list(events.keys())[0] == Epoch(i)
 
 
 def test_event_store_filter():
@@ -88,7 +88,7 @@ def test_epoch_completion(basic_tubes):
         and isinstance(eoe["timestamp"], datetime)
         and eoe["node_id"] == "meta"
         and eoe["signal"] == MetaEventType("EpochEnded")
-        and eoe["epoch"] == 0
+        and eoe["epoch"] == Epoch(0)
     )
 
 
@@ -582,7 +582,7 @@ def test_statefulness():
             scheduler.done(epoch=r["epoch"], node_id=r["value"])
             if r["value"] == "e":
                 expected_epoch = Epoch(expected_epoch[0].epoch + 1)
-        if expected_epoch >= 3:
+        if expected_epoch >= Epoch(3):
             break
 
     assert len(was_ready) == expected_total
