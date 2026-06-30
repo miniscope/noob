@@ -441,9 +441,9 @@ class Scheduler:
         if (
             node_id in self.source_nodes
             and len(epoch) == 1
-            and self.sources_finished(epoch)
             and next_ep not in self._epochs
             and next_ep[0].epoch not in self._epoch_log
+            and self.sources_finished(epoch)
         ):
             self.add_epoch(next_ep)
 

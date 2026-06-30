@@ -191,14 +191,17 @@ class TopoSorter:
         """Nodes that were actually run, marked `done`, rather than expired"""
         return self._ran_nodes
 
-    def mark_ready(self, *nodes: GraphItem) -> None:
+    def mark_ready(self, *nodes: GraphItem, nodeset: set[GraphItem] | None = None) -> None:
         """
         Manually mark a node as ready.
 
         Normally this is done automatically when marking predecessor nodes as :meth:`.done`
         or when adding nodes with no predecessors.
         """
-        self._ready_nodes.update(nodes)
+        if nodeset:
+            self._ready_nodes.update(nodeset)
+        else:
+            self._ready_nodes.update(nodes)
 
     def mark_out(self, *nodes: GraphItem) -> None:
         """
@@ -371,23 +374,18 @@ class TopoSorter:
         """
         n2i = self._node2info
 
+        mark_ready = set()
+
+        nodeset = set(nodes)
+        if already_done := self.done_nodes.intersection(nodeset):
+            raise AlreadyDoneError(f"node(s) {already_done!r} were already marked done")
+        if not_added := nodeset - set(self._node2info.keys()):
+            raise NotAddedError(f"node(s) {not_added!r} were not added using add()")
+
+        self._expire_nodes(nodeset=nodeset)
+
         for node in nodes:
-
-            # Check if we know about this node (it was added previously using add()
-            if (nodeinfo := n2i.get(node)) is None:
-                raise NotAddedError(f"node {node!r} was not added using add()")
-
-            # If the node has not been marked as "out" previously, inform the user.
-            if node not in self.out_nodes:
-                if node in self.done_nodes:
-                    raise AlreadyDoneError(f"node {node!r} was already marked done")
-                else:
-                    # we do lots of forward-looking cancellation - if we say it's done, it's done.
-                    self.mark_out(node)
-
-            # Mark the node as processed
-            self._expire_nodes(node)
-
+            nodeinfo = self._get_nodeinfo(node)
             # Go to all the successors and reduce the number of predecessors,
             # collecting all the ones that are ready to be returned in the next get_ready() call.
             for successor in nodeinfo.successors:
@@ -399,9 +397,10 @@ class TopoSorter:
                     if successor in self._disabled_nodes:
                         self.mark_expired(successor)
                     else:
-                        self.mark_ready(successor)
+                        mark_ready.add(successor)
 
-        self._ran_nodes.update(nodes)
+        self.mark_ready(nodeset=mark_ready)
+        self._ran_nodes.update(nodeset)
 
     def resurrect(self, *nodes: GraphItem) -> None:
         """
@@ -474,18 +473,19 @@ class TopoSorter:
             self._node2info[node] = result = _NodeInfo(node)
         return result
 
-    def _expire_nodes(self, *nodes: GraphItem) -> None:
+    def _expire_nodes(self, *nodes: GraphItem, nodeset: set[GraphItem] | None = None) -> None:
         """
         Mark nodes as having been completed, either via done or marked explicitly expired
         """
-        expired = set(nodes) - self._done_nodes
-        for node in expired:
-            self._ready_nodes.discard(node)
-            if node in self._out_nodes:
-                self._out_nodes.discard(node)
-            else:
-                self._npassedout += 1
+        if nodeset is None:
+            nodeset = set(nodes)
+
+        expired = nodeset - self._done_nodes
         self._done_nodes.update(expired)
+        self._ready_nodes -= expired
+        not_out = expired - self._out_nodes
+        self._npassedout += len(not_out)
+        self._out_nodes -= expired
         self._nfinished += len(expired)
 
     def _update_optionals(

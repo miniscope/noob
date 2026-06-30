@@ -294,7 +294,7 @@ def test_invalid_nodes_in_done():
     ts.add("2", "3", "4")
     ts.get_ready()
 
-    with pytest.raises(ValueError, match=r"node '24' was not added using add\(\)"):
+    with pytest.raises(ValueError, match=r".*not added using add\(\)"):
         ts.done("24")
 
 
