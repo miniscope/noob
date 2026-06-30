@@ -9,7 +9,7 @@ from time import time
 from typing import Any, cast, overload
 
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import EpochCompletedError, InputMissingError
+from noob.exceptions import InputMissingError
 from noob.input import InputScope
 from noob.network.message import ErrorMsg, ErrorValue, EventMsg, Message, MessageType
 from noob.node import Return
@@ -61,11 +61,6 @@ class ZMQRunner(TubeRunner):
     _current_epoch: Epoch = Epoch(0)
     _epoch_futures: dict[Epoch, concurrent.futures.Future] = field(default_factory=dict)
     _epoch_condition: threading.Condition = field(default_factory=threading.Condition)
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.tube.scheduler.stateful = False
-        self.tube.scheduler._frozen_sorters = {}
 
     @property
     def running(self) -> bool:
@@ -171,7 +166,6 @@ class ZMQRunner(TubeRunner):
         self._running.set()
         try:
             self._current_epoch = self.tube.scheduler.epoch
-
             # we want to mark 'input' as done if it's in the topo graph,
             # but input can be present and only used as a param,
             # so we can't check presence of inputs in the input collection
@@ -244,8 +238,6 @@ class ZMQRunner(TubeRunner):
                 ret = MetaSignal.NoEvent
                 loop = 0
                 while ret is MetaSignal.NoEvent:
-                    # with self._epoch_condition:
-                    #     self._epoch_condition.wait_for(partial(_wait_for_epoch, epoch))
                     self._get_epoch_future(Epoch(epoch)).result()
                     ret = self.collect_return(Epoch(epoch))
                     epoch += 1
@@ -348,14 +340,9 @@ class ZMQRunner(TubeRunner):
                 self.store.add(event)
 
         with self._epoch_condition:
-            # events = [e for e in msg.value if not self.tube.scheduler.epoch_completed(e["epoch"])]
             events = self.tube.scheduler.update([e for e in msg.value if e["node_id"] != "assets"])
         events = cast(MutableSequence[Event | MetaEvent], events)
-        try:
-            epochs = set(e["epoch"] for e in events)
-        except TypeError:
-            self._logger.debug(events)
-            raise
+        epochs = set(e["epoch"] for e in events)
         if self._return_node is not None:
             # mark the return node done if we've received the expected events for an epoch
             # do it here since we don't really run the return node like a real node
@@ -365,43 +352,21 @@ class ZMQRunner(TubeRunner):
                     epoch
                 ) and self.tube.scheduler.node_is_ready(self._return_node.id, epoch):
                     self._logger.debug("Marking return node ready in epoch %s", epoch)
-                    try:
-                        with self._epoch_condition:
-                            events.extend(self.tube.scheduler.expire(epoch, self._return_node.id))
-                            # if self.tube.scheduler.epoch_completed(epoch.root):
-                            # if len(epoch) == 1:
-                            #     self.tube.scheduler.end_epoch(epoch.root)
-                    except EpochCompletedError:
-                        raise
+                    with self._epoch_condition:
+                        events.extend(self.tube.scheduler.expire(epoch, self._return_node.id))
 
+        ended = [
+            e for e in events if e["node_id"] == "meta" and e["signal"] == MetaEventType.EpochEnded
+        ]
         with self._epoch_condition:
-            self._epoch_condition.notify_all()
-
-            # ready_epochs = self.tube.scheduler.get_ready(epoch, self._return_node.id)
-            # for ready in ready_epochs:
-
-        # roots = set(e.root for e in epochs)
-        # for root in roots:
-        #     if self.tube.scheduler.epoch_completed(root):
-        #         events.append(
-        #             MetaEvent(
-        #                 id=uuid4().int,
-        #                 timestamp=datetime.now(UTC),
-        #                 node_id="meta",
-        #                 signal=MetaEventType.EpochEnded,
-        #                 value=root,
-        #                 epoch=root,
-        #             )
-        #         )
-
-        for e in events:
-            if e["node_id"] == "meta" and e["signal"] == MetaEventType.EpochEnded:
+            for e in ended:
                 if len(e["value"]) == 1:
                     await self.command.epoch_ended(e["value"])
                 if e["value"] in self._epoch_futures:
                     if not self._epoch_futures[e["value"]].done():
                         self._epoch_futures[e["value"]].set_result(e["value"])
                     del self._epoch_futures[e["value"]]
+            self._epoch_condition.notify_all()
 
     def on_router(self, msg: Message) -> None:
         if isinstance(msg, ErrorMsg):
