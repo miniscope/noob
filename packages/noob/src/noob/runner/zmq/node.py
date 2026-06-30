@@ -6,7 +6,6 @@ import os
 import signal
 import traceback
 import uuid
-from collections import deque
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from functools import cached_property, partial
@@ -135,7 +134,7 @@ class NodeRunner(EventloopMixin):
         self._depends: tuple[tuple[str, str], ...] | None = None
         self._has_input: bool | None = None
         self._nodes: dict[str, IdentifyValue] = {}
-        self._epochs_todo: deque[Epoch] = deque()
+        self._epochs_todo: set[Epoch] = set()
         self._freerun = asyncio.Event()
         self._status: NodeStatus = NodeStatus.stopped
         self._status_lock = asyncio.Lock()
@@ -294,7 +293,7 @@ class NodeRunner(EventloopMixin):
         is_async = iscoroutinefunction_partial(self._node.process)
         loop = asyncio.get_running_loop()
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            async for args, kwargs, epoch in self.await_inputs():
+            async for args, kwargs, epoch in self.iter_inputs():
                 self.logger.debug(
                     "Running with args: %s, kwargs: %s, epoch: %s", args, kwargs, epoch
                 )
@@ -304,32 +303,23 @@ class NodeRunner(EventloopMixin):
                 else:
                     part = partial(self._node.process, *args, **kwargs)
                     value = await loop.run_in_executor(executor, part)
+
+                # update internal scheduler state and send events
                 events = self.store.add_value(self._node.signals, value, self._node.id, epoch)
                 async with self._ready_condition:
+                    self.scheduler.update(events)
 
-                    # nodes don't report epoch endings since they don't know about the full tube
-                    events = [e for e in events if e["node_id"] != "meta"]
-                    if events:
-                        self.scheduler.update(events)
-                        await self.publish_events(events, epoch)
                     if self.scheduler.node_is_done(self._node.id, epoch.root):
                         self.scheduler.end_epoch(epoch.root)
-                        if epoch.root in self._epochs_todo:
-                            self._epochs_todo.remove(epoch.root)
+                        self._epochs_todo.discard(epoch.root)
 
                     self._ready_condition.notify_all()
+                await self.publish_events(events, epoch)
 
-    async def await_inputs(self) -> AsyncGenerator[tuple[tuple[Any], dict[str, Any], Epoch]]:
+    async def iter_inputs(self) -> AsyncGenerator[tuple[tuple[Any], dict[str, Any], Epoch]]:
         """
-        Iterate inputs as they are ready
-
-        Handle multiple types of running
-        - `process` based: run a single epoch, or set of epochs at a time
-        - free`run` based: run until told to stop
-
-        And multiple types of nodes
-        - stateful: must call epochs and subepochs in order
-        - stateless: call whichever epoch whenever the dependencies are met
+        Iterate inputs as they are ready - receive ready epochs from :meth:`.iter_ready` ,
+        collect args and kwargs to pass to the process loop.
         """
         self._node = cast(Node, self._node)
         edges = self._node.edges
@@ -355,15 +345,20 @@ class NodeRunner(EventloopMixin):
             self.store.clear(epoch)
 
     async def iter_ready(self) -> AsyncGenerator[MetaEvent]:
+        """
+        Iterate over the scheduler, yielding epochs that are valid to run.
+
+        * If freerunning (received a ``start`` message), just follow the scheduler
+        * Otherwise, filter epochs from the scheduler until we're told to run
+          (with a ``process`` message)
+        """
         readies = []
         while not self._quitting.is_set():
-            # collect all epoch's we're ready in now
             async with self._ready_condition:
                 for ready in self.scheduler.iter_ready():
                     readies.extend([r for r in ready if r["value"] == self.spec.id])
-
             readies = sorted(readies, key=lambda r: r["epoch"])
-            self.logger.debug("readies: %s", readies)
+
             # if we're freerunning, just run it all
             if self._freerun.is_set():
                 for r in readies:
@@ -633,19 +628,20 @@ class NodeRunner(EventloopMixin):
         """
         await self.update_status(NodeStatus.running)
         if msg.value is None:
-            self._freerun.set()
+            async with self._ready_condition:
+                self._freerun.set()
+                self._ready_condition.notify_all()
         else:
-            next_epoch = (
-                max(self._epochs_todo) + 1 if self._epochs_todo else max(self.scheduler._epochs)
-            )
-            to_run = [Epoch(i) for i in range(next_epoch[0].epoch, msg.value + next_epoch[0].epoch)]
-            self.logger.debug("ADding epochs to scheduler: %s", to_run)
-            with contextlib.suppress(EpochExistsError):
-                for ep in to_run:
-                    self.scheduler.add_epoch(ep)
-            self._epochs_todo.extend(to_run)
-        async with self._ready_condition:
-            self._ready_condition.notify_all()
+            async with self._ready_condition:
+                next_epoch = (
+                    max(self._epochs_todo) + 1 if self._epochs_todo else max(self.scheduler._epochs)
+                )
+                for i in range(next_epoch[0].epoch, msg.value + next_epoch[0].epoch):
+                    ep = Epoch(i)
+                    with contextlib.suppress(EpochExistsError):
+                        self.scheduler.add_epoch(ep)
+                    self._epochs_todo.add(ep)
+                self._ready_condition.notify_all()
 
     async def on_process(self, msg: ProcessMsg) -> None:
         """
@@ -654,9 +650,7 @@ class NodeRunner(EventloopMixin):
         self._node = cast(Node, self._node)
         self.logger.debug("Received Process message: %s", msg)
         async with self._ready_condition:
-            self._epochs_todo.append(msg.value["epoch"])
-            if self._node.stateful:
-                self._epochs_todo = deque(sorted(self._epochs_todo))
+            self._epochs_todo.add(msg.value["epoch"])
 
             if self.has_input and self.depends:  # for mypy - depends is always true if has_input is
                 # combine with any tube-scoped input and store as events
@@ -733,7 +727,7 @@ class NodeRunner(EventloopMixin):
         """
         if msg.value in self._epochs_todo:
             async with self._ready_condition:
-                self._epochs_todo.remove(msg.value)
+                self._epochs_todo.discard(msg.value)
                 self._ready_condition.notify_all()
 
         if not self.scheduler.epoch_completed(msg.value):

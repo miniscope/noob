@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from itertools import product
-from multiprocessing import Queue
+from queue import Queue
 
 import pytest
 

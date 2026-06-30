@@ -140,6 +140,7 @@ class EventloopMixin:
                 continue
 
             # purposely don't catch errors here because we want them to bubble up into the caller
+            # just log - otherwise they can get lost in threading tracebacks.
             try:
                 for acb in self._callbacks[name]["asyncio"]:
                     await acb(msg)

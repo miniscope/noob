@@ -389,7 +389,7 @@ async def test_noderunner_stores_clear():
 
     runner._freerun.set()
     assert len(runner.store.events) == 3
-    iterator = runner.await_inputs()
+    iterator = runner.iter_inputs()
     _, _, epoch = await anext(iterator)
     runner.scheduler.end_epoch(Epoch(0))
     # store clears after the yield
