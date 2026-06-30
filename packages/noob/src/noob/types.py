@@ -233,7 +233,7 @@ class EpochSegment(NamedTuple):
 class Epoch(tuple[EpochSegment, ...]):
     __slots__ = ()
 
-    def __new__(cls, epoch: int | tuple[EpochSegment]):
+    def __new__(cls, epoch: int | tuple[EpochSegment, ...]):
         if isinstance(epoch, int):
             return tuple.__new__(cls, (EpochSegment("tube", epoch),))
         else:

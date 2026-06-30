@@ -339,7 +339,7 @@ class TopoSorter:
         # mark all the node's signals as out, but don't return them as "ready" -
         # signals are included in the graph for dependency bookkeeping,
         # but can't be "run" which is what we are trying to get here.
-        to_mark_out = set(result)
+        to_mark_out: set[str | NodeSignal] = set(result)
         for r in result:
             if r in self.signals:
                 to_mark_out |= self.signals[r]
