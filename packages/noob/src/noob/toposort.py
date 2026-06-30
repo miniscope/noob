@@ -377,9 +377,9 @@ class TopoSorter:
         mark_ready = set()
 
         nodeset = set(nodes)
-        if already_done := self.done_nodes.intersection(nodeset):
+        if already_done := self._done_nodes.intersection(nodeset):
             raise AlreadyDoneError(f"node(s) {already_done!r} were already marked done")
-        if not_added := nodeset - set(self._node2info.keys()):
+        if not_added := nodeset - n2i.keys():
             raise NotAddedError(f"node(s) {not_added!r} were not added using add()")
 
         self._expire_nodes(nodeset=nodeset)

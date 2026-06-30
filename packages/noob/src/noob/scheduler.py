@@ -231,7 +231,11 @@ class Scheduler:
                 # if an epoch has been completed and had its graph cleared, it's no longer active
                 # if an epoch has not been started, it is also not active.
                 return False
-            return any(self._epochs[e].is_active() for e in {*self._subepochs[epoch], epoch})
+            # perf: only construct the set if there are actually subepochs
+            subeps = self._subepochs.get(epoch)
+            if not subeps:
+                return self._epochs[epoch].is_active()
+            return any(self._epochs[e].is_active() for e in {*subeps, epoch})
         else:
             return any(graph.is_active() for graph in self._epochs.values())
 
@@ -354,7 +358,8 @@ class Scheduler:
             return True
 
         graph = self[-1] if epoch is None else self._epochs[epoch]
-        return all(src in graph.done_nodes for src in self.source_nodes)
+        done_nodes = graph.done_nodes
+        return all(src in done_nodes for src in self.source_nodes)
 
     def update(
         self, events: MutableSequence[Event | MetaEvent] | MutableSequence[Event]
@@ -423,8 +428,9 @@ class Scheduler:
             return []
 
         to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
+        graph = self[epoch]
         try:
-            self[epoch].done(to_mark)
+            graph.done(to_mark)
         except AlreadyDoneError as e:
             if not self._subepochs[epoch]:
                 raise AlreadyDoneError(f"Node {node_id} already done in {epoch}") from e
@@ -434,14 +440,13 @@ class Scheduler:
             self[parent].mark_expired(to_mark, unlock_optionals=False)
 
         if signal is None and with_signals:
-            self[epoch].done(*self[epoch].signals[node_id].difference(self[epoch].done_nodes))
+            graph.done(*graph.signals[node_id].difference(graph.done_nodes))
 
         # eagerly add the next epoch if this is a source node
-        next_ep = epoch + 1
         if (
             node_id in self.source_nodes
             and len(epoch) == 1
-            and next_ep not in self._epochs
+            and (next_ep := epoch + 1) not in self._epochs
             and next_ep[0].epoch not in self._epoch_log
             and self.sources_finished(epoch)
         ):
