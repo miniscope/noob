@@ -203,13 +203,15 @@ class TopoSorter:
         else:
             self._ready_nodes.update(nodes)
 
-    def mark_out(self, *nodes: GraphItem) -> None:
+    def mark_out(self, *nodes: GraphItem, nodeset: set[GraphItem] | None = None) -> None:
         """
         Mark a node as being out for processing
         """
-        self._ready_nodes -= set(nodes)
-        self._out_nodes.update(nodes)
-        self._npassedout += len(nodes)
+        if nodeset is None:
+            nodeset = set(nodes)
+        self._ready_nodes -= nodeset
+        self._out_nodes |= nodeset
+        self._npassedout += len(nodeset)
 
     def mark_expired(self, *nodes: GraphItem, unlock_optionals: bool = True) -> None:
         """
@@ -337,12 +339,12 @@ class TopoSorter:
         # mark all the node's signals as out, but don't return them as "ready" -
         # signals are included in the graph for dependency bookkeeping,
         # but can't be "run" which is what we are trying to get here.
-        signals = []
+        to_mark_out = set(result)
         for r in result:
             if isinstance(r, str):
-                signals.extend(self.signals[r])
+                to_mark_out |= self.signals[r]
 
-        self.mark_out(*result, *signals)
+        self.mark_out(nodeset=to_mark_out)
 
         return result
 
