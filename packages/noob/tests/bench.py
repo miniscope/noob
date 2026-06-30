@@ -1,8 +1,12 @@
+import contextlib
+
 import pytest
 from pytest_codspeed.plugin import BenchmarkFixture
 
 from noob import Tube
+from noob.exceptions import AlreadyDoneError
 from noob.runner.base import TubeRunner
+from noob.toposort import PREVIOUS_EPOCH
 
 
 def test_load_tube(benchmark: BenchmarkFixture) -> None:
@@ -39,6 +43,8 @@ def test_topo_sorter(benchmark: BenchmarkFixture, loaded_tube: Tube) -> None:
 def _run_sorter(tube: Tube) -> None:
     epoch = tube.scheduler.add_epoch()
     sorter = tube.scheduler._epochs[epoch]
+    with contextlib.suppress(AlreadyDoneError):
+        sorter.done(PREVIOUS_EPOCH)
     while sorter.is_active():
         sorter.get_ready()
         sorter.done(*sorter.out_nodes)
