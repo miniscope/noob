@@ -1,3 +1,4 @@
+import asyncio
 import concurrent.futures
 import math
 import multiprocessing as mp
@@ -362,8 +363,11 @@ class ZMQRunner(TubeRunner):
             for e in ended:
                 if len(e["value"]) == 1:
                     await self.command.epoch_ended(e["value"])
-                if (future := self._epoch_futures.get(e["value"])) and not future.done():
-                    future.set_result(e["value"])
+                if future := self._epoch_futures.get(e["value"]):
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(
+                        None, lambda: future.set_result(None) if not future.done() else None
+                    )
             self._epoch_condition.notify_all()
 
     def on_router(self, msg: Message) -> None:
