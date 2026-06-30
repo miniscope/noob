@@ -95,8 +95,8 @@ class Scheduler:
             for ep in sorted(self._epochs.keys()):
                 if self._epochs[ep].is_active():
                     return ep
-        else:
-            return self.add_epoch()
+
+        return self.add_epoch()
 
     def iter_epoch(self, epoch: Epoch | None = None) -> Iterator[list[MetaEvent]]:
         """

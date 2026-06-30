@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncGenerator, Iterator
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
@@ -157,7 +157,7 @@ class AsyncRunner(TubeRunner):
             await self.init()
         self.store.clear()
 
-    async def _get_ready(self, epoch: Epoch | None = None) -> Iterator[list[MetaEvent]]:  # type: ignore[override]
+    async def _get_ready(self, epoch: Epoch | None = None) -> AsyncGenerator[list[MetaEvent]]:  # type: ignore[override]
         if self._exception:
             await self._raise_exception()
         for ready in self.tube.scheduler.iter_epoch(epoch):
