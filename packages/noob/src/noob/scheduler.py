@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import cached_property
-from typing import Self, cast
+from typing import Self
 from uuid import uuid4
 
 from noob.edge import Edge
