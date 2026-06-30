@@ -40,6 +40,5 @@ def _run_sorter(tube: Tube) -> None:
     epoch = tube.scheduler.add_epoch()
     sorter = tube.scheduler._epochs[epoch]
     while sorter.is_active():
-        ready_nodes = sorter.get_ready()
-        for node in ready_nodes:
-            sorter.done(node)
+        sorter.get_ready()
+        sorter.done(*sorter.out_nodes)
