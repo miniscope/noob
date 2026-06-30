@@ -95,10 +95,8 @@ class Scheduler:
             for ep in sorted(self._epochs.keys()):
                 if self._epochs[ep].is_active():
                     return ep
-        elif self._epoch_log:
-            return Epoch(max(self._epoch_log) + 1)
         else:
-            return Epoch(0)
+            return self.add_epoch()
 
     def iter_epoch(self, epoch: Epoch | None = None) -> Iterator[list[MetaEvent]]:
         """
@@ -385,21 +383,20 @@ class Scheduler:
                 with contextlib.suppress(AlreadyDoneError, NotAddedError):
                     epoch_ended = self.done(e["epoch"], e["node_id"], with_signals=False)
                     if epoch_ended:
-                        end_events.append(epoch_ended)
+                        end_events.extend(epoch_ended)
                         continue
 
             if (e["node_id"], e["signal"]) not in self.graph_signals:
                 continue
 
             if e["value"] is MetaSignal.NoEvent:
-                epoch_ended = self.expire(
-                    epoch=e["epoch"], node_id=e["node_id"], signal=e["signal"]
+                end_events.extend(
+                    self.expire(epoch=e["epoch"], node_id=e["node_id"], signal=e["signal"])
                 )
             else:
-                epoch_ended = self.done(epoch=e["epoch"], node_id=e["node_id"], signal=e["signal"])
-
-            if epoch_ended:
-                end_events.append(epoch_ended)
+                end_events.extend(
+                    self.done(epoch=e["epoch"], node_id=e["node_id"], signal=e["signal"])
+                )
 
         ret_events = [*events, *end_events]
 
@@ -411,7 +408,7 @@ class Scheduler:
         node_id: str,
         signal: SignalName | None = None,
         with_signals: bool = True,
-    ) -> MetaEvent | None:
+    ) -> list[MetaEvent]:
         """
         Mark a node in a given epoch as done.
 
@@ -424,7 +421,7 @@ class Scheduler:
                 node_id,
                 epoch,
             )
-            return None
+            return []
 
         to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
         try:
@@ -453,7 +450,7 @@ class Scheduler:
 
         if not self.is_active(epoch):
             return self.end_epoch(epoch)
-        return None
+        return []
 
     def expire(
         self,
@@ -462,11 +459,12 @@ class Scheduler:
         signal: SignalName | None = None,
         with_signals: bool = True,
         unlock_optionals: bool = True,
-    ) -> MetaEvent | None:
+    ) -> list[MetaEvent]:
         """
         Mark a node as having been completed without making its dependent nodes ready.
         i.e. when the node emitted ``NoEvent``
         """
+        events = []
         to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
         self[epoch].mark_expired(to_mark, unlock_optionals=unlock_optionals)
         # if any immediate successors are already marked as "ready," we also want to cancel them.
@@ -475,18 +473,46 @@ class Scheduler:
                 self[epoch].ready_nodes.discard(successor)
         if signal is None and with_signals:
             for graph_node in self[epoch].signals[node_id]:
-                self.expire(
-                    epoch, node_id=node_id, signal=graph_node[1], unlock_optionals=unlock_optionals
+                events.extend(
+                    self.expire(
+                        epoch,
+                        node_id=node_id,
+                        signal=graph_node[1],
+                        unlock_optionals=unlock_optionals,
+                    )
                 )
 
-        if not self.is_active(epoch):
-            return self.end_epoch(epoch)
+        # if a node that *did not induce* the subepochs is expired,
+        # it expires itself in subepochs.
+        if subeps := self._subepochs.get(epoch):
+            for subep in subeps:
+                if subep[-1].node_id == node_id:
+                    continue
+                if subep in self._epochs:
+                    self._logger.debug(
+                        "expiring %s - %s in subepoch %s from %s", node_id, signal, subep, epoch
+                    )
+                    events.extend(
+                        self.expire(
+                            subep,
+                            node_id=node_id,
+                            signal=signal,
+                            with_signals=with_signals,
+                            unlock_optionals=unlock_optionals,
+                        )
+                    )
 
-        return None
+        # end the epoch if it's over, don't double-tap in case expiring subepochs ended this epoch
+        if not self.is_active(epoch) and not self.epoch_completed(epoch):
+            events.extend(self.end_epoch(epoch))
+
+        return events
 
     def epoch_completed(self, epoch: Epoch) -> bool:
         """
-        Check if the epoch has been completed.
+        Check if the epoch has been completed -
+        as in it is fully completed and should no longer be acted upon.
+        Distinct from `is_active`, which is used to check if an epoch *should be* marked as complete
         """
         epoch_int = epoch[0].epoch
         previously_completed = (
@@ -494,23 +520,24 @@ class Scheduler:
             and epoch not in self._epochs
             and (epoch_int in self._epoch_log or epoch_int < min(self._epoch_log))
         )
-        active_completed = epoch in self._epochs and not any(
-            self._epochs[ep].is_active() for ep in [epoch, *self._subepochs[epoch]]
-        )
-        return previously_completed or active_completed
+        # active_completed = epoch in self._epochs and not any(
+        #     self._epochs[ep].is_active() for ep in [epoch, *self._subepochs[epoch]]
+        # )
+        return previously_completed  # or active_completed
 
-    def end_epoch(self, epoch: Epoch | int | None = None) -> MetaEvent | None:
+    def end_epoch(self, epoch: Epoch | int | None = None) -> list[MetaEvent]:
         if isinstance(epoch, Epoch):
             ep = epoch
         elif isinstance(epoch, int):
             ep = Epoch(epoch)
         elif epoch is None or epoch == -1:
             if len(self._epochs) == 0:
-                return None
+                return []
             ep = list(self._epochs)[-1]
         else:
             raise TypeError("Can only end an epoch with an integer or Epoch")
         self._logger.debug("Ending epoch %s", ep)
+        events = []
 
         # signal this epoch has been completed to any successive epochs
         # we create root epoch graphs here -
@@ -525,9 +552,17 @@ class Scheduler:
         ):
             self.add_epoch(next)
 
-        with contextlib.suppress(AlreadyDoneError, NotAddedError, EpochCompletedError):
+        # with contextlib.suppress(AlreadyDoneError, NotAddedError, EpochCompletedError):
+        try:
             if len(ep) == 1 or next in self._epochs:
-                self[next].done(PREVIOUS_EPOCH)
+                events.extend(
+                    self.done(next, PREVIOUS_EPOCH[0], PREVIOUS_EPOCH[1], with_signals=False)
+                )
+                self._logger.debug("Marked next epoch %s done from %s", next, ep)
+            else:
+                self._logger.debug("Not marking next epoch %s done from %s", next, ep)
+        except Exception as e:
+            self._logger.debug("Error marking next epoch %s done from %s: %s", next, ep, e)
 
         if len(ep) == 1:
             self._epoch_log.add(ep[0].epoch)
@@ -541,16 +576,20 @@ class Scheduler:
             #     self._subepochs[parent].remove(ep)
             # del self._epochs[ep]
             if not self.is_active(ep.parent):
-                return self.end_epoch(ep.parent)
+                self._logger.debug("Ending parent epoch %s from %s", ep.parent, ep)
+                events.extend(self.end_epoch(ep.parent))
 
-        return MetaEvent(
-            id=uuid4().int,
-            timestamp=datetime.now(UTC),
-            node_id="meta",
-            signal=MetaEventType.EpochEnded,
-            epoch=ep,
-            value=ep,
+        events.append(
+            MetaEvent(
+                id=uuid4().int,
+                timestamp=datetime.now(UTC),
+                node_id="meta",
+                signal=MetaEventType.EpochEnded,
+                epoch=ep,
+                value=ep,
+            )
         )
+        return events
 
     def enable_node(self, node_id: str) -> None:
         """

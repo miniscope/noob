@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
 from itertools import product
 from multiprocessing import Queue
-from queue import Empty
 
 import pytest
 
@@ -76,10 +75,13 @@ def test_epoch_completion(basic_tubes):
         ready_nodes = scheduler.get_ready()
         for ready in ready_nodes:
             # until we're done, eoe should have been None in the last iteration
-            assert eoe is None
+            assert not eoe
             # marking the very last one as done should emit the end of epoch event
             # (we should also break out of the while loop after the last assignment)
             eoe = scheduler.done(epoch=Epoch(0), node_id=ready["value"])
+
+    assert len(eoe) == 1
+    eoe = eoe[0]
 
     assert (
         isinstance(eoe["id"], int)
@@ -199,7 +201,6 @@ def test_clear_ended_epochs():
             assert len(scheduler._epochs) == 1
 
 
-@pytest.mark.xfail(raises=Empty)
 def test_metaevents():
     """
     Meta events are emitted in callbacks, but not given to nodes or added to the store.
