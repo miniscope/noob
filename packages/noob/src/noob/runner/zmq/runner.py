@@ -1,8 +1,10 @@
 import concurrent.futures
+import contextlib
 import math
 import multiprocessing as mp
 import threading
 from collections.abc import Generator, MutableSequence
+from concurrent.futures import InvalidStateError
 from dataclasses import dataclass, field
 from multiprocessing.synchronize import Event as EventType
 from time import time
@@ -236,9 +238,11 @@ class ZMQRunner(TubeRunner):
                 ret = MetaSignal.NoEvent
                 loop = 0
                 while ret is MetaSignal.NoEvent:
-                    future = self._get_epoch_future(Epoch(epoch))
+                    ep = Epoch(epoch)
+                    future = self._get_epoch_future(ep)
                     future.result()
-                    ret = self.collect_return(Epoch(epoch))
+                    del self._epoch_futures[ep]
+                    ret = self.collect_return(ep)
                     epoch += 1
                     self._current_epoch = Epoch(epoch)
                     if loop > self.max_iter_loops:
@@ -360,7 +364,8 @@ class ZMQRunner(TubeRunner):
         with self._epoch_condition:
             for e in ended:
                 if future := self._epoch_futures.get(e["value"]):
-                    future.set_result(e["epoch"])
+                    with contextlib.suppress(InvalidStateError):
+                        future.set_result(e["epoch"])
 
             self._epoch_condition.notify_all()
 
