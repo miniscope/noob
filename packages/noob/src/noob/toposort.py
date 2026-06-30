@@ -341,7 +341,7 @@ class TopoSorter:
         # but can't be "run" which is what we are trying to get here.
         to_mark_out = set(result)
         for r in result:
-            if isinstance(r, str):
+            if r in self.signals:
                 to_mark_out |= self.signals[r]
 
         self.mark_out(nodeset=to_mark_out)
