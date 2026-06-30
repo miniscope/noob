@@ -366,7 +366,8 @@ class ZMQRunner(TubeRunner):
                 if future := self._epoch_futures.get(e["value"]):
                     loop = asyncio.get_running_loop()
                     await loop.run_in_executor(
-                        None, lambda: future.set_result(None) if not future.done() else None
+                        None, lambda fut: fut.set_result(None) if not fut.done() else None,
+                        future
                     )
             self._epoch_condition.notify_all()
 
