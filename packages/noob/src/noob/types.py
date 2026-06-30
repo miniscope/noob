@@ -5,7 +5,7 @@ import builtins
 import pickle
 import re
 import sys
-from collections.abc import AsyncIterator, Iterable, Iterator, Sized
+from collections.abc import AsyncIterator, Iterator, Sized
 from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
