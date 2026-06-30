@@ -9,8 +9,6 @@ on:
 jobs:
   test:
     name: pytest
-    env:
-      COLUMNS: 120
     strategy:
       fail-fast: false
       matrix:

@@ -815,6 +815,23 @@ marker = "\"dev\" in dependency_groups"
 dependencies = []
 
 [[packages]]
+name = "uvicorn"
+version = "0.49.0"
+requires-python = ">=3.10"
+sdist = {name = "uvicorn-0.49.0.tar.gz", url = "https://files.pythonhosted.org/packages/c4/1f/fa18009dea8469069cca78a4e877a008ab78f08b064bfc9ab891579077ff/uvicorn-0.49.0.tar.gz", hashes = {sha256 = "ebf4271aa580d9de97f93192d4595176df6e91f9aae919ca73e4fc07df1e66a3"}}
+wheels = [
+    {name = "uvicorn-0.49.0-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/88/fa/e1388bbcf24ef3274f45c0c1c7b501fd14971037c1b6ee23610553307497/uvicorn-0.49.0-py3-none-any.whl",hashes = {sha256 = "ba3d14c3ee7e41c6c654c46c9eb489d33213cdd30aa1696eab1374337c13f68f"}},
+]
+marker = "\"dev\" in dependency_groups"
+
+[packages.tool.pdm]
+dependencies = [
+    "click>=7.0",
+    "h11>=0.8",
+    "typing-extensions>=4.0; python_version < \"3.11\"",
+]
+
+[[packages]]
 name = "h11"
 version = "0.16.0"
 requires-python = ">=3.8"
@@ -1946,7 +1963,7 @@ dependencies = []
 
 [[packages]]
 name = "noob"
-version = "1000.1.1.dev18+gda64ba3.d20260626"
+version = "1000.1.1.dev27+g9844e49.d20260630"
 requires-python = ">=3.11"
 marker = "\"dev\" in dependency_groups"
 
@@ -2998,22 +3015,6 @@ dependencies = [
 ]
 
 [[packages]]
-name = "pytest-pretty"
-version = "1.3.0"
-requires-python = ">=3.9"
-sdist = {name = "pytest_pretty-1.3.0.tar.gz", url = "https://files.pythonhosted.org/packages/ba/d7/c699e0be5401fe9ccad484562f0af9350b4e48c05acf39fb3dab1932128f/pytest_pretty-1.3.0.tar.gz", hashes = {sha256 = "97e9921be40f003e40ae78db078d4a0c1ea42bf73418097b5077970c2cc43bf3"}}
-wheels = [
-    {name = "pytest_pretty-1.3.0-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/ab/85/2f97a1b65178b0f11c9c77c35417a4cc5b99a80db90dad4734a129844ea5/pytest_pretty-1.3.0-py3-none-any.whl",hashes = {sha256 = "074b9d5783cef9571494543de07e768a4dda92a3e85118d6c7458c67297159b7"}},
-]
-marker = "\"dev\" in dependency_groups"
-
-[packages.tool.pdm]
-dependencies = [
-    "pytest>=7",
-    "rich>=12",
-]
-
-[[packages]]
 name = "pytest-timeout"
 version = "2.4.0"
 requires-python = ">=3.7"
@@ -4021,23 +4022,6 @@ marker = "\"dev\" in dependency_groups"
 
 [packages.tool.pdm]
 dependencies = []
-
-[[packages]]
-name = "uvicorn"
-version = "0.49.0"
-requires-python = ">=3.10"
-sdist = {name = "uvicorn-0.49.0.tar.gz", url = "https://files.pythonhosted.org/packages/c4/1f/fa18009dea8469069cca78a4e877a008ab78f08b064bfc9ab891579077ff/uvicorn-0.49.0.tar.gz", hashes = {sha256 = "ebf4271aa580d9de97f93192d4595176df6e91f9aae919ca73e4fc07df1e66a3"}}
-wheels = [
-    {name = "uvicorn-0.49.0-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/88/fa/e1388bbcf24ef3274f45c0c1c7b501fd14971037c1b6ee23610553307497/uvicorn-0.49.0-py3-none-any.whl",hashes = {sha256 = "ba3d14c3ee7e41c6c654c46c9eb489d33213cdd30aa1696eab1374337c13f68f"}},
-]
-marker = "\"dev\" in dependency_groups"
-
-[packages.tool.pdm]
-dependencies = [
-    "click>=7.0",
-    "h11>=0.8",
-    "typing-extensions>=4.0; python_version < \"3.11\"",
-]
 
 [[packages]]
 name = "httptools"
