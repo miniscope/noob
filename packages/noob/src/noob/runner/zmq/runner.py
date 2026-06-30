@@ -235,7 +235,9 @@ class ZMQRunner(TubeRunner):
                 ret = MetaSignal.NoEvent
                 loop = 0
                 while ret is MetaSignal.NoEvent:
-                    self._get_epoch_future(Epoch(epoch)).result()
+                    with self._epoch_condition:
+                        future = self._get_epoch_future(Epoch(epoch))
+                    future.result()
                     ret = self.collect_return(Epoch(epoch))
                     epoch += 1
                     self._current_epoch = Epoch(epoch)
