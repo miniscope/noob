@@ -324,7 +324,6 @@ class Scheduler:
     def __getitem__(self, epoch: Epoch | int) -> TopoSorter:
         # O(1) fast exit - we are given an epoch and we already have it
         if epoch in self._epochs:
-            epoch = cast(Epoch, epoch)
             return self._epochs[epoch]
 
         # otherwise, find or create the epoch
