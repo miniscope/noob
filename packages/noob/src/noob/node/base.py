@@ -193,7 +193,7 @@ class Node(BaseModel):
         spec.stateful = node.stateful
         return node
 
-    @property
+    @functools.cached_property
     def signals(self) -> dict[str, Signal]:
         """
         Cached instance-level accessor for signals.
@@ -222,7 +222,7 @@ class Node(BaseModel):
         """
         return Signal.from_callable(cls.process)
 
-    @property
+    @functools.cached_property
     def slots(self) -> dict[str, Slot]:
         if self._slots is None:
             self._slots = self.get_slots(self.spec)
