@@ -30,7 +30,10 @@ def patch_config_source(monkeypatch_session: MonkeyPatch) -> None:
 
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Set config vars e.g. from github actions"""
-    if os.environ.get("ACTIONS_RUNNER_DEBUG") or os.environ.get("ACTIONS_STEP_DEBUG"):
+    if (
+        os.environ.get("ACTIONS_RUNNER_DEBUG", "") == "true"
+        or os.environ.get("ACTIONS_STEP_DEBUG", "") == "true"
+    ):
         os.environ["NOOB_LOGS__LEVEL"] = "DEBUG"
 
 

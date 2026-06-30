@@ -1,4 +1,3 @@
-import asyncio
 import concurrent.futures
 import math
 import multiprocessing as mp
@@ -237,8 +236,7 @@ class ZMQRunner(TubeRunner):
                 ret = MetaSignal.NoEvent
                 loop = 0
                 while ret is MetaSignal.NoEvent:
-                    with self._epoch_condition:
-                        future = self._get_epoch_future(Epoch(epoch))
+                    future = self._get_epoch_future(Epoch(epoch))
                     future.result()
                     ret = self.collect_return(Epoch(epoch))
                     epoch += 1
@@ -361,15 +359,14 @@ class ZMQRunner(TubeRunner):
         ]
         with self._epoch_condition:
             for e in ended:
-                if len(e["value"]) == 1:
-                    await self.command.epoch_ended(e["value"])
                 if future := self._epoch_futures.get(e["value"]):
-                    loop = asyncio.get_running_loop()
-                    await loop.run_in_executor(
-                        None, lambda fut: fut.set_result(None) if not fut.done() else None,
-                        future
-                    )
+                    future.set_result(e["epoch"])
+
             self._epoch_condition.notify_all()
+
+        for e in ended:
+            if len(e["value"]) == 1:
+                await self.command.epoch_ended(e["value"])
 
     def on_router(self, msg: Message) -> None:
         if isinstance(msg, ErrorMsg):
