@@ -1,3 +1,4 @@
+import os
 import platform
 from pathlib import Path
 
@@ -25,6 +26,12 @@ def patch_config_source(monkeypatch_session: MonkeyPatch) -> None:
         return [p for p in original_method() if p not in current_sources]
 
     monkeypatch_session.setattr(ConfigYAMLMixin, "config_sources", classmethod(_config_sources))
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Set config vars e.g. from github actions"""
+    if os.environ.get("ACTIONS_RUNNER_DEBUG") or os.environ.get("ACTIONS_STEP_DEBUG"):
+        os.environ["NOOB_LOGS__LEVEL"] = "DEBUG"
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

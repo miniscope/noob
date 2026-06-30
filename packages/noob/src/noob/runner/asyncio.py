@@ -43,7 +43,6 @@ class AsyncRunner(TubeRunner):
         self._running = asyncio.Event()
         self._node_ready = asyncio.Event()
         self._init_lock = asyncio.Lock()
-        self._scheduler_lock = asyncio.Lock()
         self._task_sem = asyncio.Semaphore(self.max_pending_tasks)
         self._pending_futures = set()
         self._exception: BaseException | None = None
