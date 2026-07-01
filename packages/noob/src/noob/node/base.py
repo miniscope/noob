@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import functools
 import inspect
+import logging
 from collections.abc import Callable, Generator, Mapping
 from types import GeneratorType
 from typing import (
@@ -7,7 +10,6 @@ from typing import (
     Any,
     Self,
     TypeVar,
-    Union,
     cast,
     get_args,
 )
@@ -22,6 +24,7 @@ from pydantic import (
 )
 
 from noob.edge import Edge, Signal, Slot
+from noob.logging import init_logger
 from noob.node.spec import NodeSpecification
 from noob.types import Epoch, EventMap
 from noob.utils import iscoroutinefunction_partial, resolve_python_identifier
@@ -146,8 +149,8 @@ class Node(BaseModel):
 
     @classmethod
     def from_specification(
-        cls, spec: "NodeSpecification", input_collection: Union["InputCollection", None] = None
-    ) -> "Node":
+        cls, spec: NodeSpecification, input_collection: InputCollection | None = None
+    ) -> Node | None:
         """
         Create a node from its spec
 
@@ -317,6 +320,10 @@ class Node(BaseModel):
         (checking this on every call proves to be surprisingly expensive)
         """
         return iscoroutinefunction_partial(self.process)
+
+    @functools.cached_property
+    def logger(self) -> logging.Logger:
+        return init_logger(f"node.{self.id}")
 
     def _wrap_generator(self, proc: Callable[[], GeneratorType]) -> None:
         """
