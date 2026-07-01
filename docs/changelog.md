@@ -106,6 +106,15 @@
   Even stateless tubes run in a "best effort" epoch order -
   when a bunch of epochs are queued up out of order,
   the scheduler ensures that ready nodes are yielded in an epoch-sorted order.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Fix!!!! a longstanding threadlocking problem in the ZMQRunner.
+  Twofold: the socket iteration method never actually yielded the eventloop when it was flooeded
+  with messages from an upstream node that is much faster than it.
+  This meant noderunners would sometimes just never process any events because they were just receiving messages.
+  Similarly, the command node would get flooded, and it would never actually call the coro used to quit it.
+  So: force a context switch using sleep(0) in the socket receive iterator,
+  and use a TaskGroup to more reliably force the command node to quit the thread,
+  freeing the socket.
 
 **Removed**
 - [`#231`](https://github.com/miniscope/noob/pull/231) - 
