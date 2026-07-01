@@ -325,7 +325,7 @@ def test_map_creating_subepochs_expires_parent_epoch(eventmaker: EventMaker):
     ep = scheduler.add_epoch()
     scheduler.done(ep, node_id="a")
     scheduler.update(
-        [EventMaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
     )
     assert "b" in scheduler._epochs[ep].done_nodes
     assert "b" not in scheduler._epochs[ep].ran_nodes
@@ -359,7 +359,7 @@ def test_map_gather_only_parent_epoch(eventmaker: EventMaker):
     ep = scheduler.add_epoch()
     scheduler.done(ep, node_id="a")
     scheduler.update(
-        [EventMaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
     )
     for i in range(3):
         scheduler.done(ep / ("b", i), node_id="c")
@@ -381,7 +381,7 @@ def test_map_gather_mixed_epochs(eventmaker):
     ep = scheduler.add_epoch()
     scheduler.done(ep, node_id="a")
     scheduler.update(
-        [EventMaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
     )
     for i in range(3):
         scheduler.done(ep / ("b", i), node_id="c", signal="value")
@@ -402,13 +402,13 @@ def test_is_active_when_subepochs_active(eventmaker: EventMaker):
     ep = scheduler.add_epoch()
     scheduler.done(ep, node_id="a")
     scheduler.update(
-        [EventMaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
     )
     assert not scheduler._epochs[ep].is_active()
     assert scheduler._epochs[ep / ("b", 0)].is_active()
     assert scheduler.is_active(ep)
     scheduler.update(
-        [EventMaker.new_event(value=0, epoch=ep / ("b", i), node_id="c") for i in range(3)]
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="c") for i in range(3)]
     )
     assert not scheduler._epochs[ep].is_active()
     assert scheduler._epochs[ep / ("b", 0)].is_active()
