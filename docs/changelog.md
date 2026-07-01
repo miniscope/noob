@@ -2,6 +2,21 @@
 
 ## Upcoming
 
+**Added**
+
+- [`#233`](https://github.com/miniscope/noob/pull/233) -
+  Preliminary representation of assets as nodes in JS viewer
+
+**Changed**
+
+- [`#235`](https://github.com/miniscope/noob/pull/235/) -
+  Assets (and other specifications) now include their `id` when being dumped to json
+
+**Fixed**
+
+- [`#233`](https://github.com/miniscope/noob/pull/233) -
+  Correctly handle nexted prefixes in JS viewer
+
 **Perf**
 
 - [`#224`](https://github.com/miniscope/noob/pull/224) - 
