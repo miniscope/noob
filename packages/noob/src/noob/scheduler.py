@@ -556,17 +556,14 @@ class Scheduler:
         ):
             self.add_epoch(next)
 
-        # with contextlib.suppress(AlreadyDoneError, NotAddedError, EpochCompletedError):
-        try:
-            if len(ep) == 1 or next in self._epochs:
+        if len(ep) == 1 or next in self._epochs:
+            # fine to error if there is no stateful node, or another node has already marked it done
+            # EpochCompletedError can also be emitted in both the above cases.
+            with contextlib.suppress(AlreadyDoneError, NotAddedError, EpochCompletedError):
                 events.extend(
                     self.done(next, PREVIOUS_EPOCH[0], PREVIOUS_EPOCH[1], with_signals=False)
                 )
                 self._logger.debug("Marked next epoch %s done from %s", next, ep)
-            else:
-                self._logger.debug("Not marking next epoch %s done from %s", next, ep)
-        except Exception as e:
-            self._logger.debug("Error marking next epoch %s done from %s: %s", next, ep, e)
 
         if len(ep) == 1:
             self._epoch_log.add(ep[0].epoch)
