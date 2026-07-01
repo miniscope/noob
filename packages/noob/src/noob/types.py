@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from noob import Tube
     from noob.event import Event
     from noob.runner import TubeRunner
+    from noob.input import InputCollection
 
 CONFIG_ID_PATTERN = r"[\w\-\/#]+"
 """
@@ -223,6 +224,7 @@ AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)
 class RunnerContext(TypedDict):
     runner: TubeRunner
     tube: Tube
+    input_collection: InputCollection
 
 
 class EpochSegment(NamedTuple):

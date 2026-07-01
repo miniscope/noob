@@ -176,6 +176,18 @@ class Node(BaseModel):
             ):
                 raise ValueError("No input collection supplied, but inputs specified in params")
 
+        # determine enabledness
+        if isinstance(spec.enabled, str):
+            if not input_collection:
+                raise ValueError(
+                    "No input collection supplied, "
+                    f"but inputs specified as determining enabledness of node {spec.id}"
+                )
+
+            enabled = bool(input_collection.get(spec.enabled.split('.', 1)[-1]))
+        else:
+            enabled = spec.enabled
+
         # additional kwargs that can be present or absent without default
         kwargs = {}
         if spec.stateful is not None:

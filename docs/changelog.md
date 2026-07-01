@@ -43,6 +43,31 @@
   Use a snowflake-like identifier for event IDs rather than UUIDs,
   add helpers for consistently making events.
 
+**Added**
+
+- [`#234`](https://github.com/miniscope/noob/pull/234) - 
+  Inputs can be `optional` and have a `default`. 
+  These defaults have to be basic yaml types at the moment,
+  more elaborate types are still TODO.
+- [`#234`](https://github.com/miniscope/noob/pull/234) -
+  Nodes can use a tube-scoped `input` to control their enabledness
+- [`#234`](https://github.com/miniscope/noob/pull/234) -
+  The {class}`~noob.input.InputCollection` is now passed in the dependency-injected
+  {class}`~noob.types.RunnerContext`
+
+**Fixed**
+- [`#234`](https://github.com/miniscope/noob/pull/234) -
+  {class}`.node.Tube` nodes now correctly accept params in their specs
+  and forward them and other inputs to the {class}`~noob.tube.Tube` they wrap.
+- [`#234`](https://github.com/miniscope/noob/pull/234) -
+  The {class}`.ZMQRunner` 's {class}`.zmq.node.NodeRunner` class now correctly injects
+  a requested {class}`~noob.types.RunnerContext`
+
+**Changed**
+- [`#234`](https://github.com/miniscope/noob/pull/234) -
+  The `type` of an input can be an arbitrary python type expression instead of an absolute identifier.
+  These are still unused, but they will be used for static type checking in the future.
+
 ## v1000.*
 
 ### v1000.1.0 - 26-05-18

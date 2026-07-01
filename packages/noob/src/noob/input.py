@@ -44,6 +44,7 @@ class InputSpecification(BaseModel):
     default: Any | None = None
     description: str | None = None
     """An optional description of the input value"""
+    required: bool = True
 
     model_config = ConfigDict(extra="forbid")
 
@@ -92,7 +93,14 @@ class InputCollection(BaseModel):
         if input is None:
             input = {}
 
-        return self.chain.new_child(input)[key]
+        try:
+            return self.chain.new_child(input)[key]
+        except KeyError as e:
+            # try and get default if not required
+            for specs in self.specs.values():
+                if key in specs and not specs[key].required:
+                    return specs[key].default
+            raise e
 
     @overload
     def get_node_params(self, params: dict) -> dict: ...
@@ -190,7 +198,7 @@ class InputCollection(BaseModel):
         chain = self.chain.new_child(input)
 
         for spec in self.specs[scope].values():
-            if spec.id not in chain:
+            if spec.id not in chain and spec.required:
                 raise InputMissingError(
                     f"Requested input {spec.id} not present in inputs at scope {scope.value}"
                 )
