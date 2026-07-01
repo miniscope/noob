@@ -6,6 +6,9 @@
 
 - [`#233`](https://github.com/miniscope/noob/pull/233) -
   Preliminary representation of assets as nodes in JS viewer
+- [`#237`](https://github.com/miniscope/noob/pull/237) - 
+  {class}`~noob.node.Node`s now have an {attr}`~noob.node.Node.logger` property 
+  that lazily instantiates a logger, if accessed.
 
 **Changed**
 
@@ -28,12 +31,6 @@
 - [`#230`](https://github.com/miniscope/noob/pull/230) ([@vaishnavidesai09](https://github.com/vaishnavidesai09)) -
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
-
-**Added**
-
-- [`#237`](https://github.com/miniscope/noob/pull/237) - 
-  {class}`~noob.node.Node`s now have an {attr}`~noob.node.Node.logger` property 
-  that lazily instantiates a logger, if accessed. 
 
 ## v1000.*
 
