@@ -182,7 +182,9 @@ class NodeSpecification(BaseModel):
     def enabled_is_bool_or_input(cls, val: bool | AbsoluteIdentifier) -> bool | AbsoluteIdentifier:
         """If the "enabled" value is a string, it must be a reference to an input value"""
         if isinstance(val, str):
-            assert val.startswith('input.'), "Dynamic computation of enabled can only be performed from a tube-scoped input"
+            assert val.startswith(
+                "input."
+            ), "Dynamic computation of enabled can only be performed from a tube-scoped input"
         return val
 
     @computed_field  # type: ignore[prop-decorator]

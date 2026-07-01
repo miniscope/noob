@@ -184,7 +184,7 @@ class Node(BaseModel):
                     f"but inputs specified as determining enabledness of node {spec.id}"
                 )
 
-            enabled = bool(input_collection.get(spec.enabled.split('.', 1)[-1]))
+            enabled = bool(input_collection.get(spec.enabled.split(".", 1)[-1]))
         else:
             enabled = spec.enabled
 

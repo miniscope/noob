@@ -7,11 +7,11 @@ import os
 import signal
 import traceback
 from collections import deque
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from functools import cached_property, partial
 from itertools import count
 from types import FrameType
-from typing import Any, cast, Callable
+from typing import Any, cast
 
 import zmq
 from pydantic import ValidationError
@@ -526,14 +526,13 @@ class NodeRunner(EventloopMixin):
             self._ready_condition.notify_all()
 
     def get_context(self) -> RunnerContext:
-        return RunnerContext(runner=self, input_collection=self.input_collection)
+        return RunnerContext(runner=self, input_collection=self.input_collection)  # type: ignore[typeddict-item]
 
     def inject_context(self, fn: Callable) -> Callable:
         """Wrap function in a partial with the runner context injected, if requested"""
         sig = inspect.signature(fn)
         ctx_key = [
-            k for k, v in sig.parameters.items() if
-            v.annotation and v.annotation is RunnerContext
+            k for k, v in sig.parameters.items() if v.annotation and v.annotation is RunnerContext
         ]
         if ctx_key:
             return partial(fn, **{ctx_key[0]: self.get_context()})
