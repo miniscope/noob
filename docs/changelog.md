@@ -19,6 +19,9 @@
 
 - [`#233`](https://github.com/miniscope/noob/pull/233) -
   Correctly handle nexted prefixes in JS viewer
+- [`238`](https://github.com/miniscope/noob/pull/238) - 
+  No more validation errors on type annotations on node process functions from the
+  {class}`~noob.edge.Signal` class.
 
 **Perf**
 

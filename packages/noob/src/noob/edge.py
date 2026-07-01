@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Generator
-from types import GenericAlias, UnionType
-from typing import (  # type: ignore[attr-defined]
+from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
-    _UnionGenericAlias,
     get_args,
     get_origin,
 )
@@ -58,7 +56,7 @@ class Slot(BaseModel):
 
 class Signal(BaseModel):
     name: str
-    annotation: JsonStringable[type | None | UnionType | GenericAlias | _UnionGenericAlias]
+    annotation: JsonStringable[Any]
 
     # Unable to generate pydantic-core schema for <class 'types.UnionType'>
     model_config = ConfigDict(arbitrary_types_allowed=True)
