@@ -2,6 +2,21 @@
 
 ## Upcoming
 
+**Added**
+
+- [`#233`](https://github.com/miniscope/noob/pull/233) -
+  Preliminary representation of assets as nodes in JS viewer
+
+**Changed**
+
+- [`#235`](https://github.com/miniscope/noob/pull/235/) -
+  Assets (and other specifications) now include their `id` when being dumped to json
+
+**Fixed**
+
+- [`#233`](https://github.com/miniscope/noob/pull/233) -
+  Correctly handle nexted prefixes in JS viewer
+
 **Perf**
 
 - [`#224`](https://github.com/miniscope/noob/pull/224) - 
@@ -13,11 +28,6 @@
 - [`#230`](https://github.com/miniscope/noob/pull/230) ([@vaishnavidesai09](https://github.com/vaishnavidesai09)) -
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
-
-**Changed**
-
-- [`#235`](https://github.com/miniscope/noob/pull/235/) -
-  Assets (and other specifications) now include their `id` when being dumped to json
 
 ## v1000.*
 

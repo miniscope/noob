@@ -210,3 +210,10 @@ noob_config.yml
 prof/
 packages/**/pylock.toml
 packages/noob/src/noob/_js
+rolldown-runtime-*
+elkjs-*.js
+react-*.js
+reactflow-*.js
+elkjs-*.map
+react-*.map
+reactflow-*.map

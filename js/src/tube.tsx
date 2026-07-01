@@ -4,10 +4,12 @@
  */
 
 import type {
+  AssetSpecification,
   ElkNode as ElkNodeType,
   GroupNode,
   Handle,
   Handles,
+  InputSpecification,
   NodeUnion,
   NoobNode,
   TitleNode,
@@ -23,29 +25,12 @@ export function tubeToFlow(tube: TubeSpecification): [Edge[], NodeUnion[]] {
   const edges = getEdges(tube.nodes);
   let nodes = getNodes(tube.nodes);
   nodes = [_titleNode(tube.noob_id, tube.description ?? ""), ...nodes];
-  // TODO: Dedicated representation of inputs
+
   if (tube.input && Object.keys(tube.input).length !== 0) {
-    nodes = [
-      ...nodes,
-      {
-        id: "input",
-        position: { x: 0, y: 0 },
-        type: "elk",
-        data: {
-          label: "input",
-          nodeType: "input",
-          targetHandles: [],
-          sourceHandles: Object.values(tube.input).map((i) => {
-            return {
-              id: `input.signals.${i.id}`,
-              label: i.id,
-              key: `input.signals.${i.id}`,
-              required: true,
-            };
-          }),
-        },
-      },
-    ];
+    nodes = [...nodes, _inputNode(tube.input)];
+  }
+  if (tube.assets && Object.keys(tube.assets).length !== 0) {
+    nodes = [...nodes, _assetNode(tube.assets)];
   }
   return [edges, nodes];
 }
@@ -148,7 +133,7 @@ function getNodes(nodes: Record<string, NoobNode>): NodeUnion[] {
 function getNode(node: NoobNode, prefix?: string): NodeUnion[] {
   // Create handle description for node and then filter to unique entries
   if (isTubeNode(node)) {
-    return getTubeNode(node);
+    return getTubeNode(node, prefix);
   } else {
     return getGenericNode(node, prefix);
   }
@@ -176,15 +161,17 @@ function getGenericNode(node: NoobNode, prefix?: string): ElkNodeType[] {
  *
  * Renders inputs and the return node as handles on the border of an outer grouping node.
  */
-function getTubeNode(node: TubeNode): NodeUnion[] {
+function getTubeNode(node: TubeNode, prefix?: string): NodeUnion[] {
   // Make the outer grouping node
+  const newPrefix = prefix ? `${prefix}.${node.id}` : node.id;
+
   const innerTube = node.params.tube;
   const targetHandles = innerTube.input
     ? Object.values(innerTube.input).map<Handle>((input) => {
         return {
-          id: `${node.id}.slots.${input.id}`,
+          id: `${newPrefix}.slots.${input.id}`,
           label: input.id,
-          key: `${node.id}.slots.${input.id}`,
+          key: `${newPrefix}.slots.${input.id}`,
           required: true,
         };
       })
@@ -203,9 +190,9 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
       ? Array.from(returnNode.depends).map<Handle>((slotsig) => {
           const slot = Object.keys(slotsig)[0];
           return {
-            id: `${node.id}.signals.${slot}`,
+            id: `${newPrefix}.signals.${slot}`,
             label: slot,
-            key: `${node.id}.signals.${slot}`,
+            key: `${newPrefix}.signals.${slot}`,
             required: false, // return node slots are never really required, special case.
           };
         })
@@ -213,7 +200,7 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
   }
 
   const groupNode = {
-    id: node.id,
+    id: newPrefix,
     type: "group",
     data: {
       label: node.id,
@@ -222,18 +209,21 @@ function getTubeNode(node: TubeNode): NodeUnion[] {
       targetHandles,
     },
     position: { x: 0, y: 0 },
-    key: node.id,
+    key: newPrefix,
   } as GroupNode;
 
   // Then the children that go within it
   let childNodes = Object.values(innerTube.nodes)
     .filter((child) => child.type !== "return")
-    .flatMap<NodeUnion>((child) => getNode(child, node.id));
+    .flatMap<NodeUnion>((child) => getNode(child, newPrefix));
+  if (innerTube.assets && Object.keys(innerTube.assets).length !== 0) {
+    childNodes = [...childNodes, _assetNode(innerTube.assets, newPrefix)];
+  }
   childNodes = childNodes.map((child) => {
     return {
       ...child,
       extent: "parent",
-      parentId: node.id,
+      parentId: newPrefix,
     };
   });
   return [groupNode, ...childNodes];
@@ -282,6 +272,57 @@ function _titleNode(title: string, description: string): TitleNode {
       targetHandles: [],
     },
     type: "title",
+  };
+}
+
+// TODO: Dedicated representation of inputs
+function _inputNode(input: Record<string, InputSpecification>): ElkNodeType {
+  return {
+    id: "input",
+    position: { x: 0, y: 0 },
+    type: "elk",
+    data: {
+      label: "input",
+      nodeType: "input",
+      targetHandles: [],
+      sourceHandles: Object.values(input).map((i) => {
+        return {
+          id: `input.signals.${i.id}`,
+          label: i.id,
+          key: `input.signals.${i.id}`,
+          required: true,
+        };
+      }),
+    },
+  };
+}
+
+// TODO: dedicated representation of assets
+function _assetNode(
+  assets: Record<string, AssetSpecification>,
+  prefix?: string,
+): ElkNodeType {
+  return {
+    id: prefix ? `${prefix}.assets` : "assets",
+    position: { x: 0, y: 0 },
+    type: "elk",
+    data: {
+      label: "assets",
+      nodeType: "assets",
+      targetHandles: [],
+      sourceHandles: Object.values(assets).map((i) => {
+        return {
+          id: prefix
+            ? `${prefix}.assets.signals.${i.id}`
+            : `assets.signals.${i.id}`,
+          label: i.id,
+          key: prefix
+            ? `${prefix}.assets.signals.${i.id}`
+            : `assets.signals.${i.id}`,
+          required: true,
+        };
+      }),
+    },
   };
 }
 
