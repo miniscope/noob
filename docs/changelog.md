@@ -19,6 +19,11 @@
 
 - [`#233`](https://github.com/miniscope/noob/pull/233) -
   Correctly handle nexted prefixes in JS viewer
+- [`#236`](https://github.com/miniscope/noob/pull/236) -
+  `context: recursive` when loading a tube specification actually recurses more than two levels
+- [`#236`](https://github.com/miniscope/noob/pull/236) -
+  Validation errors for tube specifications are logged rather than suppressed so it's possible to know
+  what is wrong with the spec while working on it
 - [`238`](https://github.com/miniscope/noob/pull/238) - 
   No more validation errors on type annotations on node process functions from the
   {class}`~noob.edge.Signal` class.
