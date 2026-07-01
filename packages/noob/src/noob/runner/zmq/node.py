@@ -5,10 +5,8 @@ import multiprocessing as mp
 import os
 import signal
 import traceback
-import uuid
 from collections import deque
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
 from functools import cached_property, partial
 from itertools import count
 from types import FrameType
@@ -415,12 +413,10 @@ class NodeRunner(EventloopMixin):
         for asset in self.publishes_assets:
             if asset in self.state.specs:
                 asset_val = self.state.assets[asset].obj
-                asset_evt = Event(
+                asset_evt = self.store.event_maker.new_event(
                     node_id="assets",
                     signal=asset,
                     epoch=epoch,
-                    id=uuid.uuid4().int,
-                    timestamp=datetime.now(UTC),
                     value=asset_val,
                 )
 

@@ -4,11 +4,9 @@ import multiprocessing as mp
 import threading
 from collections.abc import Generator, MutableSequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from multiprocessing.synchronize import Event as EventType
 from time import time
 from typing import Any, cast, overload
-from uuid import uuid4
 
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
 from noob.exceptions import InputMissingError
@@ -354,13 +352,8 @@ class ZMQRunner(TubeRunner):
         for root in roots:
             if self.tube.scheduler.epoch_completed(root):
                 events.append(
-                    MetaEvent(
-                        id=uuid4().int,
-                        timestamp=datetime.now(UTC),
-                        node_id="meta",
-                        signal=MetaEventType.EpochEnded,
-                        value=root,
-                        epoch=root,
+                    self.tube.scheduler.event_maker.new_meta_event(
+                        signal=MetaEventType.EpochEnded, epoch=root, value=root
                     )
                 )
 
