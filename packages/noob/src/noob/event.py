@@ -121,7 +121,7 @@ class MetaEvent(Event):
     signal: MetaEventType  # type: ignore
 
 
-def event_id(prefix: int, sequence: int) -> int:
+def event_id(prefix: int, sequence: int, shifted: bool = False) -> int:
     """
     Construct an event id from a prefix and a sequence like::
 
@@ -130,11 +130,16 @@ def event_id(prefix: int, sequence: int) -> int:
     Args:
         prefix (int): A 32-bit prefix
         sequence (int): A 32-bit monotonically increasing sequence
+        shifted (bool): If ``True`` , prefix is already shifted
+            (for performance's sake, avoid an unnecessary operation on a high-call path)
 
     Returns:
         A 64-bit event ID
     """
-    return (prefix << _ID_SEQUENCE_BITS) ^ sequence
+    if shifted:
+        return prefix ^ sequence
+    else:
+        return (prefix << _ID_SEQUENCE_BITS) ^ sequence
 
 
 def event_id_parts(event_id: int) -> tuple[int, int]:
@@ -163,10 +168,11 @@ class EventMaker:
     when we need to handle networked event processing
     """
 
-    __slots__ = ("prefix", "node_id", "_sequence")
+    __slots__ = ("prefix", "node_id", "_sequence", "_shifted")
 
     def __init__(self, prefix: int | None = None, node_id: str | None = None) -> None:
         self.prefix = random.getrandbits(_ID_PREFIX_BITS) if prefix is None else prefix
+        self._shifted = self.prefix << _ID_SEQUENCE_BITS
         self.node_id = node_id
         self._sequence = itertools.count()
 
@@ -189,7 +195,7 @@ class EventMaker:
             )
 
         return Event(
-            id=event_id(self.prefix, next(self._sequence)),
+            id=event_id(self._shifted, next(self._sequence), shifted=True),
             timestamp=datetime.now(UTC) if timestamp is None else timestamp,
             node_id=node_id,
             signal=signal,
