@@ -197,14 +197,14 @@ class Node(BaseModel):
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec, enabled=spec.enabled, **params, **kwargs)
+                return obj(id=spec.id, spec=spec, enabled=enabled, **params, **kwargs)
             else:
                 return WrapClassNode(
-                    id=spec.id, cls=obj, spec=spec, params=params, enabled=spec.enabled, **kwargs
+                    id=spec.id, cls=obj, spec=spec, params=params, enabled=enabled, **kwargs
                 )
         else:
             return WrapFuncNode(
-                id=spec.id, fn=obj, spec=spec, params=params, enabled=spec.enabled, **kwargs
+                id=spec.id, fn=obj, spec=spec, params=params, enabled=enabled, **kwargs
             )
 
     @property
