@@ -356,10 +356,7 @@ class TopoSorter:
         number of nodes marked "done" is less than the number that have been returned
         by "get_ready".
         """
-        active = self._nfinished < self._npassedout or bool(self.ready_nodes)
-        # if active:
-        #     breakpoint()
-        return active
+        return self._nfinished < self._npassedout or bool(self.ready_nodes)
 
     def done(self, *nodes: GraphItem) -> None:
         """Marks a set of nodes returned by "get_ready" as processed.

@@ -201,6 +201,18 @@ def test_clear_ended_epochs():
             assert len(scheduler._epochs) == 1
 
 
+def test_dont_create_empty_subepoch_sets():
+    """
+    We don't create a bunch of empty sets in subepochs by carelessly accessing the default dict
+    """
+    tube = Tube.from_specification("testing-basic")
+    runner = SynchronousRunner(tube)
+    with runner:
+        runner.process()
+
+    assert Epoch(0) not in tube.scheduler._subepochs
+
+
 def test_metaevents():
     """
     Meta events are emitted in callbacks, but not given to nodes or added to the store.
@@ -260,10 +272,6 @@ def test_epoch_log_trim_keeps_recent_epochs():
         for ready in scheduler.iter_epoch(Epoch(epoch)):
             for r in ready:
                 scheduler.done(epoch=Epoch(epoch), node_id=r["value"])
-        # scheduler.add_epoch(epoch)
-        # for node in scheduler.nodes:
-        #     scheduler.get_ready(epoch=Epoch(epoch))
-        #     scheduler.done(epoch=Epoch(epoch), node_id=node)
 
     remaining = scheduler._epoch_log
     assert remaining == {5, 6, 7, 8, 9}, f"Expected {{5..9}}, got {remaining}"

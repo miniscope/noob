@@ -310,7 +310,7 @@ class Scheduler:
         graphs = (
             self._epochs.items()
             if epoch is None
-            else [(ep, self[ep]) for ep in [epoch, *self._subepochs[epoch]]]
+            else [(ep, self[ep]) for ep in [epoch, *self._subepochs.get(epoch, set())]]
         )
         is_ready = any(node in graph.ready_nodes for epoch, graph in graphs)
         return is_ready
@@ -320,8 +320,8 @@ class Scheduler:
         if epoch[0].epoch in self._epoch_log:
             return True
 
-        if self._subepochs[epoch]:
-            return all(node in self._epochs[e].done_nodes for e in self._subepochs[epoch] | {epoch})
+        if subepochs := self._subepochs.get(epoch):
+            return all(node in self._epochs[e].done_nodes for e in subepochs | {epoch})
         else:
             return node in self._epochs[epoch].done_nodes
 
@@ -432,7 +432,7 @@ class Scheduler:
         try:
             graph.done(to_mark)
         except AlreadyDoneError as e:
-            if not self._subepochs[epoch]:
+            if not self._subepochs.get(epoch, False):
                 raise AlreadyDoneError(f"Node {node_id} already done in {epoch}") from e
 
         self._done_subepochs(epoch, node_id, signal)
@@ -524,10 +524,7 @@ class Scheduler:
             and epoch not in self._epochs
             and (epoch_int in self._epoch_log or epoch_int < min(self._epoch_log))
         )
-        # active_completed = epoch in self._epochs and not any(
-        #     self._epochs[ep].is_active() for ep in [epoch, *self._subepochs[epoch]]
-        # )
-        return previously_completed  # or active_completed
+        return previously_completed
 
     def end_epoch(self, epoch: Epoch | int | None = None) -> list[MetaEvent]:
         if isinstance(epoch, Epoch):
@@ -566,16 +563,23 @@ class Scheduler:
                 self._logger.debug("Marked next epoch %s done from %s", next, ep)
 
         if len(ep) == 1:
+            # Add and potentially trim the epoch log
             self._epoch_log.add(ep[0].epoch)
             if len(self._epoch_log) >= self._epoch_log_trim_interval:
                 self._epoch_log = {k for k in sorted(self._epoch_log)[-self._epoch_log_keep :]}
-            for subep in {ep, *self._subepochs[ep]}:
+
+            # garbage collect completed topo sorters
+            # split into two legs to avoid creating unnecessary empty subepoch sets
+            # by just getattr'ing and spreading the empty set unconditionally
+            if subeps := self._subepochs.get(ep):
+                for subep in {ep, *subeps}:
+                    with contextlib.suppress(KeyError):
+                        del self._epochs[subep]
+            else:
                 with contextlib.suppress(KeyError):
-                    del self._epochs[subep]
+                    del self._epochs[ep]
+
         else:
-            # for parent in ep.parents:
-            #     self._subepochs[parent].remove(ep)
-            # del self._epochs[ep]
             if not self.is_active(ep.parent):
                 self._logger.debug("Ending parent epoch %s from %s", ep.parent, ep)
                 events.extend(self.end_epoch(ep.parent))
@@ -743,7 +747,7 @@ class Scheduler:
         """
         from noob.tube import downstream_nodes
 
-        if not self._subepochs[epoch]:
+        if not self._subepochs.get(epoch):
             return
 
         our_subgraph = set(self._subgraph(node_id)[0])
