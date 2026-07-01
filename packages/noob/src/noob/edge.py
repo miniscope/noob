@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Generator
-from typing import (  # type: ignore[attr-defined]
+from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
