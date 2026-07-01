@@ -40,8 +40,6 @@
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
 
-**Fix**
-
 ## v1000.*
 
 ### v1000.1.0 - 26-05-18
