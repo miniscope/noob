@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from noob.edge import Edge
 from noob.exceptions import ExtraInputWarning, InputMissingError
-from noob.types import AbsoluteIdentifier, PythonIdentifier
+from noob.types import PythonIdentifier
 from noob.yaml import id_optional_json_schema
 
 
@@ -39,7 +39,7 @@ class InputSpecification(BaseModel):
     """
 
     id: PythonIdentifier
-    type_: AbsoluteIdentifier = Field(..., alias="type")
+    type_: str = Field(..., alias="type")
     scope: InputScope = InputScope.tube
     default: Any | None = None
     description: str | None = None
