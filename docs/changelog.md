@@ -13,6 +13,108 @@
 - [`#230`](https://github.com/miniscope/noob/pull/230) ([@vaishnavidesai09](https://github.com/vaishnavidesai09)) -
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Cached {attr}`.Node.signals` and {attr}`.Node.slots` as they are frequently accessed props
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  More of the {class}`.TopoSorter`'s methods were adapted to be batched set operations
+  rather than iterators.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  {class}`.Epoch` 's `__eq__` method was removed to avoid using it during lookups,
+  using hash instead and normal tuple equality.
+  Being able to `==` an integer wasn't worth the performance cost.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  {class}`.Epoch`'s creation was optimized to avoid remaking {class}`.EpochSegment`s.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  {class}`.Epoch` gained `__slots__`
+
+**Added**
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  `stateful` is propagated from {class}`~.Node` classes back to {class}`~.NodeSpecification` s.
+  `stateful` can be specified explicitly in the spec, or computed automatically by the node class.
+  So we need to make sure to propagate that with the spec for e.g. the `ZMQRunner`
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  {meth}`~.Scheduler.iter_epoch` and {meth}`~.Scheduler.iter_ready` methods
+  to iterate over a single epoch's nodes, or any nodes, respectively, as they are ready.
+  This will largely replace the previous pattern of repeatedly calling `get_ready` 
+  within a `while scheduler.is_active()` loop.
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  A special `('meta', 'previous_epoch')` signal is added to {class}`.TopoSorter`s
+  to model statefulness and inter-epoch dependencies within the graph directly.
+  Nodes that are `stateful` will depend on this signal, 
+  which is marked as done when the previous epoch completes.
+  This ensures that nodes that must be run with ordered inputs are in all contexts,
+  and dramatically simplifies scheduling while also making concurrent runners
+  naturally to handle multiple epochs simultaneously with stateless tubes.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  A {attr}`.Scheduler.epoch` property was added to get the current epoch.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  {meth}`.TopoSorter.get_state` convenience method to get a summary of a topo sorter's state
+  (for debugging purposes).
+  This copies the internal sets to protect them from mutation,
+  and so shouldn't be used in any perf-sensitive paths.
+  
+
+**Changed**
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  Moved scheduling logic out of runners and into the scheduler!
+  Runners used to have to internally keep their own counters of the current/active epochs,
+  which was a huge mess and a bad division of labor.
+  Now the relationship between a runner and the scheduler is much less janky.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  The ZMQRunner was simplified and its terrible state management was streamlined.
+  There are still some flaky test failures from threading deadlocks, but we are getting there.
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  the {class}`.TubeRunner`'s `_get_ready` method was made an iterator, yielding from the scheduler.
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  The {class}`.TopoSorter` no longer returns `NodeSignal`s as "ready".
+  Instead it marks them as being "out" along with the node, returning only the node as ready.
+  Previously, they could be returned with a warning in the event of a bug or an
+  inconsistent scheduling state that marked a node as done without marking its signals as done.
+  Signals can't be run, it makes no sense for them to be ready.
+  They are always out at the same time that a node is,
+  even if they can have different ending conditions
+  (i.e. being marked "done" by emitting an event or "expired" by emitting `NoEvent`)
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  The {class}`.Scheduler`'s node completion methods all return a list of {class}`.MetaEvent`s
+  rather than one or `None`, allowing multiple epochs to be marked as completed at once.
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  An epoch is considered completed by {meth}`.Scheduler.epoch_completed` 
+  *only* when it is fully complete, rather than when no more progress can be made,
+  but a completion event has not been emitted. 
+  This clarifies the distinction and use between it and {meth}`.Scheduler.is_active`,
+  which returns `False` when an epoch *should* be marked as completed 
+  because no more progress can be made, 
+  while `epoch_completed` checks if that completion event has been emitted. 
+
+**Fixed**
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  The `ZMQRunner` now more correctly locks the state around its scheduler,
+  avoiding race conditions between the command node thread and the main thread.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Events in the parent epoch that are from a node that is *not* the one that induced subepochs
+  can mark their counterparts in subepochs as expired.
+  This is how it was supposed to work, and how `gather`ing works - 
+  To decrease cardinality, a node emits an event in the parent.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Empty sets are no longer created in the Scheduler's `_subepochs` dict for every epoch,
+  even when there are no subepochs.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Dynamically enabling/disabling a node with the scheduler now works in epochs that have already been scheduled,
+  however this means that nodes should only be enabled/disabled in between running epochs,
+  or else nodes may be re-ran in those epochs.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Even stateless tubes run in a "best effort" epoch order -
+  when a bunch of epochs are queued up out of order,
+  the scheduler ensures that ready nodes are yielded in an epoch-sorted order.
+
+**Removed**
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  {class}`.zmq.NodeRunner` 's `await_inputs` and `await_node` methods 
+  were removed in favor of the scheduler iterators.
+
+**CI**
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  pytest hooks were added to set the debug logging level when re-running an action in debug mode.
 
 ## v1000.*
 
