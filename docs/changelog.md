@@ -32,6 +32,12 @@
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
 
+**Fix**
+
+- [`238`](https://github.com/miniscope/noob/pull/238) - 
+  No more validation errors on type annotations on node process functions from the
+  {class}`~noob.edge.Signal` class.
+
 ## v1000.*
 
 ### v1000.1.0 - 26-05-18
