@@ -14,6 +14,17 @@
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
 
+**Add**
+
+- [`#233`](https://github.com/miniscope/noob/pull/233) -
+  Preliminary representation of assets as nodes in JS viewer
+
+**Fix**
+
+- [`#233`](https://github.com/miniscope/noob/pull/233) -
+  Correctly handle nexted prefixes in JS viewer
+
+
 ## v1000.*
 
 ### v1000.1.0 - 26-05-18
