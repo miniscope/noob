@@ -150,7 +150,7 @@ class Node(BaseModel):
     @classmethod
     def from_specification(
         cls, spec: NodeSpecification, input_collection: InputCollection | None = None
-    ) -> Node | None:
+    ) -> Node:
         """
         Create a node from its spec
 
