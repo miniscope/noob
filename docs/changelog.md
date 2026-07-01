@@ -35,6 +35,13 @@
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
 
+**Fix**
+- [`#236`](https://github.com/miniscope/noob/pull/236) -
+  `context: recursive` when loading a tube specification actually recurses more than two levels
+- [`#236`](https://github.com/miniscope/noob/pull/236) -
+  Validation errors for tube specifications are logged rather than suppressed so it's possible to know
+  what is wrong with the spec while working on it
+
 ## v1000.*
 
 ### v1000.1.0 - 26-05-18
