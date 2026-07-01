@@ -6,6 +6,9 @@
 
 - [`#233`](https://github.com/miniscope/noob/pull/233) -
   Preliminary representation of assets as nodes in JS viewer
+- [`#237`](https://github.com/miniscope/noob/pull/237) - 
+  {class}`~noob.node.Node`s now have an {attr}`~noob.node.Node.logger` property 
+  that lazily instantiates a logger, if accessed.
 
 **Changed**
 
