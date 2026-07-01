@@ -39,6 +39,9 @@
 - [`#230`](https://github.com/miniscope/noob/pull/230) ([@vaishnavidesai09](https://github.com/vaishnavidesai09)) -
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
+- [`#232`](https://github.com/miniscope/noob/pull/232) -
+  Use a snowflake-like identifier for event IDs rather than UUIDs,
+  add helpers for consistently making events.
 
 ## v1000.*
 

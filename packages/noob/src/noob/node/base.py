@@ -24,6 +24,7 @@ from pydantic import (
 )
 
 from noob.edge import Edge, Signal, Slot
+from noob.event import EventMaker
 from noob.logging import init_logger
 from noob.node.spec import NodeSpecification
 from noob.types import Epoch, EventMap
@@ -97,6 +98,7 @@ class Node(BaseModel):
     _gen: Generator | None = None
     _edges: list[Edge] | None = None
     _injections: dict[str, str] | None = None
+    _event_maker: EventMaker = PrivateAttr(default_factory=EventMaker)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -104,6 +106,7 @@ class Node(BaseModel):
         """See docstring of :meth:`.process` for description of post init wrapping of generators"""
         if inspect.isgeneratorfunction(self.process):
             self._wrap_generator(self.process)
+        self._event_maker.node_id = self.id
 
     # TODO: Support dependency injection in mypy plugin
     def init(self) -> None:

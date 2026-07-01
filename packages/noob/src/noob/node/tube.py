@@ -1,10 +1,8 @@
-import uuid
 import warnings
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Union
 
 from noob.edge import Slot
-from noob.event import Event
 from noob.exceptions import ExtraInputWarning
 from noob.node.base import Node
 from noob.node.spec import NodeSpecification
@@ -60,13 +58,11 @@ class TubeNode(Node):
         if isinstance(res, dict):
             now = datetime.now(UTC)
             return [
-                Event(
-                    id=uuid.uuid4().int,
-                    timestamp=now,
-                    node_id=self.id,
+                self._event_maker.new_event(
                     signal=key,
                     epoch=epoch,
                     value=value,
+                    timestamp=now,
                 )
                 for key, value in res.items()
             ]

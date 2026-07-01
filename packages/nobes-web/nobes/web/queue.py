@@ -5,9 +5,7 @@ See examples/http-scrape-concise.yaml for example usage
 """
 
 import sys
-import uuid
 from collections import defaultdict
-from datetime import UTC, datetime
 from typing import Annotated as A
 from urllib.parse import urldefrag, urljoin
 
@@ -15,7 +13,7 @@ from httpx import Response
 from pydantic import Field, PrivateAttr
 
 from nobes.web.parse import extract_tags
-from noob import Asset, Epoch, Event, MetaSignal, Name, Node, NoEventable
+from noob import Asset, Epoch, MetaSignal, Name, Node, NoEventable
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
@@ -89,10 +87,7 @@ class update_urls(Node):
 
         self._seen[parent] += 1
         if self._seen[parent] >= self._n[parent]:
-            return new_urls, Event(
-                id=uuid.uuid4().int,
-                timestamp=datetime.now(UTC),
-                node_id=self.spec.id,
+            return new_urls, self._event_maker.new_event(
                 signal="queue",
                 epoch=parent,
                 value=self._states[parent],
