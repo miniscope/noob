@@ -14,6 +14,12 @@
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
 
+**Added**
+
+- [`#237`](https://github.com/miniscope/noob/pull/237) - 
+  {class}`~noob.node.Node`s now have an {attr}`~noob.node.Node.logger` property 
+  that lazily instantiates a logger, if accessed. 
+
 ## v1000.*
 
 ### v1000.1.0 - 26-05-18
