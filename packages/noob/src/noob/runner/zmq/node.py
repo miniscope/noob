@@ -497,7 +497,7 @@ class NodeRunner(EventloopMixin):
 
     async def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
-        self._node.init()
+        self.inject_context(self._node.init)()
         self.state = State.from_specification(
             specs={asset: self.asset_specs[asset] for asset in self.inits_assets}
         )
