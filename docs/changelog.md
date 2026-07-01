@@ -14,6 +14,11 @@
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
 
+**Changed**
+
+- [`#235`](https://github.com/miniscope/noob/pull/235/) -
+  Assets (and other specifications) now include their `id` when being dumped to json
+
 ## v1000.*
 
 ### v1000.1.0 - 26-05-18
@@ -46,8 +51,6 @@
 - [`#213`](https://github.com/miniscope/noob/pull/213) - 
   An additional `NodeInfo` dictionary contains metadata about signals and slots
   derived from the combination of the node specification and the node class.
-- [`#235`](https://github.com/miniscope/noob/pull/235/) -
-  Assets (and other specifications) now include their `id` when being dumped to json
 
 ### v1000.0.1 - 26-03-15
 
