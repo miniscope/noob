@@ -53,6 +53,7 @@ class ZMQRunner(TubeRunner):
     If ``False`` , don't clear events from the event store
     """
 
+    _command_thread: threading.Thread | None = None
     _initialized: EventType = field(default_factory=mp.Event)
     _running: EventType = field(default_factory=mp.Event)
     _init_lock: threading.RLock = field(default_factory=threading.RLock)
@@ -80,7 +81,8 @@ class ZMQRunner(TubeRunner):
         with self._init_lock:
             self._logger.debug("Initializing ZMQ runner")
             self.command = CommandNode(runner_id=self.runner_id)
-            threading.Thread(target=self.command.run, daemon=True).start()
+            self._command_thread = threading.Thread(target=self.command.run, daemon=True)
+            self._command_thread.start()
             self.command._init.wait()
             self.command.add_callback("inbox", self.on_event)
             self.command.add_callback("router", self.on_router)
@@ -152,9 +154,18 @@ class ZMQRunner(TubeRunner):
                         f"NodeRunner {proc.name} still not closed! making an unclean exit."
                     )
 
+            self.tube.scheduler.clear()
             self.command.clear_callbacks()
             self.command.deinit()
-            self.tube.scheduler.clear()
+
+            self._command_thread = cast(threading.Thread, self._command_thread)
+            self._command_thread.join(5)
+            if self._command_thread.is_alive():
+                raise TimeoutError(
+                    "Command node thread was still alive after timeout. "
+                    "This is almost certainly a bug, and the command node was threadlocked!"
+                )
+
             self._initialized.clear()
 
     def process(self, **kwargs: Any) -> ReturnNodeType:
@@ -410,7 +421,6 @@ class ZMQRunner(TubeRunner):
             # if we're waiting in the process method,
             # end epoch and raise error there
             self.tube.scheduler.end_epoch(self._current_epoch)
-            self.deinit()
             if self._current_epoch in self._epoch_futures:
                 self._epoch_futures[self._current_epoch].set_exception(exception)
                 del self._epoch_futures[self._current_epoch]

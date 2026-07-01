@@ -361,12 +361,13 @@ class NodeRunner(EventloopMixin):
 
             # if we're freerunning, just run it all
             if self._freerun.is_set():
-                for r in readies:
-                    yield r
-                if not readies:
+                if readies:
+                    for r in readies:
+                        yield r
+                    readies = []
+                else:
                     async with self._ready_condition:
                         await self._ready_condition.wait()
-                readies = []
 
             # otherwise, we only run from epochs that have been requested
             elif len(self._epochs_todo) > 0:

@@ -149,3 +149,7 @@ class EventloopMixin:
             except Exception as e:
                 self.logger.exception("EXCEPTION IN EVENTLOOP: %s", e)
                 raise e
+
+            # force a context switch to avoid us getting flooded and only processing messages
+            await asyncio.sleep(0)
+        self.logger.debug("Exiting polling loop")

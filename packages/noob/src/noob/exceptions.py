@@ -106,3 +106,9 @@ class AlreadyDoneError(SchedulerError, ValueError):
     """
     Node was marked done, but it was already done!
     """
+
+
+class TerminateTaskGroup(NoobError):
+    """
+    https://docs.python.org/3/library/asyncio-task.html#terminating-a-task-group
+    """
