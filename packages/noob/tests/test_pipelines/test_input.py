@@ -125,10 +125,13 @@ async def test_asset_input_params(all_runner_cls):
     """
     tube = Tube.from_specification("testing-input-asset-params", input={"start": 7})
     runner = all_runner_cls(tube)
-    with runner:
-        for i in range(5):
-            if iscoroutinefunction_partial(runner.process):
+    if iscoroutinefunction_partial(runner.process):
+        async with runner:
+            for i in range(5):
                 result = await runner.process()
-            else:
+                assert result == i + 7
+    else:
+        with runner:
+            for i in range(5):
                 result = runner.process()
-            assert result == i + 7
+                assert result == i + 7
