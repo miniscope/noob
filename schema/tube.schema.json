@@ -118,6 +118,11 @@
           ],
           "default": null,
           "title": "Description"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
         }
       },
       "required": [],
@@ -180,9 +185,16 @@
           "title": "Params"
         },
         "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
           "default": true,
-          "title": "Enabled",
-          "type": "boolean"
+          "title": "Enabled"
         },
         "stateful": {
           "anyOf": [
