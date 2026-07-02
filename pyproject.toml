@@ -148,4 +148,5 @@ concurrency = ["thread", "multiprocessing"]
 omit = [
     "*/testing/*"
 ]
+patch = ["fork"]
 sigterm = true
