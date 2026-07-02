@@ -6,7 +6,7 @@ import pytest
 
 from noob import NodeSpecification, SynchronousRunner, Tube
 from noob.edge import Edge
-from noob.event import Event, MetaEventType
+from noob.event import Event, EventMaker, MetaEventType
 from noob.exceptions import EpochCompletedError
 from noob.scheduler import Scheduler
 from noob.toposort import TopoSorter
@@ -337,7 +337,7 @@ def test_disable_nodes():
 
 
 @pytest.mark.map
-def test_map_creating_subepochs_expires_parent_epoch():
+def test_map_creating_subepochs_expires_parent_epoch(eventmaker: EventMaker):
     """
     When a node induces a map by creating subepochs,
     that node should be marked exhausted in the parent epoch
@@ -346,13 +346,15 @@ def test_map_creating_subepochs_expires_parent_epoch():
     scheduler = tube.scheduler
     ep = scheduler.add_epoch()
     scheduler.done(ep, node_id="a")
-    scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
+    scheduler.update(
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
+    )
     assert "b" in scheduler._epochs[ep].done_nodes
     assert "b" not in scheduler._epochs[ep].ran_nodes
 
 
 @pytest.mark.map
-def test_get_ready_yields_all_mapped_subepochs():
+def test_get_ready_yields_all_mapped_subepochs(eventmaker: EventMaker):
     """
     get_ready should yield all mapped subepochs at once when accessed with the parent epoch
     """
@@ -360,14 +362,16 @@ def test_get_ready_yields_all_mapped_subepochs():
     scheduler = tube.scheduler
     ep = scheduler.add_epoch()
     scheduler.done(ep, node_id="a")
-    scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
+    scheduler.update(
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
+    )
     ready = scheduler.get_ready(ep)
     assert len(ready) == 3
     assert {r["epoch"] for r in ready} == {ep / ("b", i) for i in range(3)}
 
 
 @pytest.mark.map
-def test_map_gather_only_parent_epoch():
+def test_map_gather_only_parent_epoch(eventmaker: EventMaker):
     """
     When a gather node collapses subepochs, nodes that are exclusively downstream of the gather node
     only run in the parent epoch
@@ -376,7 +380,9 @@ def test_map_gather_only_parent_epoch():
     scheduler = tube.scheduler
     ep = scheduler.add_epoch()
     scheduler.done(ep, node_id="a")
-    scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
+    scheduler.update(
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
+    )
     for i in range(3):
         scheduler.done(ep / ("b", i), node_id="c")
     scheduler.done(ep, node_id="d")
@@ -386,7 +392,7 @@ def test_map_gather_only_parent_epoch():
 
 
 @pytest.mark.map
-def test_map_gather_mixed_epochs():
+def test_map_gather_mixed_epochs(eventmaker):
     """
     When a gather node collapses subepochs,
     it yields nodes that are exclusively downstream of the gather node in the parent epoch,
@@ -396,7 +402,9 @@ def test_map_gather_mixed_epochs():
     scheduler = tube.scheduler
     ep = scheduler.add_epoch()
     scheduler.done(ep, node_id="a")
-    scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
+    scheduler.update(
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
+    )
     for i in range(3):
         scheduler.done(ep / ("b", i), node_id="c", signal="value")
     for i in range(3):
@@ -409,17 +417,21 @@ def test_map_gather_mixed_epochs():
 
 
 @pytest.mark.map
-def test_is_active_when_subepochs_active():
+def test_is_active_when_subepochs_active(eventmaker: EventMaker):
     """Scheduler stays active for an epoch as long as there are active subepochs"""
     tube = Tube.from_specification("testing-map-basic")
     scheduler = tube.scheduler
     ep = scheduler.add_epoch()
     scheduler.done(ep, node_id="a")
-    scheduler.update([_make_event(ep / ("b", i), "b") for i in range(3)])
+    scheduler.update(
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="b") for i in range(3)]
+    )
     assert not scheduler._epochs[ep].is_active()
     assert scheduler._epochs[ep / ("b", 0)].is_active()
     assert scheduler.is_active(ep)
-    scheduler.update([_make_event(ep / ("b", i), "c") for i in range(3)])
+    scheduler.update(
+        [eventmaker.new_event(value=0, epoch=ep / ("b", i), node_id="c") for i in range(3)]
+    )
     assert not scheduler._epochs[ep].is_active()
     assert scheduler._epochs[ep / ("b", 0)].is_active()
     assert scheduler.is_active(ep)
@@ -430,12 +442,6 @@ def test_is_active_when_subepochs_active():
             assert scheduler.is_active(ep)
         assert not scheduler.is_active(ep / ("b", i))
     assert not scheduler.is_active(ep)
-
-
-def _make_event(epoch: Epoch, node_id: str, signal: str = "value") -> Event:
-    return Event(
-        id=0, epoch=epoch, node_id=node_id, timestamp=datetime.now(), signal=signal, value=0
-    )
 
 
 def test_asset_generations():

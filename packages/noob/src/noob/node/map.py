@@ -1,4 +1,3 @@
-import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Annotated as A
@@ -38,14 +37,5 @@ class Map(Node):
         ret = []
 
         for item, subepoch in zip(value, subepochs):
-            ret.append(
-                Event(
-                    id=uuid.uuid4().int,
-                    timestamp=now,
-                    node_id=self.id,
-                    signal="value",
-                    epoch=subepoch,
-                    value=item,
-                )
-            )
+            ret.append(self._event_maker.new_event(epoch=subepoch, value=item, timestamp=now))
         return ret, len(ret)

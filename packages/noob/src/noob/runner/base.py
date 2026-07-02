@@ -434,7 +434,7 @@ class TubeRunner(ABC):
         pass
 
     def get_context(self) -> RunnerContext:
-        return RunnerContext(runner=self, tube=self.tube)
+        return RunnerContext(runner=self, input_collection=self.tube.input_collection)
 
     def inject_context(self, fn: Callable) -> Callable:
         """Wrap function in a partial with the runner context injected, if requested"""

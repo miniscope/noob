@@ -4,13 +4,11 @@ from collections import defaultdict
 from collections.abc import Iterator, MutableSequence
 from copy import deepcopy
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from functools import cached_property
 from typing import Self
-from uuid import uuid4
 
 from noob.edge import Edge
-from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
+from noob.event import Event, EventMaker, MetaEvent, MetaEventType, MetaSignal
 from noob.exceptions import AlreadyDoneError, EpochCompletedError, EpochExistsError, NotAddedError
 from noob.logging import init_logger
 from noob.node import NodeSpecification
@@ -30,6 +28,7 @@ class Scheduler:
     nodes: dict[str, NodeSpecification]
     edges: list[Edge]
     source_nodes: list[NodeID] = field(default_factory=list)
+    event_maker: EventMaker = field(default_factory=EventMaker)
     _logger: logging.Logger = field(default_factory=lambda: init_logger("noob.scheduler"))
 
     _last_epoch: int = -1
@@ -281,13 +280,8 @@ class Scheduler:
                     node != "meta" and (node not in self.nodes or self.nodes[node].enabled)
                 ):
                     ready_nodes.append(
-                        MetaEvent(
-                            id=uuid4().int,
-                            timestamp=datetime.now(),
-                            node_id="meta",
-                            signal=MetaEventType.NodeReady,
-                            epoch=epoch,
-                            value=node,
+                        self.event_maker.new_meta_event(
+                            signal=MetaEventType.NodeReady, epoch=epoch, value=node
                         )
                     )
         return ready_nodes
@@ -584,16 +578,7 @@ class Scheduler:
                 self._logger.debug("Ending parent epoch %s from %s", ep.parent, ep)
                 events.extend(self.end_epoch(ep.parent))
 
-        events.append(
-            MetaEvent(
-                id=uuid4().int,
-                timestamp=datetime.now(UTC),
-                node_id="meta",
-                signal=MetaEventType.EpochEnded,
-                epoch=ep,
-                value=ep,
-            )
-        )
+        events.append(self.event_maker.new_meta_event(signal=MetaEventType.EpochEnded, epoch=ep, value=ep))
         return events
 
     def enable_node(self, node_id: str) -> None:

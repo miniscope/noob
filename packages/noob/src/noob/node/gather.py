@@ -1,5 +1,3 @@
-import uuid
-from datetime import UTC, datetime
 from multiprocessing import Lock
 from multiprocessing.synchronize import Lock as LockType
 from typing import Any, Generic, TypeVar, cast
@@ -77,14 +75,7 @@ class Gather(Node, Generic[_TInput]):
                     # collapse epoch if in a sub-epoch
                     ep = epoch.parent if len(epoch) > 1 else epoch
                     ep = cast(Epoch, ep)
-                    return Event(
-                        id=uuid.uuid4().int,
-                        timestamp=datetime.now(UTC),
-                        node_id=self.id,
-                        signal="value",
-                        epoch=ep,
-                        value=items,
-                    )
+                    return self._event_maker.new_event(epoch=ep, value=items)
                 finally:
                     # clear list after returning
                     self._items = []

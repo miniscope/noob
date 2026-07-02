@@ -170,7 +170,9 @@ class TubeSpecification(ConfigYAMLMixin):
                 if node.type_ == "tube":
                     if node.params is None:
                         node.params = {}
-                    node.params["tube"] = TubeSpecification.from_any(node.params["tube"])
+                    node.params["tube"] = TubeSpecification.from_any(
+                        node.params["tube"], context={"recursive": True}
+                    )
         return self
 
     @cached_property

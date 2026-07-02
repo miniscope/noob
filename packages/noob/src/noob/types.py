@@ -41,8 +41,8 @@ else:
     from typing import TypeIs
 
 if TYPE_CHECKING:
-    from noob import Tube
     from noob.event import Event
+    from noob.input import InputCollection
     from noob.runner import TubeRunner
 
 CONFIG_ID_PATTERN = r"[\w\-\/#]+"
@@ -222,7 +222,7 @@ AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)
 
 class RunnerContext(TypedDict):
     runner: TubeRunner
-    tube: Tube
+    input_collection: InputCollection
 
 
 class EpochSegment(NamedTuple):
