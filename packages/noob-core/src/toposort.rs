@@ -1,13 +1,12 @@
+use indexmap::{IndexMap, IndexSet};
 use std::collections::HashMap;
 
-use indexmap::{IndexMap, IndexSet};
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use crate::exceptions::{CoreError, CoreResult};
+use crate::item::{Interner, Item, PREVIOUS_EPOCH};
 
-// use crate::exceptions::{CoreError, CoreResult};
-// use crate::item::Interner;
-
-#[derive(Clone, Debug, PartialEq, FromPyObject)]
+/// The fields of `noob.edge.Edge` the sorter cares about.
+/// The boundary layer is responsible for extracting these from python.
+#[derive(Clone, Debug, PartialEq)]
 pub struct EdgeRec {
     pub source_node: String,
     pub source_signal: String,
@@ -15,7 +14,10 @@ pub struct EdgeRec {
     pub required: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, FromPyObject)]
+/// The fields of `noob.node.NodeSpecification` the sorter cares about.
+/// `stateful` is `bool | None` in python - `None` (unresolved) is treated
+/// as stateless, see [`NodeFlags::is_stateful`].
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NodeFlags {
     pub enabled: bool,
     pub stateful: Option<bool>,
@@ -28,13 +30,6 @@ impl NodeFlags {
     }
 }
 
-pub fn extract_nodes(nodes: &Bound<'_, PyDict>) -> PyResult<IndexMap<String, NodeFlags>> {
-    nodes
-        .iter()
-        .map(|(node_id, spec)| PyResult::Ok((node_id.extract()?, spec.extract()?)))
-        .collect()
-}
-
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NodeRec {
     pub nqueue: i64,
@@ -44,11 +39,20 @@ pub struct NodeRec {
     pub optional_successors: IndexSet<u32>,
 }
 
+/// Port of `noob.toposort.TopoSorter`, operating on interned item ids.
+///
+/// Uses `IndexSet`/`IndexMap` rather than the std hash containers
+/// because their iteration is deterministic (reproducible scheduling and
+/// directly comparable test output, where std's per-instance random hash
+/// seeds are not) and iterates a dense vec rather than sparse hash buckets.
+/// These sets are iterated constantly.
+// TODO: interned ids are dense, so the endgame is Vec/bitset storage
+// indexed by id, with no hashing at all. Benchmark once the port is correct.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Sorter {
     /// node item id -> signal items emitted by that node that the graph depends on
     pub signals: HashMap<u32, IndexSet<u32>>,
-    /// insertion-ordered, mirrors `TopoSorter._node2info`
+    /// mirrors `TopoSorter._node2info`
     pub info: IndexMap<u32, NodeRec>,
     pub ready: IndexSet<u32>,
     pub out: IndexSet<u32>,
@@ -58,3 +62,444 @@ pub struct Sorter {
     pub npassedout: i64,
     pub nfinished: i64,
 }
+
+impl Sorter {
+    /// Port of `TopoSorter.__init__` from a node map and edge list
+    pub fn from_graph(
+        interner: &mut Interner,
+        nodes: &IndexMap<String, NodeFlags>,
+        edges: &[EdgeRec],
+    ) -> CoreResult<Sorter> {
+        let mut sorter = Sorter::default();
+        // filter on disabled rather than enabled nodes: edges may reference
+        // nodes we have no specification for, which should pass through
+        for (node_id, flags) in nodes {
+            if !flags.enabled {
+                sorter.disabled.insert(interner.intern_node(node_id));
+            }
+        }
+        for edge in edges {
+            let target = interner.intern_node(&edge.target_node);
+            if sorter.disabled.contains(&target) {
+                continue;
+            }
+            let signal = interner.intern_signal(&edge.source_node, &edge.source_signal);
+            sorter.add(interner, target, &[signal], edge.required)?;
+        }
+        for (node_id, flags) in nodes {
+            let id = interner.intern_node(node_id);
+            // add enabled nodes that have no edges
+            if flags.enabled && !sorter.info.contains_key(&id) {
+                sorter.add(interner, id, &[], true)?;
+            }
+            // stateful nodes wait on their own previous epoch.
+            // note: python adds this for disabled nodes too - kept faithfully
+            if flags.is_stateful() {
+                sorter.add(interner, id, &[PREVIOUS_EPOCH], true)?;
+            }
+        }
+        Ok(sorter)
+    }
+    
+    pub fn get_nodeinfo(&mut self, id: u32) -> &mut NodeRec {
+        self.info.entry(id).or_default()
+    }
+    
+    pub fn mark_ready(&mut self, nodes: &[u32]) {
+        for n in nodes {
+            self.ready.insert(*n);
+        }
+    }
+    
+    pub fn add(
+        &mut self,
+        interner: &mut Interner,
+        node: u32,
+        predecessors: &[u32],
+        required: bool,
+    ) -> CoreResult<()> {
+        // refuse to add nodes that are out / done
+        let mut reasons: Vec<&str> = Vec::new();
+        if self.out.contains(&node) {
+            reasons.push("already out");
+        }
+        if self.done.contains(&node) {
+            reasons.push("already done");
+        }
+        if !reasons.is_empty() {
+            return Err(CoreError::Value(format!(
+                "{} cannot be added: {}",
+                interner.resolve(node),
+                reasons.join(", ")
+            )));
+        }
+
+        // create the predecessor -> node edges,
+        // filtering predecessors to those that are newly being created
+        let mut new_predecessors: Vec<u32> = Vec::new();
+        for &pred in predecessors {
+            if self.get_nodeinfo(pred).successors.contains(&node) {
+                continue;
+            }
+            new_predecessors.push(pred);
+            self.get_nodeinfo(pred).successors.insert(node);
+
+            if pred != PREVIOUS_EPOCH && interner.is_signal(pred) {
+                // (node, signal) predecessors must always depend on their node
+                let pred_node = interner.node_part(pred);
+                self.signals.entry(pred_node).or_default().insert(pred);
+                self.add(interner, pred, &[pred_node], true)?;
+            }
+
+            // re-read after the recursive add: python holds a reference to
+            // the info object, which the recursion may have mutated
+            let nqueue = self.get_nodeinfo(pred).nqueue;
+            if nqueue == 0
+                && !self.out.contains(&pred)
+                && !self.done.contains(&pred)
+                && !self.disabled.contains(&pred)
+            {
+                self.mark_ready(&[pred]);
+            }
+        }
+
+        // create the node -> predecessor edges
+        let rec = self.get_nodeinfo(node);
+        for &p in &new_predecessors {
+            rec.predecessors.insert(p);
+        }
+        // note: python passes *all* given predecessors here, not just new ones
+        self.update_optionals(interner, node, predecessors, required);
+
+        let ndone_predecessors = new_predecessors
+            .iter()
+            .filter(|p| self.done.contains(*p))
+            .count() as i64;
+        let rec = self.get_nodeinfo(node);
+        rec.nqueue += new_predecessors.len() as i64 - ndone_predecessors;
+        let nqueue = rec.nqueue;
+        if nqueue == 0 {
+            self.mark_ready(&[node]);
+        } else {
+            // in case the node is added multiple times
+            self.ready.swap_remove(&node);
+        }
+        Ok(())
+    }
+    
+    fn update_optionals(
+        &mut self,
+        interner: &Interner,
+        node: u32,
+        predecessors: &[u32],
+        required: bool,
+    ) {
+        if interner.is_signal(node) {
+            return;
+        }
+        let info = self.get_nodeinfo(node);
+        if required {
+            predecessors.iter().for_each(|p| {
+                info.optional_predecessors.swap_remove(p);
+            });
+        } else {
+            predecessors.iter().for_each(|p| {
+                info.optional_predecessors.insert(*p);
+            });
+        }
+
+        let mut to_visit: IndexSet<u32> = info.successors.clone();
+        let mut new_successors: Vec<u32> = Vec::new();
+        let mut seen: IndexSet<u32> = IndexSet::new();
+        while let Some(current) = to_visit.pop() {
+            let current_info = self.get_nodeinfo(current);
+            let successors = current_info.successors.clone();
+            for next_successor in successors {
+                let next_info = self.get_nodeinfo(next_successor);
+                if !interner.is_signal(next_successor)
+                    && next_info.optional_predecessors.contains(&current)
+                {
+                    new_successors.push(next_successor);
+                } else {
+                    to_visit.extend(next_info.successors.difference(&seen));
+                    seen.extend(next_info.successors.iter().copied());
+                }
+            }
+        }
+        self.get_nodeinfo(node)
+            .optional_successors
+            .extend(new_successors);
+
+        // update upstream - since optional/non-optional can overlap,
+        // and we can add required/optional out of order with overwriting,
+        // we do this in two passes - first clearing all optionals and re-adding
+        // first pass - remove optionals
+        let info = self.get_nodeinfo(node);
+        let mut to_visit: IndexSet<u32> = info
+            .predecessors
+            .difference(&info.optional_predecessors)
+            .copied()
+            .collect();
+        let mut seen: IndexSet<u32> = IndexSet::new();
+        while let Some(current) = to_visit.pop() {
+            let current_info = self.get_nodeinfo(current);
+            current_info.optional_successors.swap_remove(&node);
+            to_visit.extend(
+                current_info
+                    .predecessors
+                    .difference(&current_info.optional_predecessors)
+                    .copied()
+                    .filter(|p| !seen.contains(p)),
+            );
+            seen.extend(current_info.predecessors.iter().copied())
+        }
+
+        // second pass - re-add optionals
+        let info = self.get_nodeinfo(node);
+        let mut to_visit: IndexSet<u32> = info.optional_predecessors.clone();
+        let mut seen: IndexSet<u32> = IndexSet::new();
+        while let Some(current) = to_visit.pop() {
+            let current_info = self.get_nodeinfo(current);
+            if interner.is_signal(current) {
+                current_info.optional_successors.insert(node);
+            }
+            if current_info.optional_predecessors.is_empty() {
+                to_visit.extend(current_info.predecessors.difference(&seen));
+                seen.extend(current_info.predecessors.clone());
+            }
+        }
+    }
+
+    pub fn mark_out(&mut self, nodes: &IndexSet<u32>) {
+        nodes.iter().for_each(|n| {
+            self.ready.swap_remove(n);
+            self.out.insert(*n);
+        });
+        self.npassedout += nodes.len() as i64;
+    }
+
+    pub fn get_ready(&mut self, interner: &Interner, node_id: Option<u32>) -> Vec<u32> {
+        let ready: Vec<u32> = match node_id {
+            None => self
+                .ready
+                .iter()
+                .copied()
+                .filter(|n| !interner.is_signal(*n))
+                .collect(),
+            Some(node) => self.ready.iter().copied().filter(|n| *n == node).collect(),
+        };
+        let mut to_mark_out: IndexSet<u32> = ready.iter().copied().collect();
+        for node in &ready {
+            if let Some(sigs) = self.signals.get(node) {
+                to_mark_out.extend(sigs);
+            }
+        }
+        self.mark_out(&to_mark_out);
+        ready
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.nfinished < self.npassedout || !self.ready.is_empty()
+    }
+
+    fn expire_node(&mut self, node: u32) -> bool {
+        if self.done.contains(&node) {
+            return false;
+        }
+
+        self.nfinished += 1;
+        self.done.insert(node);
+        self.ready.swap_remove(&node);
+        if !self.out.swap_remove(&node) {
+            self.npassedout += 1;
+        }
+
+        true
+    }
+
+    pub fn mark_expired(&mut self, nodes: &[u32], unlock_optionals: bool) {
+        let mut newly_expired: Vec<u32> = Vec::with_capacity(nodes.len());
+        for &node in nodes {
+            if self.expire_node(node) {
+                newly_expired.push(node);
+            }
+        }
+        if !unlock_optionals {
+            return;
+        }
+
+        for node in newly_expired {
+            let successors = self.optional_successors_of(node);
+            for successor in successors {
+                let successor_info = self.get_nodeinfo(successor);
+                successor_info.nqueue -= 1;
+                if successor_info.nqueue == 0
+                    && !self.done.contains(&successor)
+                    && !self.out.contains(&successor)
+                {
+                    if self.disabled.contains(&successor) {
+                        self.expire_node(successor);
+                    } else {
+                        self.mark_ready(&[successor]);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn done(&mut self, interner: &Interner, nodes: &[u32]) -> CoreResult<()> {
+        // TODO: Give the errors the formatting logic and just pass Vec<u32> without resolving
+        let already_done: Vec<&Item> = nodes
+            .iter()
+            .copied()
+            .filter(|n| self.done.contains(n))
+            .map(|n| interner.resolve(n))
+            .collect();
+        if !already_done.is_empty() {
+            return Err(CoreError::AlreadyDone(format!(
+                "node(s) {already_done:?} were already marked done"
+            )));
+        }
+        let not_added: Vec<&Item> = nodes
+            .iter()
+            .copied()
+            .filter(|n| !self.info.contains_key(n))
+            .map(|n| interner.resolve(n))
+            .collect();
+        if !not_added.is_empty() {
+            return Err(CoreError::NotAdded(format!(
+                "node(s) {not_added:?} were not added using add()"
+            )));
+        }
+
+        let mut newly_done: Vec<u32> = Vec::with_capacity(nodes.len());
+        for &node in nodes {
+            if self.expire_node(node) {
+                newly_done.push(node);
+                self.ran.insert(node);
+            }
+        }
+
+        for node in newly_done {
+            let successors = self.successors_of(node);
+            for successor in successors {
+                if self.done.contains(&successor) || self.out.contains(&successor) {
+                    continue;
+                }
+                let successor_info = self.get_nodeinfo(successor);
+                successor_info.nqueue -= 1;
+                if successor_info.nqueue == 0 {
+                    if self.disabled.contains(&successor) {
+                        self.mark_expired(&[successor], true);
+                    } else {
+                        self.mark_ready(&[successor]);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn resurrect(&mut self, interner: &Interner, nodes: &[u32]) -> CoreResult<()> {
+        let already_ran: Vec<&Item> = nodes
+            .iter()
+            .copied()
+            .filter(|n| self.ran.contains(n))
+            .map(|n| interner.resolve(n))
+            .collect();
+        if !already_ran.is_empty() {
+            return Err(CoreError::AlreadyDone(format!("node(s) {already_ran:?} were marked done, not expired! can only resurrect expired nodes.")));
+        }
+        for node in nodes {
+            if self.disabled.contains(node) {
+                continue;
+            }
+            if self.done.swap_remove(node) {
+                self.nfinished -= 1;
+                self.npassedout -= 1;
+                if let Some(info) = self.info.get(node) {
+                    if info.nqueue == 0 {
+                        self.mark_ready(&[*node])
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn successors_of(&mut self, node: u32) -> Vec<u32> {
+        self.get_nodeinfo(node).successors.iter().copied().collect()
+    }
+
+    fn optional_successors_of(&mut self, node: u32) -> Vec<u32> {
+        self.get_nodeinfo(node)
+            .optional_successors
+            .iter()
+            .copied()
+            .collect()
+    }
+    
+    pub fn find_cycle(&self) -> Option<Vec<u32>> {
+        let mut colors: HashMap<u32, Color> = HashMap::new();
+        let mut path: Vec<u32> = Vec::new();
+        for &start in self.info.keys() {
+            if colors.contains_key(&start) {
+                continue;
+            }
+            if let Some(cycle) = self.dfs(start, &mut colors, &mut path) {
+                return Some(cycle);
+            }
+        }
+        None
+    }
+
+    /// One depth-first descent from `node`. `path` holds the gray nodes in
+    /// descent order; a node's `Gray(i)` color records its position in it.
+    fn dfs(
+        &self,
+        node: u32,
+        colors: &mut HashMap<u32, Color>,
+        path: &mut Vec<u32>,
+    ) -> Option<Vec<u32>> {
+        colors.insert(node, Color::Gray(path.len()));
+        path.push(node);
+
+        for &successor in &self.info[&node].successors {
+            match colors.get(&successor) {
+                // on our own descent path: the cycle is everything from the
+                // successor's position down to us, closed by the successor
+                Some(&Color::Gray(i)) => {
+                    let mut cycle = path[i..].to_vec();
+                    cycle.push(successor);
+                    return Some(cycle);
+                }
+                // fully explored, known cycle-free
+                Some(Color::Black) => {}
+                // unvisited: descend, and unwind immediately on a find
+                None => {
+                    if let Some(cycle) = self.dfs(successor, colors, path) {
+                        return Some(cycle);
+                    }
+                }
+            }
+        }
+
+        path.pop();
+        colors.insert(node, Color::Black);
+        None
+    }
+}
+
+/// graph coloring for cycle detection: a node absent from the color map
+/// is unvisited ("white" in the classic three-color scheme)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Color {
+    /// on the current descent path, at this position in it
+    Gray(usize),
+    /// fully explored and known to be cycle-free
+    Black,
+}
+
+#[cfg(test)]
+#[path = "tests/toposort.rs"]
+mod tests;

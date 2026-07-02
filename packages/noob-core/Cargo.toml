@@ -14,6 +14,17 @@ pyo3 = { version = "0.29", features = ["abi3-py311"] }
 indexmap = "2"
 uuid = { version = "1", features = ["v4"] }
 
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "toposort"
+harness = false
+
 [profile.release]
 lto = true
 codegen-units = 1
+
+[lints.clippy]
+semicolon_if_nothing_returned = "warn"
+trivially_copy_pass_by_ref = "warn"

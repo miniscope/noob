@@ -1,15 +1,16 @@
 use pyo3::prelude::*;
 
-pub mod epoch;
-pub mod event;
 pub mod exceptions;
 pub mod item;
-pub mod scheduler;
 pub mod toposort;
+// not yet ported to the new design:
+// pub mod epoch;
+// pub mod event;
+// pub mod scheduler;
 
+/// The python extension module. Empty for now: the sorter is private to
+/// rust, and the scheduler that will be exposed here isn't ported yet.
 #[pymodule]
-fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-  m.add_class::<scheduler::Scheduler>()?;
-//   m.add_class::<pysorter::CoreTopoSorter>()?;
-  Ok(())
+fn _core(_py: Python<'_>, _m: &Bound<'_, PyModule>) -> PyResult<()> {
+    Ok(())
 }
