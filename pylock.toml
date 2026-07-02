@@ -40,7 +40,7 @@ dependencies = [
 
 [[packages]]
 name = "nobes"
-version = "0.0.1.dev221+ged385b3.d20260702"
+version = "0.0.1.dev223+ga137e2a"
 requires-python = ">=3.11"
 marker = "\"dev\" in dependency_groups"
 
@@ -50,7 +50,7 @@ editable = true
 
 [[packages]]
 name = "noob"
-version = "1000.1.1.dev58+ged385b3.d20260702"
+version = "1000.1.1.dev60+ga137e2a"
 requires-python = ">=3.11"
 marker = "\"dev\" in dependency_groups"
 
@@ -1026,7 +1026,7 @@ dependencies = []
 
 [[packages]]
 name = "nobes-core"
-version = "0.0.1.dev813+ged385b3.d20260702"
+version = "0.0.1.dev815+ga137e2a"
 requires-python = ">=3.11"
 marker = "\"dev\" in dependency_groups"
 
@@ -1119,7 +1119,7 @@ dependencies = []
 
 [[packages]]
 name = "nobes-files"
-version = "0.0.1.dev813+ged385b3.d20260702"
+version = "0.0.1.dev815+ga137e2a"
 requires-python = ">=3.11"
 marker = "\"dev\" in dependency_groups"
 
@@ -1129,7 +1129,7 @@ editable = false
 
 [[packages]]
 name = "nobes-image"
-version = "0.0.1.dev813+ged385b3.d20260702"
+version = "0.0.1.dev815+ga137e2a"
 requires-python = ">=3.11"
 marker = "\"dev\" in dependency_groups"
 
@@ -1244,7 +1244,7 @@ dependencies = [
 
 [[packages]]
 name = "nobes-input"
-version = "0.0.1.dev221+ged385b3.d20260702"
+version = "0.0.1.dev223+ga137e2a"
 requires-python = ">=3.11"
 marker = "\"dev\" in dependency_groups"
 
@@ -1479,7 +1479,7 @@ dependencies = []
 
 [[packages]]
 name = "nobes-os"
-version = "0.0.1.dev813+ged385b3.d20260702"
+version = "0.0.1.dev815+ga137e2a"
 requires-python = ">=3.11"
 marker = "\"dev\" in dependency_groups"
 
@@ -1767,7 +1767,7 @@ dependencies = []
 
 [[packages]]
 name = "nobes-video"
-version = "0.0.1.dev221+ged385b3.d20260702"
+version = "0.0.1.dev223+ga137e2a"
 requires-python = ">=3.11"
 marker = "\"dev\" in dependency_groups"
 
@@ -1816,7 +1816,7 @@ dependencies = [
 
 [[packages]]
 name = "nobes-web"
-version = "0.0.1.dev813+ged385b3.d20260702"
+version = "0.0.1.dev815+ga137e2a"
 requires-python = ">=3.11"
 marker = "\"dev\" in dependency_groups"
 
