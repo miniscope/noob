@@ -19,7 +19,7 @@ from noob.exceptions import EntrypointImportWarning
 _default_userdir = Path().home() / ".config" / "noob"
 _dirs = PlatformDirs("noob", "noob")
 LOG_LEVELS = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
-_extra_sources = []
+_extra_sources: list[Path] = []
 """Extra sources for tube configs added by `add_sources`"""
 _entrypoint_sources: list[Path] | None = None
 """Sources added by entrypoint functions. Initially `None`, populated on first load of a config"""
