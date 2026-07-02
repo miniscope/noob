@@ -148,3 +148,4 @@ concurrency = ["thread", "multiprocessing"]
 omit = [
     "*/testing/*"
 ]
+sigterm = true
