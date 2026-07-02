@@ -578,7 +578,9 @@ class Scheduler:
                 self._logger.debug("Ending parent epoch %s from %s", ep.parent, ep)
                 events.extend(self.end_epoch(ep.parent))
 
-        events.append(self.event_maker.new_meta_event(signal=MetaEventType.EpochEnded, epoch=ep, value=ep))
+        events.append(
+            self.event_maker.new_meta_event(signal=MetaEventType.EpochEnded, epoch=ep, value=ep)
+        )
         return events
 
     def enable_node(self, node_id: str) -> None:
