@@ -264,19 +264,7 @@ class Scheduler:
         ready_nodes = []
         for epoch, graph in graphs:
             for node in graph.get_ready(node_id):
-                if isinstance(node, NodeSignal):
-                    self._logger.warning(
-                        "Scheduler attempted to return signal tuple %s in %s - "
-                        "something is wrong with how the graph is instantiated or run, "
-                        "or a node is emitting incorrect events manually, "
-                        "all signals should be marked done/expired by events passed in `update`. "
-                        "Ignoring - nodes downstream of this signal will not run.",
-                        node,
-                        epoch,
-                    )
-                    graph.mark_expired(node)
-                    continue
-                elif node in _VIRTUAL_NODES or (
+                if node in _VIRTUAL_NODES or (
                     node != "meta" and (node not in self.nodes or self.nodes[node].enabled)
                 ):
                     ready_nodes.append(
