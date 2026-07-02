@@ -1,0 +1,34 @@
+noob_id: testing-input-optional
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  - Inputs can be optional and have a default!
+  - Nodes can use an input to control enabledness
+input:
+  start:
+    scope: tube
+    type: int
+    required: false
+    default: 10
+  return_enabled:
+    scope: tube
+    type: bool
+    required: false
+    default: true
+nodes:
+  a:
+    type: noob.testing.count_source
+    params:
+      start: input.start
+  b:
+    type: noob.testing.multiply
+    depends:
+    - left: a.index
+  c:
+    type: noob.testing.multiply
+    depends:
+    - left: b.value
+  d:
+    type: return
+    depends: c.value
+    enabled: 'input.return_enabled'

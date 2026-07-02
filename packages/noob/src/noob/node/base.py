@@ -176,6 +176,18 @@ class Node(BaseModel):
             ):
                 raise ValueError("No input collection supplied, but inputs specified in params")
 
+        # determine enabledness
+        if isinstance(spec.enabled, str):
+            if not input_collection:
+                raise ValueError(
+                    "No input collection supplied, "
+                    f"but inputs specified as determining enabledness of node {spec.id}"
+                )
+
+            enabled = bool(input_collection.get(spec.enabled.split(".", 1)[-1]))
+        else:
+            enabled = spec.enabled
+
         # additional kwargs that can be present or absent without default
         kwargs = {}
         if spec.stateful is not None:
@@ -185,14 +197,14 @@ class Node(BaseModel):
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec, enabled=spec.enabled, **params, **kwargs)
+                return obj(id=spec.id, spec=spec, enabled=enabled, **params, **kwargs)
             else:
                 return WrapClassNode(
-                    id=spec.id, cls=obj, spec=spec, params=params, enabled=spec.enabled, **kwargs
+                    id=spec.id, cls=obj, spec=spec, params=params, enabled=enabled, **kwargs
                 )
         else:
             return WrapFuncNode(
-                id=spec.id, fn=obj, spec=spec, params=params, enabled=spec.enabled, **kwargs
+                id=spec.id, fn=obj, spec=spec, params=params, enabled=enabled, **kwargs
             )
 
     @property

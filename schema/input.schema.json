@@ -48,6 +48,11 @@
       ],
       "default": null,
       "title": "Description"
+    },
+    "required": {
+      "default": true,
+      "title": "Required",
+      "type": "boolean"
     }
   },
   "required": [

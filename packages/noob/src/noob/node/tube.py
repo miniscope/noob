@@ -2,6 +2,8 @@ import warnings
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Union
 
+from pydantic import ConfigDict
+
 from noob.edge import Slot
 from noob.exceptions import ExtraInputWarning
 from noob.node.base import Node
@@ -18,11 +20,14 @@ class TubeNode(Node):
     A node that contains another tube within it
     """
 
+    spec: NodeSpecification  # not optional for tube nodes
     tube: ConfigSource
 
     _tube: Union["Tube", None] = None
     _tube_spec: Union["TubeSpecification", None] = None
     _runner: Union["TubeRunner", None] = None
+
+    model_config = ConfigDict(extra="allow")
 
     @property
     def tube_spec(self) -> "TubeSpecification":
@@ -36,9 +41,22 @@ class TubeNode(Node):
     def init(self, context: RunnerContext) -> None:  # type: ignore[override]
         from noob import SynchronousRunner, Tube
 
+        spec_params = self.spec.params if self.spec.params else {}
+
+        input_collection = context["input_collection"]
+        input_params = input_collection.get_node_params(
+            {k: v for k, v in spec_params.items() if k != "tube"}
+        )
+        if self.__pydantic_extra__:
+            extra_params = {
+                k: v for k, v in self.__pydantic_extra__.items() if k not in input_params
+            }
+        else:
+            extra_params = {}
+
         with warnings.catch_warnings(action="ignore", category=ExtraInputWarning):
             self._tube = Tube.from_specification(
-                self.tube, input={**context["tube"].input_collection.chain}
+                self.tube, input={**input_collection.chain, **input_params, **extra_params}
             )
         self._runner = SynchronousRunner(tube=self._tube)
         self._runner.init()

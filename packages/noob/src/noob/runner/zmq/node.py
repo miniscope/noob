@@ -1,12 +1,13 @@
 import asyncio
 import concurrent.futures
 import contextlib
+import inspect
 import multiprocessing as mp
 import os
 import signal
 import traceback
 from collections import deque
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from functools import cached_property, partial
 from itertools import count
 from types import FrameType
@@ -44,7 +45,7 @@ from noob.node import Node, NodeSpecification
 from noob.scheduler import Scheduler
 from noob.state import State
 from noob.store import EventStore
-from noob.types import Epoch
+from noob.types import Epoch, RunnerContext
 from noob.utils import iscoroutinefunction_partial
 
 
@@ -496,7 +497,7 @@ class NodeRunner(EventloopMixin):
 
     async def init_node(self) -> None:
         self._node = Node.from_specification(self.spec, self.input_collection)
-        self._node.init()
+        self.inject_context(self._node.init)()
         self.state = State.from_specification(
             specs={asset: self.asset_specs[asset] for asset in self.inits_assets}
         )
@@ -523,6 +524,20 @@ class NodeRunner(EventloopMixin):
             ):
                 self.scheduler.done(ep, "assets")
             self._ready_condition.notify_all()
+
+    def get_context(self) -> RunnerContext:
+        return RunnerContext(runner=self, input_collection=self.input_collection)  # type: ignore[typeddict-item]
+
+    def inject_context(self, fn: Callable) -> Callable:
+        """Wrap function in a partial with the runner context injected, if requested"""
+        sig = inspect.signature(fn)
+        ctx_key = [
+            k for k, v in sig.parameters.items() if v.annotation and v.annotation is RunnerContext
+        ]
+        if ctx_key:
+            return partial(fn, **{ctx_key[0]: self.get_context()})
+        else:
+            return fn
 
     def _init_sockets(self) -> None:
         self._init_loop()
