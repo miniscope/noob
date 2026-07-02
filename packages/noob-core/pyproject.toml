@@ -1,0 +1,28 @@
+[project]
+name = "noob-core"
+description = "Optimized routines for noob"
+authors = [
+    {name = "raymondwjang", email = "ray0815@ucla.edu"},
+    {name = "sneakers-the-rat", email = "sneakers-the-rat@protonmail.com"}
+]
+dynamic=["version"]
+requires-python = ">=3.11"
+readme = "README.md"
+repository = "https://github.com/miniscope/noob"
+license = {text = "MIT"}
+
+[project.urls]
+homepage = "https://noob.readthedocs.io"
+documentation = "https://noob.readthedocs.io"
+repository = "https://github.com/miniscope/noob"
+changelog = "https://noob.readthedocs.io/en/latest/changelog.html"
+
+[build-system]
+requires = ["maturin>=1.9.4,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+module-name = "noob_core._core"
+python-source = "python"
+features = ["pyo3/extension-module"]
+profile = "release"
