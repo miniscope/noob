@@ -142,3 +142,9 @@ show_error_code_links = true
 pretty = true
 color_output = true
 plugins = ['pydantic.mypy']
+
+[tool.coverage.report]
+concurrency = ["thread", "multiprocessing"]
+omit = [
+    "*/testing/*"
+]
