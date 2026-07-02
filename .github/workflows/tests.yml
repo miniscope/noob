@@ -36,6 +36,10 @@ jobs:
         env:
           NOOB_LOGS__WIDTH: 140
 
+      - name: Trust Coveralls Homebrew tap (Homebrew 6 requirement)
+        if: runner.os == 'macOS'
+        run: brew trust coverallsapp/coveralls
+
       - name: Coveralls Parallel
         uses: coverallsapp/github-action@v2
         continue-on-error: true

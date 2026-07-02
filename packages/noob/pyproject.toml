@@ -80,6 +80,7 @@ tests = [
     "pytest-codspeed>=4.2.0",
     "pytest-mock>=3.15.1",
     "jsonschema>=4.26.0",
+    "coverage>=7.14.3",
 ]
 docs = [
     "sphinx>=8.2.3,<9.0.0", # until myst parser catches up and stops emitting invalid references
