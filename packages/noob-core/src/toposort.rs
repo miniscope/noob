@@ -101,17 +101,17 @@ impl Sorter {
         }
         Ok(sorter)
     }
-    
+
     pub fn get_nodeinfo(&mut self, id: u16) -> &mut NodeRec {
         self.info.entry(id).or_default()
     }
-    
+
     pub fn mark_ready(&mut self, nodes: &[u16]) {
         for n in nodes {
             self.ready.insert(*n);
         }
     }
-    
+
     pub fn add(
         &mut self,
         interner: &mut Interner,
@@ -187,7 +187,7 @@ impl Sorter {
         }
         Ok(())
     }
-    
+
     fn update_optionals(
         &mut self,
         interner: &Interner,
@@ -252,7 +252,7 @@ impl Sorter {
                     .copied()
                     .filter(|p| !seen.contains(p)),
             );
-            seen.extend(current_info.predecessors.iter().copied())
+            seen.extend(current_info.predecessors.iter().copied());
         }
 
         // second pass - re-add optionals
@@ -420,7 +420,7 @@ impl Sorter {
                 self.npassedout -= 1;
                 if let Some(info) = self.info.get(node) {
                     if info.nqueue == 0 {
-                        self.mark_ready(&[*node])
+                        self.mark_ready(&[*node]);
                     }
                 }
             }
@@ -439,7 +439,7 @@ impl Sorter {
             .copied()
             .collect()
     }
-    
+
     pub fn find_cycle(&self) -> Option<Vec<u16>> {
         let mut colors: FxHashMap<u16, Color> = FxHashMap::default();
         let mut path: Vec<u16> = Vec::new();

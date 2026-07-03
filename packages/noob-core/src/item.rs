@@ -43,6 +43,8 @@ impl fmt::Display for Item {
 /// epoch completes; the scheduler controls when it is marked done.
 /// Every [`Interner`] interns it at construction, so it is always id 0.
 pub const PREVIOUS_EPOCH: u16 = 0;
+/// The marker that indicates the root of an epoch, Epoch(("tube", 0))
+pub const TUBE_NODE: u16 = 1;
 
 /// Interns [`Item`]s to dense `u16` ids shared by all sorters in a scheduler,
 /// so that all graph algorithms operate on integers rather than strings.
@@ -58,6 +60,7 @@ impl Default for Interner {
             items: FxIndexSet::default(),
         };
         interner.intern_signal("meta", "previous_epoch");
+        interner.intern_node("tube");
         interner
     }
 }
@@ -96,3 +99,7 @@ impl Interner {
         self.intern_node(&node)
     }
 }
+
+#[cfg(test)]
+#[path = "tests/item.rs"]
+mod tests;

@@ -7,7 +7,7 @@ pub mod exceptions;
 pub mod item;
 pub mod toposort;
 // not yet ported to the new design:
-// pub mod epoch;
+pub mod epoch;
 // pub mod event;
 // pub mod scheduler;
 
