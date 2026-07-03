@@ -9,7 +9,7 @@ pub mod toposort;
 // not yet ported to the new design:
 pub mod epoch;
 // pub mod event;
-// pub mod scheduler;
+pub mod scheduler;
 
 /// The python extension module. Empty for now: the sorter is private to
 /// rust, and the scheduler that will be exposed here isn't ported yet.
