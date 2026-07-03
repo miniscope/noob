@@ -7,7 +7,6 @@ use crate::exceptions::CoreResult;
 use crate::item::Interner;
 use crate::toposort::{EdgeRec, NodeFlags, Sorter};
 
-
 pub struct Scheduler {
     nodes: IndexMap<String, NodeFlags>,
     edges: Vec<EdgeRec>,
