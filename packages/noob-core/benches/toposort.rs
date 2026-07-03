@@ -64,7 +64,7 @@ fn drive(interner: &Interner, sorter: &mut Sorter) {
 }
 
 fn bench_sorter(c: &mut Criterion) {
-    for (name, layers, width) in [("small", 10, 5), ("large", 50, 20)] {
+    for (name, layers, width) in [("tiny", 5, 2), ("small", 10, 5), ("large", 50, 20)] {
         let edges = random_graph_edges(layers, width, 42);
 
         c.bench_function(&format!("random_graph_creation/{name}"), |b| {

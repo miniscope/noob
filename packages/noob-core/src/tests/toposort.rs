@@ -1,3 +1,5 @@
+use indexmap::IndexSet;
+
 use super::*;
 
 fn chain() -> (Interner, Sorter) {

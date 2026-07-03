@@ -111,7 +111,7 @@ def _random_graph_edges(layers: int, width: int, seed: int = 42) -> list[Edge]:
     return edges
 
 
-_SIZES = {"small": (10, 5), "large": (50, 20)}
+_SIZES = {"tiny": (5, 2), "small": (10, 5), "large": (50, 20)}
 
 
 def _drive(sorter: TopoSorter) -> None:

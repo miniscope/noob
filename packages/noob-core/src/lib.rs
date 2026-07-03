@@ -1,5 +1,8 @@
 use pyo3::prelude::*;
 
+pub type FxIndexSet<T> = indexmap::IndexSet<T, rustc_hash::FxBuildHasher>;
+pub type FxIndexMap<K, V> = indexmap::IndexMap<K, V, rustc_hash::FxBuildHasher>;
+
 pub mod exceptions;
 pub mod item;
 pub mod toposort;

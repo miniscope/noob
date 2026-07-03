@@ -1,8 +1,9 @@
-use indexmap::{IndexMap, IndexSet};
-use std::collections::HashMap;
+use indexmap::IndexMap;
+use rustc_hash::FxHashMap;
 
 use crate::exceptions::{CoreError, CoreResult};
 use crate::item::{Interner, Item, PREVIOUS_EPOCH};
+use crate::{FxIndexMap, FxIndexSet};
 
 /// The fields of `noob.edge.Edge` the sorter cares about.
 /// The boundary layer is responsible for extracting these from python.
@@ -33,10 +34,10 @@ impl NodeFlags {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NodeRec {
     pub nqueue: i64,
-    pub successors: IndexSet<u16>,
-    pub predecessors: IndexSet<u16>,
-    pub optional_predecessors: IndexSet<u16>,
-    pub optional_successors: IndexSet<u16>,
+    pub successors: FxIndexSet<u16>,
+    pub predecessors: FxIndexSet<u16>,
+    pub optional_predecessors: FxIndexSet<u16>,
+    pub optional_successors: FxIndexSet<u16>,
 }
 
 /// Port of `noob.toposort.TopoSorter`, operating on interned item ids.
@@ -51,14 +52,14 @@ pub struct NodeRec {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Sorter {
     /// node item id -> signal items emitted by that node that the graph depends on
-    pub signals: HashMap<u16, IndexSet<u16>>,
+    pub signals: FxHashMap<u16, FxIndexSet<u16>>,
     /// mirrors `TopoSorter._node2info`
-    pub info: IndexMap<u16, NodeRec>,
-    pub ready: IndexSet<u16>,
-    pub out: IndexSet<u16>,
-    pub done: IndexSet<u16>,
-    pub disabled: IndexSet<u16>,
-    pub ran: IndexSet<u16>,
+    pub info: FxIndexMap<u16, NodeRec>,
+    pub ready: FxIndexSet<u16>,
+    pub out: FxIndexSet<u16>,
+    pub done: FxIndexSet<u16>,
+    pub disabled: FxIndexSet<u16>,
+    pub ran: FxIndexSet<u16>,
     pub npassedout: i64,
     pub nfinished: i64,
 }
@@ -208,9 +209,9 @@ impl Sorter {
             });
         }
 
-        let mut to_visit: IndexSet<u16> = info.successors.clone();
+        let mut to_visit: FxIndexSet<u16> = info.successors.clone();
         let mut new_successors: Vec<u16> = Vec::new();
-        let mut seen: IndexSet<u16> = IndexSet::new();
+        let mut seen: FxIndexSet<u16> = FxIndexSet::default();
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
             let successors = current_info.successors.clone();
@@ -235,12 +236,12 @@ impl Sorter {
         // we do this in two passes - first clearing all optionals and re-adding
         // first pass - remove optionals
         let info = self.get_nodeinfo(node);
-        let mut to_visit: IndexSet<u16> = info
+        let mut to_visit: FxIndexSet<u16> = info
             .predecessors
             .difference(&info.optional_predecessors)
             .copied()
             .collect();
-        let mut seen: IndexSet<u16> = IndexSet::new();
+        let mut seen: FxIndexSet<u16> = FxIndexSet::default();
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
             current_info.optional_successors.swap_remove(&node);
@@ -256,8 +257,8 @@ impl Sorter {
 
         // second pass - re-add optionals
         let info = self.get_nodeinfo(node);
-        let mut to_visit: IndexSet<u16> = info.optional_predecessors.clone();
-        let mut seen: IndexSet<u16> = IndexSet::new();
+        let mut to_visit: FxIndexSet<u16> = info.optional_predecessors.clone();
+        let mut seen: FxIndexSet<u16> = FxIndexSet::default();
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
             if interner.is_signal(current) {
@@ -270,7 +271,7 @@ impl Sorter {
         }
     }
 
-    pub fn mark_out(&mut self, nodes: &IndexSet<u16>) {
+    pub fn mark_out(&mut self, nodes: &FxIndexSet<u16>) {
         nodes.iter().for_each(|n| {
             self.ready.swap_remove(n);
             self.out.insert(*n);
@@ -288,7 +289,7 @@ impl Sorter {
                 .collect(),
             Some(node) => self.ready.iter().copied().filter(|n| *n == node).collect(),
         };
-        let mut to_mark_out: IndexSet<u16> = ready.iter().copied().collect();
+        let mut to_mark_out: FxIndexSet<u16> = ready.iter().copied().collect();
         for node in &ready {
             if let Some(sigs) = self.signals.get(node) {
                 to_mark_out.extend(sigs);
@@ -440,7 +441,7 @@ impl Sorter {
     }
     
     pub fn find_cycle(&self) -> Option<Vec<u16>> {
-        let mut colors: HashMap<u16, Color> = HashMap::new();
+        let mut colors: FxHashMap<u16, Color> = FxHashMap::default();
         let mut path: Vec<u16> = Vec::new();
         for &start in self.info.keys() {
             if colors.contains_key(&start) {
@@ -458,7 +459,7 @@ impl Sorter {
     fn dfs(
         &self,
         node: u16,
-        colors: &mut HashMap<u16, Color>,
+        colors: &mut FxHashMap<u16, Color>,
         path: &mut Vec<u16>,
     ) -> Option<Vec<u16>> {
         colors.insert(node, Color::Gray(path.len()));

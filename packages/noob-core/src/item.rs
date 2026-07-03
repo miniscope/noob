@@ -1,6 +1,6 @@
 use std::fmt;
 
-use indexmap::IndexSet;
+use crate::FxIndexSet;
 
 /// A graph item: either a node id, or a (node id, signal name) pair.
 ///
@@ -48,14 +48,14 @@ pub const PREVIOUS_EPOCH: u16 = 0;
 /// so that all graph algorithms operate on integers rather than strings.
 #[derive(Clone, Debug)]
 pub struct Interner {
-    items: IndexSet<Item>,
+    items: FxIndexSet<Item>,
 }
 
 impl Default for Interner {
     /// Start with the [`PREVIOUS_EPOCH`] signal interned, guaranteeing its id
     fn default() -> Self {
         let mut interner = Interner {
-            items: IndexSet::new(),
+            items: FxIndexSet::default(),
         };
         interner.intern_signal("meta", "previous_epoch");
         interner
