@@ -42,9 +42,9 @@ impl fmt::Display for Item {
 /// Stateful nodes depend on it so they can't run before their previous
 /// epoch completes; the scheduler controls when it is marked done.
 /// Every [`Interner`] interns it at construction, so it is always id 0.
-pub const PREVIOUS_EPOCH: u32 = 0;
+pub const PREVIOUS_EPOCH: u16 = 0;
 
-/// Interns [`Item`]s to dense `u32` ids shared by all sorters in a scheduler,
+/// Interns [`Item`]s to dense `u16` ids shared by all sorters in a scheduler,
 /// so that all graph algorithms operate on integers rather than strings.
 #[derive(Clone, Debug)]
 pub struct Interner {
@@ -63,35 +63,35 @@ impl Default for Interner {
 }
 
 impl Interner {
-    pub fn intern(&mut self, item: Item) -> u32 {
-        self.items.insert_full(item).0 as u32
+    pub fn intern(&mut self, item: Item) -> u16 {
+        self.items.insert_full(item).0 as u16
     }
 
-    pub fn intern_node(&mut self, id: &str) -> u32 {
+    pub fn intern_node(&mut self, id: &str) -> u16 {
         self.intern(Item::Node(id.to_owned()))
     }
 
-    pub fn intern_signal(&mut self, node: &str, signal: &str) -> u32 {
+    pub fn intern_signal(&mut self, node: &str, signal: &str) -> u16 {
         self.intern(Item::Signal(node.to_owned(), signal.to_owned()))
     }
 
-    pub fn get(&self, item: &Item) -> Option<u32> {
-        self.items.get_index_of(item).map(|i| i as u32)
+    pub fn get(&self, item: &Item) -> Option<u16> {
+        self.items.get_index_of(item).map(|i| i as u16)
     }
 
-    pub fn resolve(&self, id: u32) -> &Item {
+    pub fn resolve(&self, id: u16) -> &Item {
         self.items
             .get_index(id as usize)
             .expect("interner ids are never removed")
     }
 
-    pub fn is_signal(&self, id: u32) -> bool {
+    pub fn is_signal(&self, id: u16) -> bool {
         self.resolve(id).is_signal()
     }
 
     /// For a signal item, the interned id of its node part.
     /// For a node item, its own id.
-    pub fn node_part(&mut self, id: u32) -> u32 {
+    pub fn node_part(&mut self, id: u16) -> u16 {
         let node = self.resolve(id).node_id().to_owned();
         self.intern_node(&node)
     }

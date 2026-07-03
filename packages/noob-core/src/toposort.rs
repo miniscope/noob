@@ -33,10 +33,10 @@ impl NodeFlags {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NodeRec {
     pub nqueue: i64,
-    pub successors: IndexSet<u32>,
-    pub predecessors: IndexSet<u32>,
-    pub optional_predecessors: IndexSet<u32>,
-    pub optional_successors: IndexSet<u32>,
+    pub successors: IndexSet<u16>,
+    pub predecessors: IndexSet<u16>,
+    pub optional_predecessors: IndexSet<u16>,
+    pub optional_successors: IndexSet<u16>,
 }
 
 /// Port of `noob.toposort.TopoSorter`, operating on interned item ids.
@@ -51,14 +51,14 @@ pub struct NodeRec {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Sorter {
     /// node item id -> signal items emitted by that node that the graph depends on
-    pub signals: HashMap<u32, IndexSet<u32>>,
+    pub signals: HashMap<u16, IndexSet<u16>>,
     /// mirrors `TopoSorter._node2info`
-    pub info: IndexMap<u32, NodeRec>,
-    pub ready: IndexSet<u32>,
-    pub out: IndexSet<u32>,
-    pub done: IndexSet<u32>,
-    pub disabled: IndexSet<u32>,
-    pub ran: IndexSet<u32>,
+    pub info: IndexMap<u16, NodeRec>,
+    pub ready: IndexSet<u16>,
+    pub out: IndexSet<u16>,
+    pub done: IndexSet<u16>,
+    pub disabled: IndexSet<u16>,
+    pub ran: IndexSet<u16>,
     pub npassedout: i64,
     pub nfinished: i64,
 }
@@ -101,11 +101,11 @@ impl Sorter {
         Ok(sorter)
     }
     
-    pub fn get_nodeinfo(&mut self, id: u32) -> &mut NodeRec {
+    pub fn get_nodeinfo(&mut self, id: u16) -> &mut NodeRec {
         self.info.entry(id).or_default()
     }
     
-    pub fn mark_ready(&mut self, nodes: &[u32]) {
+    pub fn mark_ready(&mut self, nodes: &[u16]) {
         for n in nodes {
             self.ready.insert(*n);
         }
@@ -114,8 +114,8 @@ impl Sorter {
     pub fn add(
         &mut self,
         interner: &mut Interner,
-        node: u32,
-        predecessors: &[u32],
+        node: u16,
+        predecessors: &[u16],
         required: bool,
     ) -> CoreResult<()> {
         // refuse to add nodes that are out / done
@@ -136,7 +136,7 @@ impl Sorter {
 
         // create the predecessor -> node edges,
         // filtering predecessors to those that are newly being created
-        let mut new_predecessors: Vec<u32> = Vec::new();
+        let mut new_predecessors: Vec<u16> = Vec::new();
         for &pred in predecessors {
             if self.get_nodeinfo(pred).successors.contains(&node) {
                 continue;
@@ -190,8 +190,8 @@ impl Sorter {
     fn update_optionals(
         &mut self,
         interner: &Interner,
-        node: u32,
-        predecessors: &[u32],
+        node: u16,
+        predecessors: &[u16],
         required: bool,
     ) {
         if interner.is_signal(node) {
@@ -208,9 +208,9 @@ impl Sorter {
             });
         }
 
-        let mut to_visit: IndexSet<u32> = info.successors.clone();
-        let mut new_successors: Vec<u32> = Vec::new();
-        let mut seen: IndexSet<u32> = IndexSet::new();
+        let mut to_visit: IndexSet<u16> = info.successors.clone();
+        let mut new_successors: Vec<u16> = Vec::new();
+        let mut seen: IndexSet<u16> = IndexSet::new();
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
             let successors = current_info.successors.clone();
@@ -235,12 +235,12 @@ impl Sorter {
         // we do this in two passes - first clearing all optionals and re-adding
         // first pass - remove optionals
         let info = self.get_nodeinfo(node);
-        let mut to_visit: IndexSet<u32> = info
+        let mut to_visit: IndexSet<u16> = info
             .predecessors
             .difference(&info.optional_predecessors)
             .copied()
             .collect();
-        let mut seen: IndexSet<u32> = IndexSet::new();
+        let mut seen: IndexSet<u16> = IndexSet::new();
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
             current_info.optional_successors.swap_remove(&node);
@@ -256,8 +256,8 @@ impl Sorter {
 
         // second pass - re-add optionals
         let info = self.get_nodeinfo(node);
-        let mut to_visit: IndexSet<u32> = info.optional_predecessors.clone();
-        let mut seen: IndexSet<u32> = IndexSet::new();
+        let mut to_visit: IndexSet<u16> = info.optional_predecessors.clone();
+        let mut seen: IndexSet<u16> = IndexSet::new();
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
             if interner.is_signal(current) {
@@ -270,7 +270,7 @@ impl Sorter {
         }
     }
 
-    pub fn mark_out(&mut self, nodes: &IndexSet<u32>) {
+    pub fn mark_out(&mut self, nodes: &IndexSet<u16>) {
         nodes.iter().for_each(|n| {
             self.ready.swap_remove(n);
             self.out.insert(*n);
@@ -278,8 +278,8 @@ impl Sorter {
         self.npassedout += nodes.len() as i64;
     }
 
-    pub fn get_ready(&mut self, interner: &Interner, node_id: Option<u32>) -> Vec<u32> {
-        let ready: Vec<u32> = match node_id {
+    pub fn get_ready(&mut self, interner: &Interner, node_id: Option<u16>) -> Vec<u16> {
+        let ready: Vec<u16> = match node_id {
             None => self
                 .ready
                 .iter()
@@ -288,7 +288,7 @@ impl Sorter {
                 .collect(),
             Some(node) => self.ready.iter().copied().filter(|n| *n == node).collect(),
         };
-        let mut to_mark_out: IndexSet<u32> = ready.iter().copied().collect();
+        let mut to_mark_out: IndexSet<u16> = ready.iter().copied().collect();
         for node in &ready {
             if let Some(sigs) = self.signals.get(node) {
                 to_mark_out.extend(sigs);
@@ -302,7 +302,7 @@ impl Sorter {
         self.nfinished < self.npassedout || !self.ready.is_empty()
     }
 
-    fn expire_node(&mut self, node: u32) -> bool {
+    fn expire_node(&mut self, node: u16) -> bool {
         if self.done.contains(&node) {
             return false;
         }
@@ -317,8 +317,8 @@ impl Sorter {
         true
     }
 
-    pub fn mark_expired(&mut self, nodes: &[u32], unlock_optionals: bool) {
-        let mut newly_expired: Vec<u32> = Vec::with_capacity(nodes.len());
+    pub fn mark_expired(&mut self, nodes: &[u16], unlock_optionals: bool) {
+        let mut newly_expired: Vec<u16> = Vec::with_capacity(nodes.len());
         for &node in nodes {
             if self.expire_node(node) {
                 newly_expired.push(node);
@@ -347,8 +347,8 @@ impl Sorter {
         }
     }
 
-    pub fn done(&mut self, interner: &Interner, nodes: &[u32]) -> CoreResult<()> {
-        // TODO: Give the errors the formatting logic and just pass Vec<u32> without resolving
+    pub fn done(&mut self, interner: &Interner, nodes: &[u16]) -> CoreResult<()> {
+        // TODO: Give the errors the formatting logic and just pass Vec<u16> without resolving
         let already_done: Vec<&Item> = nodes
             .iter()
             .copied()
@@ -372,7 +372,7 @@ impl Sorter {
             )));
         }
 
-        let mut newly_done: Vec<u32> = Vec::with_capacity(nodes.len());
+        let mut newly_done: Vec<u16> = Vec::with_capacity(nodes.len());
         for &node in nodes {
             if self.expire_node(node) {
                 newly_done.push(node);
@@ -400,7 +400,7 @@ impl Sorter {
         Ok(())
     }
 
-    pub fn resurrect(&mut self, interner: &Interner, nodes: &[u32]) -> CoreResult<()> {
+    pub fn resurrect(&mut self, interner: &Interner, nodes: &[u16]) -> CoreResult<()> {
         let already_ran: Vec<&Item> = nodes
             .iter()
             .copied()
@@ -427,11 +427,11 @@ impl Sorter {
         Ok(())
     }
 
-    fn successors_of(&mut self, node: u32) -> Vec<u32> {
+    fn successors_of(&mut self, node: u16) -> Vec<u16> {
         self.get_nodeinfo(node).successors.iter().copied().collect()
     }
 
-    fn optional_successors_of(&mut self, node: u32) -> Vec<u32> {
+    fn optional_successors_of(&mut self, node: u16) -> Vec<u16> {
         self.get_nodeinfo(node)
             .optional_successors
             .iter()
@@ -439,9 +439,9 @@ impl Sorter {
             .collect()
     }
     
-    pub fn find_cycle(&self) -> Option<Vec<u32>> {
-        let mut colors: HashMap<u32, Color> = HashMap::new();
-        let mut path: Vec<u32> = Vec::new();
+    pub fn find_cycle(&self) -> Option<Vec<u16>> {
+        let mut colors: HashMap<u16, Color> = HashMap::new();
+        let mut path: Vec<u16> = Vec::new();
         for &start in self.info.keys() {
             if colors.contains_key(&start) {
                 continue;
@@ -457,10 +457,10 @@ impl Sorter {
     /// descent order; a node's `Gray(i)` color records its position in it.
     fn dfs(
         &self,
-        node: u32,
-        colors: &mut HashMap<u32, Color>,
-        path: &mut Vec<u32>,
-    ) -> Option<Vec<u32>> {
+        node: u16,
+        colors: &mut HashMap<u16, Color>,
+        path: &mut Vec<u16>,
+    ) -> Option<Vec<u16>> {
         colors.insert(node, Color::Gray(path.len()));
         path.push(node);
 
