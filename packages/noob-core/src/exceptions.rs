@@ -1,3 +1,4 @@
+use crate::epoch::Epoch;
 use std::error::Error;
 use std::fmt;
 
@@ -13,6 +14,8 @@ pub enum CoreError {
     AlreadyDone(String),
     /// `noob.exceptions.NotAddedError`
     NotAdded(String),
+    EpochExists(Epoch),
+    EpochCompleted(Epoch),
     /// `ValueError`
     Value(String),
 }
@@ -25,6 +28,12 @@ impl fmt::Display for CoreError {
         match self {
             CoreError::AlreadyDone(msg) | CoreError::NotAdded(msg) | CoreError::Value(msg) => {
                 write!(f, "{msg}")
+            }
+            CoreError::EpochExists(epoch) => {
+                write!(f, "Epoch {epoch} is already scheduled!")
+            }
+            CoreError::EpochCompleted(epoch) => {
+                write!(f, "Epoch {epoch} has already been completed!")
             }
         }
     }

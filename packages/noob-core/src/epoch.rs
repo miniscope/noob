@@ -1,3 +1,4 @@
+use std::fmt;
 use std::ops::Div;
 
 use crate::item::TUBE_NODE;
@@ -15,6 +16,12 @@ impl From<(u16, u32)> for EpochSegment {
             node: segment.0,
             epoch: segment.1,
         }
+    }
+}
+
+impl fmt::Display for EpochSegment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.node, self.epoch)
     }
 }
 
@@ -65,6 +72,23 @@ impl<T: Into<EpochSegment>> Div<T> for &Epoch {
     fn div(self, rhs: T) -> Epoch {
         let epoch = self.clone();
         epoch.child(rhs.into())
+    }
+}
+
+impl fmt::Display for Epoch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.len() == 1 {
+            write!(f, "{}", self.root())
+        } else {
+            write!(f, "(")?;
+            for (i, seg) in self.0.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{seg}")?;
+            }
+            write!(f, ")")
+        }
     }
 }
 

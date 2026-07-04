@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use indexmap::IndexMap;
 
 use crate::epoch::Epoch;
-use crate::exceptions::CoreResult;
-use crate::item::Interner;
+use crate::exceptions::{CoreError, CoreResult};
+use crate::item::{Interner, PREVIOUS_EPOCH};
 use crate::toposort::{EdgeRec, NodeFlags, Sorter};
 
 pub struct Scheduler {
@@ -41,6 +41,42 @@ impl Scheduler {
             epoch_log: BTreeSet::new(),
             next_epoch: 0,
         })
+    }
+
+    pub fn add_epoch(&mut self) -> Epoch {
+        let this_epoch = Epoch::from(self.next_epoch);
+        self.next_epoch += 1;
+        self.init_graph(this_epoch.clone())
+            .expect("Fresh epoch clones should only be Ok() or NotAdded if no stateful nodes are in the graph");
+        this_epoch
+    }
+
+    pub fn add_epoch_at(&mut self, epoch: impl Into<Epoch>) -> CoreResult<Epoch> {
+        let epoch = epoch.into();
+        if self.epochs.contains_key(&epoch) {
+            Err(CoreError::EpochExists(epoch))
+        } else if self.epoch_log.contains(&epoch.root()) {
+            Err(CoreError::EpochCompleted(epoch))
+        } else {
+            self.next_epoch = self.next_epoch.max(epoch.root() + 1);
+            self.init_graph(epoch.clone())?;
+            Ok(epoch)
+        }
+    }
+
+    /// Clone the topo sorter, add it to the epochs map, and mark previous epoch if completed
+    /// TODO: subgraphs for subepochs
+    fn init_graph(&mut self, epoch: Epoch) -> CoreResult<()> {
+        let mut graph = self.template.clone();
+        if epoch.root() == 0 || self.epoch_log.contains(&(epoch.root() - 1)) {
+            match graph.done(&self.interner, &[PREVIOUS_EPOCH]) {
+                Ok(()) | Err(CoreError::NotAdded(_)) => {}
+                Err(e) => return Err(e),
+            }
+        }
+
+        self.epochs.insert(epoch, graph);
+        Ok(())
     }
 }
 
