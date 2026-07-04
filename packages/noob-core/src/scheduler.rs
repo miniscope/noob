@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 
 use crate::epoch::Epoch;
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{Interner, PREVIOUS_EPOCH};
+use crate::item::{Interner, ASSETS_NODE, INPUT_NODE, PREVIOUS_EPOCH};
 use crate::toposort::{EdgeRec, NodeFlags, Sorter};
 
 pub struct Scheduler {
@@ -77,6 +77,43 @@ impl Scheduler {
 
         self.epochs.insert(epoch, graph);
         Ok(())
+    }
+
+    /// Is the scheduler active in any epoch?
+    pub fn is_active(&self) -> bool {
+        self.epochs.values().any(|sorter| sorter.is_active())
+    }
+
+    /// Is the scheduler active in a specific epoch?
+    /// TODO: Subepochs
+    pub fn is_active_at(&self, epoch: &Epoch) -> bool {
+        self.epochs
+            .get(epoch)
+            .is_some_and(|sorter| sorter.is_active())
+    }
+
+    fn get_ready(&mut self) -> Vec<(Epoch, u16)> {
+        self.epochs
+            .iter_mut()
+            .flat_map(|(epoch, graph)| {
+                graph
+                    .get_ready(&self.interner)
+                    .into_iter()
+                    .map(|ready| (epoch.clone(), ready))
+            })
+            .collect()
+    }
+
+    fn get_ready_at(&mut self, epoch: &Epoch) -> Vec<(Epoch, u16)> {
+        let graph = self.epochs.get_mut(&epoch);
+        match graph {
+            Some(graph) => graph
+                .get_ready(&self.interner)
+                .into_iter()
+                .map(|ready| (epoch.clone(), ready))
+                .collect(),
+            None => Vec::new(),
+        }
     }
 }
 

@@ -45,6 +45,8 @@ impl fmt::Display for Item {
 pub const PREVIOUS_EPOCH: u16 = 0;
 /// The marker that indicates the root of an epoch, Epoch(("tube", 0))
 pub const TUBE_NODE: u16 = 1;
+pub const INPUT_NODE: u16 = 2;
+pub const ASSETS_NODE: u16 = 3;
 
 /// Interns [`Item`]s to dense `u16` ids shared by all sorters in a scheduler,
 /// so that all graph algorithms operate on integers rather than strings.
@@ -61,6 +63,8 @@ impl Default for Interner {
         };
         interner.intern_signal("meta", "previous_epoch");
         interner.intern_node("tube");
+        interner.intern_node("input");
+        interner.intern_node("assets");
         interner
     }
 }

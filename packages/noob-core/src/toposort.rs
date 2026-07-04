@@ -94,8 +94,7 @@ impl Sorter {
                 sorter.add(interner, id, &[], true)?;
             }
             // stateful nodes wait on their own previous epoch.
-            // note: python adds this for disabled nodes too - kept faithfully
-            if flags.is_stateful() {
+            if flags.enabled && flags.is_stateful() {
                 sorter.add(interner, id, &[PREVIOUS_EPOCH], true)?;
             }
         }
@@ -279,16 +278,13 @@ impl Sorter {
         self.npassedout += nodes.len() as i64;
     }
 
-    pub fn get_ready(&mut self, interner: &Interner, node_id: Option<u16>) -> Vec<u16> {
-        let ready: Vec<u16> = match node_id {
-            None => self
-                .ready
-                .iter()
-                .copied()
-                .filter(|n| !interner.is_signal(*n))
-                .collect(),
-            Some(node) => self.ready.iter().copied().filter(|n| *n == node).collect(),
-        };
+    pub fn get_ready(&mut self, interner: &Interner) -> Vec<u16> {
+        let ready: Vec<u16> = self
+            .ready
+            .iter()
+            .copied()
+            .filter(|n| !interner.is_signal(*n))
+            .collect();
         let mut to_mark_out: FxIndexSet<u16> = ready.iter().copied().collect();
         for node in &ready {
             if let Some(sigs) = self.signals.get(node) {

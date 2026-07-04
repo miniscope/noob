@@ -39,7 +39,7 @@ fn chain() -> (Interner, Sorter) {
 fn static_order_with_groups(interner: &mut Interner, sorter: &mut Sorter) -> Vec<Vec<String>> {
     let mut groups = Vec::new();
     while sorter.is_active() {
-        let ready = sorter.get_ready(interner, None);
+        let ready = sorter.get_ready(interner);
         let out: Vec<u16> = sorter.out.iter().copied().collect();
         if ready.is_empty() && out.is_empty() {
             // python's generator would loop forever here; fail loudly instead
@@ -354,21 +354,21 @@ fn test_optional_dependencies() {
     let b_b1 = interner.intern_signal("b", "b1");
 
     // nodes with only optional dependencies still wait for those to be decided
-    let ready = sorter.get_ready(&interner, None);
+    let ready = sorter.get_ready(&interner);
     assert_eq!(ready, vec![a]);
     sorter.done(&interner, &ready).unwrap();
     assert_eq!(sorter.out, IndexSet::from([a_a1, a_a2]));
 
     sorter.mark_expired(&[a_a1], true);
     sorter.done(&interner, &[a_a2]).unwrap();
-    let ready: IndexSet<u16> = sorter.get_ready(&interner, None).into_iter().collect();
+    let ready: IndexSet<u16> = sorter.get_ready(&interner).into_iter().collect();
     assert_eq!(ready, IndexSet::from([only_optional, mixed, b]));
 
     sorter.done(&interner, &[only_optional, mixed]).unwrap();
     assert_eq!(sorter.out, IndexSet::from([b, b_b1, mixed_value]));
 
     sorter.mark_expired(&[mixed_value], true);
-    let ready = sorter.get_ready(&interner, None);
+    let ready = sorter.get_ready(&interner);
     assert_eq!(ready, vec![two_hop]);
 }
 
@@ -377,12 +377,12 @@ fn test_optional_dependencies() {
 /// (pytest parametrizes over the bool; here it's a helper called twice.)
 fn unlock_optionals_case(unlock_optionals: bool) {
     let (mut interner, mut sorter) = optional_graph();
-    let ready = sorter.get_ready(&interner, None);
+    let ready = sorter.get_ready(&interner);
     sorter.done(&interner, &ready).unwrap();
 
     let out: Vec<u16> = sorter.out.iter().copied().collect();
     sorter.mark_expired(&out, unlock_optionals);
-    let ready: IndexSet<u16> = sorter.get_ready(&interner, None).into_iter().collect();
+    let ready: IndexSet<u16> = sorter.get_ready(&interner).into_iter().collect();
     if unlock_optionals {
         let expected = IndexSet::from([
             interner.intern_node("only_optional"),
@@ -402,4 +402,20 @@ fn test_unlock_optionals_true() {
 #[test]
 fn test_unlock_optionals_false() {
     unlock_optionals_case(false);
+}
+
+/// Regression - ensure that nodes that are disabled are not added to the graph even when stateful
+#[test]
+fn test_disabled_stateful_not_added() {
+    let mut nodes: IndexMap<String, NodeFlags> = IndexMap::new();
+    nodes.insert(
+        "a".to_string(),
+        NodeFlags {
+            enabled: false,
+            stateful: Some(true),
+        },
+    );
+    let mut interner = Interner::default();
+    let sorter = Sorter::from_graph(&mut interner, &nodes, &Vec::new()).unwrap();
+    assert!(!sorter.info.contains_key(&interner.intern_node("a")))
 }
