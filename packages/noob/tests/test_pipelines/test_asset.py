@@ -152,6 +152,30 @@ async def test_asset_depends_post_gather(loaded_tube, all_runners):
             last_b = result["b_value"]
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-depends-asset-multi"], indirect=True)
+async def test_asset_depends_multi(loaded_tube, all_runners):
+    """
+    Multiple assets can be updated from the same signal
+    """
+    runner = all_runners
+    assert set(runner.tube.state.dependencies.keys()) == {"c"}
+    assert runner.tube.state.dependencies["c"]["iterator"] == {"counter", "counter2"}
+    for i in range(5):
+        if iscoroutinefunction_partial(runner.process):
+            result = await runner.process()
+        else:
+            result = runner.process()
+
+        # in the first iteration, the values should differ,
+        # but in subsequent iterations, after copied from the same signal,
+        # they are the same.
+        if i == 0:
+            assert result["a_value"] != result["b_value"]
+        else:
+            assert result["a_value"] == result["b_value"]
+
+
 def test_asset_nocopy_when_unused():
     """
     Don't copy assets when there is no chance for them to be mutated after they are stored
