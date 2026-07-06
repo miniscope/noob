@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
-from multiprocessing import Queue
-from queue import Empty
+from itertools import product
+from queue import Queue
 
 import pytest
 
@@ -25,12 +25,12 @@ def test_epoch_increment():
     assert isinstance(scheduler[0], TopoSorter)
 
     for i in range(5):
-        assert scheduler.add_epoch() == i + 1
+        assert scheduler.add_epoch() == Epoch(i + 1)
         assert isinstance(scheduler[i], TopoSorter)
 
     # if we create an epoch out of order, the next call without epoch specified increments
-    assert scheduler.add_epoch(10) == 10
-    assert scheduler.add_epoch() == 11
+    assert scheduler.add_epoch(10) == Epoch(10)
+    assert scheduler.add_epoch() == Epoch(11)
 
 
 def test_tube_increments_epoch(basic_tubes):
@@ -45,7 +45,7 @@ def test_tube_increments_epoch(basic_tubes):
         events = runner.store.events
         # we haven't cleared events
         assert len(events) == 1
-        assert list(events.keys())[0] == i
+        assert list(events.keys())[0] == Epoch(i)
 
 
 def test_event_store_filter():
@@ -75,17 +75,20 @@ def test_epoch_completion(basic_tubes):
         ready_nodes = scheduler.get_ready()
         for ready in ready_nodes:
             # until we're done, eoe should have been None in the last iteration
-            assert eoe is None
+            assert not eoe
             # marking the very last one as done should emit the end of epoch event
             # (we should also break out of the while loop after the last assignment)
             eoe = scheduler.done(epoch=Epoch(0), node_id=ready["value"])
+
+    assert len(eoe) == 1
+    eoe = eoe[0]
 
     assert (
         isinstance(eoe["id"], int)
         and isinstance(eoe["timestamp"], datetime)
         and eoe["node_id"] == "meta"
         and eoe["signal"] == MetaEventType("EpochEnded")
-        and eoe["epoch"] == 0
+        and eoe["epoch"] == Epoch(0)
     )
 
 
@@ -114,8 +117,20 @@ def test_scheduler_disable_node():
     scheduler.disable_node("c")
     scheduler.add_epoch()
     assert list(scheduler.nodes.keys()) == ["a", "b", "c"]
-    assert list(scheduler[0]._node2info.keys()) == [("a", "index"), "a", "b", ("b", "value"), "c"]
-    assert list(scheduler[1]._node2info.keys()) == [("a", "index"), "a", "b"]
+    assert set(scheduler[0]._node2info.keys()) == {
+        ("meta", "previous_epoch"),
+        ("a", "index"),
+        "a",
+        "b",
+        ("b", "value"),
+        "c",
+    }
+    assert set(scheduler[1]._node2info.keys()) == {
+        ("meta", "previous_epoch"),
+        ("a", "index"),
+        "a",
+        "b",
+    }
 
 
 @pytest.mark.parametrize(
@@ -146,7 +161,6 @@ def test_identify_source_node(spec, input, expected):
 def test_source_node_completion(spec, input, sources):
     """
     Scheduler checks whether all source nodes of a given epoch is complete.
-
     """
     tube = Tube.from_specification(spec, input)
     scheduler = tube.scheduler
@@ -160,7 +174,7 @@ def test_source_node_completion(spec, input, sources):
         # Default checks the latest epoch
         assert not scheduler.sources_finished()
         scheduler.done(epoch=epoch_1, node_id=node_id)
-    assert scheduler.sources_finished()
+    assert scheduler.sources_finished(epoch_1)
 
 
 def test_clear_ended_epochs():
@@ -187,7 +201,18 @@ def test_clear_ended_epochs():
             assert len(scheduler._epochs) == 1
 
 
-@pytest.mark.xfail(raises=Empty)
+def test_dont_create_empty_subepoch_sets():
+    """
+    We don't create a bunch of empty sets in subepochs by carelessly accessing the default dict
+    """
+    tube = Tube.from_specification("testing-basic")
+    runner = SynchronousRunner(tube)
+    with runner:
+        runner.process()
+
+    assert Epoch(0) not in tube.scheduler._subepochs
+
+
 def test_metaevents():
     """
     Meta events are emitted in callbacks, but not given to nodes or added to the store.
@@ -243,12 +268,10 @@ def test_epoch_log_trim_keeps_recent_epochs():
     scheduler = tube.scheduler
     scheduler._epoch_log_trim_interval = 10
     scheduler._epoch_log_keep = 5
-
     for epoch in range(10):
-        scheduler.add_epoch(epoch)
-        for node in scheduler.nodes:
-            scheduler.get_ready(epoch=Epoch(epoch))
-            scheduler.done(epoch=Epoch(epoch), node_id=node)
+        for ready in scheduler.iter_epoch(Epoch(epoch)):
+            for r in ready:
+                scheduler.done(epoch=Epoch(epoch), node_id=r["value"])
 
     remaining = scheduler._epoch_log
     assert remaining == {5, 6, 7, 8, 9}, f"Expected {{5..9}}, got {remaining}"
@@ -267,10 +290,9 @@ def test_epoch_log_out_of_order_trim():
     scheduler._epoch_log_keep = 5
 
     for epoch in reversed(range(10)):
-        scheduler.add_epoch(epoch)
-        for node in scheduler.nodes:
-            scheduler.get_ready(epoch=Epoch(epoch))
-            scheduler.done(epoch=Epoch(epoch), node_id=node)
+        scheduler.add_epoch(Epoch(epoch))
+    for epoch in reversed(range(10)):
+        scheduler.end_epoch(Epoch(epoch))
     remaining = scheduler._epoch_log
     assert remaining == {5, 6, 7, 8, 9}, "Early arriving, high epoch keys incorrectly evicted"
 
@@ -310,8 +332,8 @@ def test_disable_nodes():
     assert {node["value"] for node in ready_nodes} == {"a"}
     scheduler.done(epoch=epoch, node_id="a")
 
-    # nothing ready anymore
-    assert not scheduler.get_ready()
+    # b is not ready
+    assert "b" not in [r["value"] for r in scheduler.get_ready()]
 
 
 @pytest.mark.map
@@ -415,7 +437,10 @@ def test_is_active_when_subepochs_active(eventmaker: EventMaker):
     assert scheduler.is_active(ep)
     for i in range(3):
         scheduler.expire(ep / ("b", i), node_id="return")
-        assert not scheduler._epochs[ep / ("b", i)].is_active()
+        if i != 2:
+            # once all the subepochs are done, the parent epoch is done
+            assert scheduler.is_active(ep)
+        assert not scheduler.is_active(ep / ("b", i))
     assert not scheduler.is_active(ep)
 
 
@@ -527,3 +552,179 @@ def test_non_equivalent_event(non_equivalent_event):
         },
     )
     scheduler.update([non_equivalent_event])
+
+
+def test_statefulness():
+    """
+    When iterating events, we don't yield stateful nodes until they have been run in
+    a previous epoch.
+    """
+    tube = Tube.from_specification("testing-stateful")
+    scheduler = tube.scheduler
+    was_ready = []
+    for i in range(3):
+        scheduler.add_epoch(Epoch(i))
+
+    scheduler.done(epoch=Epoch(2), node_id="input")
+    scheduler.done(epoch=Epoch(1), node_id="input")
+
+    # add some guards against infinite iteration
+    for i, ready in enumerate(scheduler.iter_ready()):
+        # the inputs should all be ready, as should 'c' in epoch 0
+        ready = sorted(ready, key=lambda item: item["value"])
+        assert len(ready) == 2
+        assert ready[0]["value"] == "c"
+        assert ready[0]["epoch"] == Epoch(0)
+        assert ready[1]["value"] == "input"
+        assert ready[1]["epoch"] == Epoch(0)
+
+        if i >= 1:
+            raise RuntimeError("should only have iterated once!")
+
+    # now we should get all the events from three epochs
+    scheduler.done(epoch=Epoch(0), node_id="c")
+    scheduler.done(epoch=Epoch(0), node_id="input")
+    expected_total = len(tube.nodes) * 3
+    expected_epoch = Epoch(0)
+    for ready in scheduler.iter_ready():
+        was_ready.extend(ready)
+        for r in ready:
+            # run the epochs in order
+            assert r["epoch"] == expected_epoch or (
+                r["value"] == "input" and r["epoch"] == expected_epoch + 1
+            )
+            scheduler.done(epoch=r["epoch"], node_id=r["value"])
+            if r["value"] == "e":
+                expected_epoch = Epoch(expected_epoch[0].epoch + 1)
+        if expected_epoch >= Epoch(3):
+            break
+
+    assert len(was_ready) == expected_total
+
+
+def test_statelessness():
+    """
+    When iterating events, we can run stateless nodes out of order, in any epoch,
+    as long as their deps are met.
+    """
+    tube = Tube.from_specification("testing-stateful")
+    scheduler = tube.scheduler
+
+    # when just iterating without any input, for now with a single epoch-ready event,
+    # should just get the generator in the first round since it doesn't require input,
+    # but then in the second round we just get the 'input' ready event
+    #
+    for i, ready in enumerate(scheduler.iter_ready()):
+        if i == 0:
+            assert len(ready) == 2
+            ready = sorted(ready, key=lambda item: item["value"])
+            assert ready[0]["value"] == "c"
+            assert ready[0]["epoch"] == Epoch(i)
+            scheduler.done(epoch=ready[0]["epoch"], node_id=ready[0]["value"])
+        elif i == 1:
+            assert len(ready) == 1
+            assert ready[0]["value"] == "input"
+        if i >= 2:
+            break
+
+    # now if we give some input out of order, we run the nodes in that epoch
+    scheduler.done(epoch=Epoch(2), node_id="input")
+
+    for i, ready in enumerate(scheduler.iter_ready()):
+        if i == 0:
+            # should have gotten a, b, and d from epoch 2, and c from epoch 3
+            assert len(ready) == 3
+            for node in ("a", "b", "d"):
+                assert any(r["node_id"] == node and r["epoch"] == Epoch(2) for r in ready)
+            assert any(r["node_id"] == "c" and r["epoch"] == Epoch(3) for r in ready)
+
+        elif i == 1:
+            # now we should just get the return and another count
+            assert len(ready) == 2
+            assert any(r["node_id"] == "e" and r["epoch"] == Epoch(2) for r in ready)
+            assert any(r["node_id"] == "c" and r["epoch"] == Epoch(4) for r in ready)
+
+        elif i == 2:
+            # and now that epoch 2 is exhausted, should just have the generator
+            assert scheduler.epoch_completed(Epoch(2))
+            assert len(ready) == 1
+            assert ready[0]["node_id"] == "c" and ready[0]["epoch"] == Epoch(5)
+
+        else:
+            break
+
+        for r in ready:
+            scheduler.done(epoch=r["epoch"], node_id=r["node_id"])
+
+
+def test_statelessness_source():
+    """
+    When we have no inputs and a stateless source, the stateless source can just go for it,
+    but a stateful dependent will run in order
+    """
+    tube = Tube.from_specification("testing-stateless-source")
+    scheduler = tube.scheduler
+    all_ready = []
+
+    for i in range(5):
+        scheduler.add_epoch(Epoch(i))
+
+    # this shouldn't really happen, but would technically be correct -
+    # a stateless node should be able to run in parallel like this
+    _i = -1
+    for _i, ready in enumerate(scheduler.iter_ready()):
+        all_ready.extend(ready)
+        assert len(ready) == 5
+        assert all(r["value"] == "a" for r in ready)
+        break
+    assert _i != -1, "did not iterate!"
+
+    # marking the source ready out of order does not ready the stateful node
+    scheduler.done(epoch=Epoch(2), node_id="a")
+    for _ in scheduler.iter_ready():
+        raise RuntimeError("Shouldn't have iterated")
+
+    # marking the source node completed in the max epoch adds another epoch and yields it as ready
+    scheduler.done(epoch=Epoch(4), node_id="a")
+    i = -1
+    for i, ready in enumerate(scheduler.iter_ready()):
+        all_ready.extend(ready)
+        assert len(ready) == 1
+        assert ready[0]["value"] == "a"
+        assert ready[0]["epoch"] == Epoch(5)
+        if i >= 1:
+            raise RuntimeError("Should only have iterated once")
+    assert i != -1, "did not iterate!"
+
+    # now marking the source node complete in order readies the stateful dependent one by one
+    for i in range(6):
+        if i != 2:
+            scheduler.done(epoch=Epoch(i), node_id="a")
+        j = -1
+        for j, ready in enumerate(scheduler.iter_ready()):
+            all_ready.extend(ready)
+            ready = sorted(ready, key=lambda item: item["epoch"])
+
+            # in the last iteration, we get the next 'a' epoch (6)
+            if i == 5:
+                assert len(ready) == 2
+            else:
+                assert len(ready) == 1
+            assert ready[0]["value"] == "b"
+
+            # when we reach epoch 1 and 3, epoch 2 and 4 have already been done, so we iter twice
+            if i in (1, 3):
+                assert ready[0]["epoch"] in (Epoch(i), Epoch(i + 1))
+                assert j <= 1, "should have iterated at most twice"
+            else:
+                assert ready[0]["epoch"] == Epoch(i)
+                assert j <= 0, "should have only iterated once!"
+
+            scheduler.done(epoch=Epoch(ready[0]["epoch"]), node_id="b")
+        assert j != -1 or i in (2, 4), "did not iterate!"
+
+    # finally, assert that we got all the readies we expect
+    expected = {(node_id, Epoch(i)) for node_id, i in product(("a", "b"), range(6))}
+    expected.add(("a", Epoch(6)))
+    actual = {(r["value"], r["epoch"]) for r in all_ready}
+    assert actual == expected

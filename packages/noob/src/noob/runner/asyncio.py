@@ -43,7 +43,6 @@ class AsyncRunner(TubeRunner):
         self._running = asyncio.Event()
         self._node_ready = asyncio.Event()
         self._init_lock = asyncio.Lock()
-        self._scheduler_lock = asyncio.Lock()
         self._task_sem = asyncio.Semaphore(self.max_pending_tasks)
         self._pending_futures = set()
         self._exception: BaseException | None = None
@@ -70,8 +69,7 @@ class AsyncRunner(TubeRunner):
         with self._asset_context(AssetScope.process):
             await self._before_process()
 
-            while self.tube.scheduler.is_active():
-                ready = await self._get_ready()
+            async for ready in self._get_ready():
                 ready = self._filter_ready(ready, self.tube.scheduler)
                 for node_info in ready:
                     await self._task_sem.acquire()
@@ -158,22 +156,19 @@ class AsyncRunner(TubeRunner):
         if not self._running.is_set():
             await self.init()
         self.store.clear()
-        async with self._scheduler_lock:
-            self.tube.scheduler.add_epoch()
 
-    async def _get_ready(self, epoch: Epoch | None = None) -> list[MetaEvent]:  # type: ignore[override]
+    async def _get_ready(self, epoch: Epoch | None = None) -> AsyncGenerator[list[MetaEvent]]:  # type: ignore[override]
         if self._exception:
             await self._raise_exception()
-        async with self._scheduler_lock:
-            ready = self.tube.scheduler.get_ready()
-        if not ready:
-            # if none are ready, wait until another node is complete and check again
-            self._node_ready.clear()
-            await self._node_ready.wait()
-            async with self._scheduler_lock:
-                return self.tube.scheduler.get_ready()
-        else:
-            return ready
+        for ready in self.tube.scheduler.iter_epoch(epoch):
+            if not ready:
+                # if none are ready, wait until another node is complete and check again
+                self._node_ready.clear()
+                await self._node_ready.wait()
+                if self._exception:
+                    await self._raise_exception()
+                continue
+            yield ready
 
     def _call_node(self, node: Node, *args: Any, **kwargs: Any) -> Any:
         future: asyncio.Task | asyncio.Future

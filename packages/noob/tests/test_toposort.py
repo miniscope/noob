@@ -159,8 +159,7 @@ def _graphlib_init_to_noob(graph: dict[Any, Collection]) -> list[Edge]:
 def _static_order_with_groups(ts: TopoSorter) -> Generator[tuple[Any], None, None]:
     while ts.is_active():
         nodes = ts.get_ready()
-        for node in nodes:
-            ts.done(node)
+        ts.done(*ts.out_nodes)
         yield tuple(sorted(nodes))
 
 
@@ -295,7 +294,7 @@ def test_invalid_nodes_in_done():
     ts.add("2", "3", "4")
     ts.get_ready()
 
-    with pytest.raises(ValueError, match=r"node '24' was not added using add\(\)"):
+    with pytest.raises(ValueError, match=r".*not added using add\(\)"):
         ts.done("24")
 
 
@@ -385,9 +384,8 @@ def test_deepcopy():
         assert getattr(ts, slot) == getattr(copied, slot) == getattr(third, slot)
 
     while ts.is_active():
-        ready = ts.get_ready()
-        for r in ready:
-            ts.done(r)
+        _ = ts.get_ready()
+        ts.done(*ts.out_nodes)
 
     for slot in ts.__slots__:
         assert getattr(copied, slot) == getattr(third, slot)
@@ -430,16 +428,14 @@ def test_optional_dependencies(optional_graph):
     ready = ts.get_ready()
     # nodes with only optional dependencies should still wait for those to be done
     assert set(ready) == {"a"}
-    ts.done("a")
-    ready = ts.get_ready()
-    assert set(ready) == {NodeSignal("a", "a1"), NodeSignal("a", "a2")}
+    ts.done(*ready)
+    assert set(ts.out_nodes) == {NodeSignal("a", "a1"), NodeSignal("a", "a2")}
     ts.mark_expired(NodeSignal("a", "a1"))
     ts.done(NodeSignal("a", "a2"))
     ready = ts.get_ready()
     assert set(ready) == {"only_optional", "mixed", "b"}
     ts.done("only_optional", "mixed")
-    ready = ts.get_ready()
-    assert set(ready) == {NodeSignal("mixed", "value")}
+    assert set(ts.out_nodes) == {"b", NodeSignal("b", "b1"), NodeSignal("mixed", "value")}
     ts.mark_expired(NodeSignal("mixed", "value"))
     ready = ts.get_ready()
     assert set(ready) == {"two_hop"}
@@ -454,9 +450,8 @@ def test_unlock_optionals(optional_graph, unlock_optionals: bool):
     ts = TopoSorter(edges=optional_graph)
 
     ready = ts.get_ready()
-    ts.done("a")
-    ready = ts.get_ready()
-    ts.mark_expired(*ready, unlock_optionals=unlock_optionals)
+    ts.done(*ready)
+    ts.mark_expired(*ts.out_nodes, unlock_optionals=unlock_optionals)
     ready = ts.get_ready()
     if unlock_optionals:
         assert set(ready) == {"only_optional", "b"}

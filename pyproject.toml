@@ -144,7 +144,6 @@ color_output = true
 plugins = ['pydantic.mypy']
 
 [tool.coverage.report]
-concurrency = ["thread", "multiprocessing"]
 omit = [
     "*/testing/*"
 ]

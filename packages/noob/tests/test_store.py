@@ -27,12 +27,12 @@ def test_store_get_by_epoch():
     # get a specific epoch
     event = store.get(node_id="a", signal="b", epoch=Epoch(2))
     assert event
-    assert event["epoch"] == 2
+    assert event["epoch"] == Epoch(2)
 
     # get the latest epoch
     event = store.get(node_id="a", signal="b", epoch=-1)
     assert event
-    assert event["epoch"] == 4
+    assert event["epoch"] == Epoch(4)
 
 
 @pytest.mark.xfail()

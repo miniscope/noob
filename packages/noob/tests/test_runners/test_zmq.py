@@ -158,7 +158,7 @@ async def test_statelessness():
             await sleep(0.1)
         assert len(events) == 2
 
-        # two more from the stateless chian
+        # two more from the stateless chain
         runner.command.process(Epoch(2), input={"multiply": 7})
         start = time()
         while len(events) < 4 and time() - start < 1:
@@ -175,19 +175,19 @@ async def test_statelessness():
     assert len(events) == 12
     assert runner.store.events[Epoch(0)]["a"]["value"][0]["value"] == 11 * 3
     assert runner.store.events[Epoch(0)]["b"]["value"][0]["value"] == 11
-    # node d runs epoch 1 and 2 first, since they were queued first
-    # and we forced a stateful node to be stateless, so
-    # 1 (from count source) * 3 (from internal state) * 11 (input)
-    assert runner.store.events[Epoch(0)]["d"]["value"][0]["value"] == 11 * 3
+    # node d still runs epochs in order, since its stateful predecessor only starts at 0.
+    # we do the best we can do run in order even while stateless.
+    # 1 (from count source) * 1 (from internal state) * 11 (input)
+    assert runner.store.events[Epoch(0)]["d"]["value"][0]["value"] == 11
 
     assert runner.store.events[Epoch(1)]["a"]["value"][0]["value"] == 3
     assert runner.store.events[Epoch(1)]["b"]["value"][0]["value"] == 3
-    # 2 (from count source) * 1 (from internal state) * 3
-    assert runner.store.events[Epoch(1)]["d"]["value"][0]["value"] == 3 * 2 * 1
+    # 2 (from count source) * 2 (from internal state) * 3
+    assert runner.store.events[Epoch(1)]["d"]["value"][0]["value"] == 2 * 2 * 3
 
     assert runner.store.events[Epoch(2)]["a"]["value"][0]["value"] == 7 * 2
     assert runner.store.events[Epoch(2)]["b"]["value"][0]["value"] == 7
-    assert runner.store.events[Epoch(2)]["d"]["value"][0]["value"] == 7 * 3 * 2
+    assert runner.store.events[Epoch(2)]["d"]["value"][0]["value"] == 7 * 3 * 3
 
 
 @pytest.mark.asyncio
@@ -389,7 +389,7 @@ async def test_noderunner_stores_clear():
 
     runner._freerun.set()
     assert len(runner.store.events) == 3
-    iterator = runner.await_inputs()
+    iterator = runner.iter_inputs()
     _, _, epoch = await anext(iterator)
     runner.scheduler.end_epoch(Epoch(0))
     # store clears after the yield

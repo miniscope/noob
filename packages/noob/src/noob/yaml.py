@@ -212,7 +212,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
                 from noob.logging import init_logger
 
                 init_logger("config").debug(
-                    "Model fo r%s found at %s", cls._model_name(), config_file
+                    "Model for %s found at %s", cls._model_name(), config_file
                 )
                 return config_file
 

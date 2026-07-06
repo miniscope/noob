@@ -140,7 +140,16 @@ class EventloopMixin:
                 continue
 
             # purposely don't catch errors here because we want them to bubble up into the caller
-            for acb in self._callbacks[name]["asyncio"]:
-                await acb(msg)
-            for cb in self._callbacks[name]["sync"]:
-                self.loop.run_in_executor(None, cb, msg)
+            # just log - otherwise they can get lost in threading tracebacks.
+            try:
+                for acb in self._callbacks[name]["asyncio"]:
+                    await acb(msg)
+                for cb in self._callbacks[name]["sync"]:
+                    self.loop.run_in_executor(None, cb, msg)
+            except Exception as e:
+                self.logger.exception("EXCEPTION IN EVENTLOOP: %s", e)
+                raise e
+
+            # force a context switch to avoid us getting flooded and only processing messages
+            await asyncio.sleep(0)
+        self.logger.debug("Exiting polling loop")

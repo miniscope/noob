@@ -197,17 +197,21 @@ class Node(BaseModel):
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec, enabled=enabled, **params, **kwargs)
+                node = obj(id=spec.id, spec=spec, enabled=enabled, **params, **kwargs)
             else:
-                return WrapClassNode(
+                node = WrapClassNode(
                     id=spec.id, cls=obj, spec=spec, params=params, enabled=enabled, **kwargs
                 )
         else:
-            return WrapFuncNode(
+            node = WrapFuncNode(
                 id=spec.id, fn=obj, spec=spec, params=params, enabled=enabled, **kwargs
             )
 
-    @property
+        # update the spec's statefulness, which can be determined dynamically by a node
+        spec.stateful = node.stateful
+        return node
+
+    @functools.cached_property
     def signals(self) -> dict[str, Signal]:
         """
         Cached instance-level accessor for signals.
@@ -236,7 +240,7 @@ class Node(BaseModel):
         """
         return Signal.from_callable(cls.process)
 
-    @property
+    @functools.cached_property
     def slots(self) -> dict[str, Slot]:
         if self._slots is None:
             self._slots = self.get_slots(self.spec)

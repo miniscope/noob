@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from noob import SynchronousRunner, Tube
 from noob.node import NodeSpecification
 from noob.tube import TubeSpecification
@@ -111,11 +109,10 @@ def test_synch_unready_end_epoch():
     runner = SynchronousRunner(tube)
 
     n_iters = 5
-    with patch("noob.scheduler.Scheduler.end_epoch") as end_epoch:
-        for _ in runner.iter(n=n_iters):
-            pass
+    for _ in runner.iter(n=n_iters):
+        pass
 
-        assert end_epoch.call_count == n_iters * tube.nodes["b"].n
+    assert len(runner.tube.scheduler._epoch_log) == n_iters * tube.nodes["b"].n
 
 
 def test_max_iters_doesnt_apply_without_return():

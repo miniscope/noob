@@ -5,7 +5,7 @@ import builtins
 import pickle
 import re
 import sys
-from collections.abc import AsyncIterator, Iterable, Iterator, Sized
+from collections.abc import AsyncIterator, Iterator, Sized
 from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
@@ -231,10 +231,13 @@ class EpochSegment(NamedTuple):
 
 
 class Epoch(tuple[EpochSegment, ...]):
-    def __new__(cls, epoch: int | Iterable[EpochSegment]):
+    __slots__ = ()
+
+    def __new__(cls, epoch: int | tuple[EpochSegment, ...]):
         if isinstance(epoch, int):
-            epoch = (EpochSegment("tube", epoch),)
-        return super().__new__(cls, epoch)
+            return tuple.__new__(cls, (EpochSegment("tube", epoch),))
+        else:
+            return tuple.__new__(cls, epoch)
 
     def make_subepochs(self, node_id: NodeID, n: int) -> list[Epoch]:
         """
@@ -275,15 +278,6 @@ class Epoch(tuple[EpochSegment, ...]):
         return core_schema.chain_schema(
             steps=[tuple_schema, core_schema.no_info_plain_validator_function(_cast)],
         )
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, int):
-            if len(self) == 1:
-                return self[0].epoch == other
-            else:
-                return False
-        else:
-            return tuple.__eq__(self, other)
 
     __hash__ = tuple.__hash__
 

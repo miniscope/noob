@@ -7,6 +7,7 @@ import zmq
 
 from noob import init_logger
 from noob.config import config
+from noob.exceptions import TerminateTaskGroup
 from noob.network.loop import EventloopMixin
 from noob.network.message import (
     AnnounceMsg,
@@ -85,7 +86,24 @@ class CommandNode(EventloopMixin):
 
     async def _run(self) -> None:
         self.init()
-        await self._poll_receivers()
+        try:
+            # Use a taskgroup so we can reliably kill long-running coros
+            async with asyncio.TaskGroup() as tg:
+                tg.create_task(self._poll_receivers())
+
+                # wait here until we're told to quit
+                await self._quitting.wait()
+
+                msg = DeinitMsg(node_id="command")
+                await self.sockets["outbox"].send_multipart([b"deinit", msg.to_bytes()])
+
+                # create a task that will kill the task group
+                tg.create_task(_terminate_group())
+
+        except ExceptionGroup as e:
+            if not len(e.exceptions) == 1 and isinstance(e.exceptions[0], TerminateTaskGroup):
+                raise e
+        self.logger.debug("Command node exiting thread")
 
     def init(self) -> None:
         self.logger.debug("Starting command runner")
@@ -98,14 +116,7 @@ class CommandNode(EventloopMixin):
 
     def deinit(self) -> None:
         """Close the eventloop, stop processing messages, reset state"""
-        self.logger.debug("Deinitializing")
-
-        async def _deinit() -> None:
-            msg = DeinitMsg(node_id="command")
-            await self.sockets["outbox"].send_multipart([b"deinit", msg.to_bytes()])
-            self._quitting.set()
-
-        self.loop.create_task(_deinit())
+        self.loop.call_soon_threadsafe(self._quitting.set)
         self.logger.debug("Queued loop for deinitialization")
 
     def stop(self) -> None:
@@ -252,3 +263,7 @@ class CommandNode(EventloopMixin):
 
         with self._ready_condition:
             self._ready_condition.notify_all()
+
+
+async def _terminate_group() -> None:
+    raise TerminateTaskGroup()
