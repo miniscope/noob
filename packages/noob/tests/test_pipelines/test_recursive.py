@@ -1,4 +1,6 @@
 from noob import SynchronousRunner, Tube
+from noob.event import MetaSignal
+from noob.types import Epoch
 
 
 def test_recursive_pipeline():
@@ -36,3 +38,27 @@ def test_recursive_signals():
         res = runner.process()
         assert res["multiply"] == i * 2 * 2
         assert res["divide"] == i / 5 / 5
+
+
+def test_recursive_sporadic():
+    """
+    NoEvents from the return in the child tube should propagate to the parent
+    """
+    tube = Tube.from_specification("testing-recursive-sporadic-parent")
+    runner = SynchronousRunner(tube)
+    with runner:
+        for i in range(5):
+            res = runner.process()
+            if (i + 1) % 3 != 0:
+                assert res is None
+                assert (
+                    runner.store.events[Epoch(i)]["child"]["value"][0]["value"]
+                    == MetaSignal.NoEvent
+                )
+                assert "word" not in runner.store.events[Epoch(i)]["child"]
+            else:
+                assert isinstance(res, dict)
+                assert "word" in res
+                assert "doubleword" in res
+                assert "word" in runner.store.events[Epoch(i)]["child"]
+                assert res["doubleword"] == res["word"] * 2

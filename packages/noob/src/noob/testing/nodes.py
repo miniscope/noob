@@ -14,7 +14,7 @@ from pydantic import Field
 
 from noob import Name, NodeSpecification, process_method
 from noob.edge import Signal, Slot
-from noob.event import MetaSignal
+from noob.event import MetaSignal, NoEventable
 from noob.node import Node
 from noob.types import Epoch, EventMap
 
@@ -58,6 +58,19 @@ def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")] | None, None
             yield fake.word()
         else:
             yield None
+
+
+def sporadic_word_noevent(
+    every: int = 3,
+) -> Generator[A[NoEventable[str], Name("word")] | None, None, None]:
+    fake = Faker()
+    i = 0
+    while True:
+        i += 1
+        if i % every == 0:
+            yield fake.word()
+        else:
+            yield MetaSignal.NoEvent
 
 
 def word_counts() -> Generator[tuple[A[str, Name("word")], A[list[int], Name("counts")]]]:
