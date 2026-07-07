@@ -215,7 +215,6 @@ class AsyncRunner(TubeRunner):
         self.tube.state.deinit(AssetScope.node, node.edges)
 
         events = self.store.add_value(node.signals, value, node.id, epoch)
-
         if events is not None:
             all_events = self.tube.scheduler.update(events)
             if node.id in self.tube.state.dependencies:
