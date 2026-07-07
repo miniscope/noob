@@ -75,7 +75,7 @@ class AsyncRunner(TubeRunner):
                     await self._task_sem.acquire()
                     self._process_node(node_info=node_info, input=input)
 
-            self._after_process()
+            await self._after_process()
             result = self.collect_return()
         return result
 
@@ -155,7 +155,11 @@ class AsyncRunner(TubeRunner):
     async def _before_process(self) -> None:  # type: ignore[override]
         if not self._running.is_set():
             await self.init()
+        self.tube.state.init(AssetScope.process)
         self.store.clear()
+
+    async def _after_process(self) -> None:
+        self.tube.state.deinit(AssetScope.process)
 
     async def _get_ready(self, epoch: Epoch | None = None) -> AsyncGenerator[list[MetaEvent]]:  # type: ignore[override]
         if self._exception:
@@ -209,12 +213,14 @@ class AsyncRunner(TubeRunner):
             return
 
         value = future.result()
+        self.tube.state.deinit(AssetScope.node, node.edges)
+
         events = self.store.add_value(node.signals, value, node.id, epoch)
+
         if events is not None:
             all_events = self.tube.scheduler.update(events)
             if node.id in self.tube.state.dependencies:
                 self.tube.state.update(events)
-            self.tube.state.deinit(AssetScope.node, node.edges)
             self._call_callbacks(all_events)
         self._task_sem.release()
         self._node_ready.set()

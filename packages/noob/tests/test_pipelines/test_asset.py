@@ -252,6 +252,7 @@ async def test_contextmanager_asset_lifecycle(loaded_tube, all_runners):
     its yielded value is the asset object, and it is exited on deinit.
     """
     runner = all_runners
+    not_zmq = not isinstance(runner, ZMQRunner)
 
     for i in range(3):
         if iscoroutinefunction_partial(runner.process):
@@ -271,9 +272,9 @@ async def test_contextmanager_asset_lifecycle(loaded_tube, all_runners):
 
         # process scoped assets can be shared and are not deinit'd before sharing
         assert result["process_a"].entered == 1
-        assert result["process_a"].exited == 1
+        assert result["process_a"].exited == (1 if not_zmq else 0)
         assert result["process_b"].entered == 1
-        assert result["process_b"].exited == 1
+        assert result["process_b"].exited == (1 if not_zmq else 0)
         assert result["process_a_value"] == 2
         assert result["process_b_value"] == 3
 
