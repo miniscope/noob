@@ -145,7 +145,6 @@ class AsyncRunner(TubeRunner):
         node = self._get_node(node_id)
 
         # FIXME: since nodes can run quasiconcurrently, need to ensure unique assets per node
-        self.tube.state.init(AssetScope.node, node.edges)
         args, kwargs = self._collect_input(node, epoch, input)
         node, args, kwargs = self._before_call_node(node, *args, **kwargs)
         value = self._call_node(node, *args, **kwargs)
@@ -158,7 +157,7 @@ class AsyncRunner(TubeRunner):
         self.tube.state.init(AssetScope.process)
         self.store.clear()
 
-    async def _after_process(self) -> None:
+    async def _after_process(self) -> None:  # type: ignore[override]
         self.tube.state.deinit(AssetScope.process)
 
     async def _get_ready(self, epoch: Epoch | None = None) -> AsyncGenerator[list[MetaEvent]]:  # type: ignore[override]
