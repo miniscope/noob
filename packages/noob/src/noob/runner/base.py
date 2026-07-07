@@ -5,7 +5,7 @@ import hashlib
 import inspect
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Coroutine, Generator, Iterator, Sequence
+from collections.abc import Callable, Coroutine, Generator, Iterator, MutableSequence, Sequence
 from concurrent.futures import Future as ConcurrentFuture
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -19,7 +19,7 @@ from noob import Tube, init_logger
 from noob.asset import AssetScope
 from noob.edge import Edge
 from noob.event import Event, MetaEvent
-from noob.exceptions import InputMissingError
+from noob.exceptions import InputMissingError, NodeExhaustedError
 from noob.input import InputScope
 from noob.node import Node, Return
 from noob.store import EventStore
@@ -54,6 +54,8 @@ class TubeRunner(ABC):
 
     _logger: Logger = None  # type: ignore[assignment]
     _runner_id: str | None = None
+    _exhausted: bool = False
+    """When a node is exhausted, set True to prevent further process calls until re-inited"""
 
     def __post_init__(self):
         self._logger = init_logger(f"noob.runner.{self.runner_id}")
@@ -104,7 +106,10 @@ class TubeRunner(ABC):
         Runner-scoped assets are initialized and deinitialized in
         :meth:`.TubeRunner.init` and :meth:`.TubeRunner.deinit`
         """
+        if self._exhausted:
+            raise NodeExhaustedError("Tube is exhausted and can't be run until re-initialized")
         input = self._validate_input(**kwargs)
+
         with self._asset_context(AssetScope.process):
             self._before_process()
 
@@ -131,7 +136,6 @@ class TubeRunner(ABC):
           if the tube has already been started and is running,
           (i.e. :meth:`.deinit` has not been called,
           or the tube has not exhausted itself)
-
         """
 
     @abstractmethod
@@ -143,7 +147,7 @@ class TubeRunner(ABC):
 
         * Deinitialize nodes
         * Deinitialize runner-scoped assets
-
+        * Set _exhausted flag to False
         """
 
     def iter(self, n: int | None = None) -> Generator[ReturnNodeType, None, None]:
@@ -167,13 +171,13 @@ class TubeRunner(ABC):
         current_iter = 0
         has_return = any(isinstance(node, Return) for node in self.tube.nodes.values())
         try:
-            while n is None or current_iter < n:
+            while self.running and (n is None or current_iter < n):
                 ret = None
                 loop = 0
                 if not has_return:
                     ret = self.process()
                 else:
-                    while ret is None:
+                    while self.running and ret is None:
                         ret = self.process()
                         loop += 1
                         if loop > self.max_iter_loops:
@@ -181,6 +185,8 @@ class TubeRunner(ABC):
 
                 yield ret
                 current_iter += 1
+        except NodeExhaustedError:
+            self._logger.info("Iteration stopped because node was exhausted")
         finally:
             self.deinit()
 
@@ -211,12 +217,12 @@ class TubeRunner(ABC):
         if not self.running:
             self.init()
         try:
-            while n is None or current_iter < n:
+            while self.running and (n is None or current_iter < n):
                 out = self.process()
                 if out is not None:
                     outputs.append(out)
                 current_iter += 1
-        except (KeyboardInterrupt, StopIteration):
+        except (KeyboardInterrupt, StopIteration, NodeExhaustedError):
             # fine, just return
             pass
         finally:
@@ -370,6 +376,7 @@ class TubeRunner(ABC):
         * Store events to make them available to other nodes, as needed
         * Update the scheduler
         * Update the asset state
+        * Call :meth:`_handle_exhaustion` to cancel a run when a node is exhausted
         * Call any callbacks with the resultant events
 
         The base implementation
@@ -385,7 +392,17 @@ class TubeRunner(ABC):
         if node.id in self.tube.state.dependencies:
             self.tube.state.update(events)
         events_and_metaevents = self.tube.scheduler.update(events)
+        self._handle_exhaustion(events_and_metaevents)
         self._call_callbacks(events_and_metaevents)
+
+    @abstractmethod
+    def _handle_exhaustion(self, events: MutableSequence[Event | MetaEvent]) -> bool:
+        """
+        Stop a run if a node is exhausted.
+        Return True if a node was exhausted, False otherwise.
+        Set the `_exhausted` flag to True
+        """
+        pass
 
     @contextmanager
     def _asset_context(self, scope: AssetScope, edges: list[Edge] | None = None) -> Iterator[None]:

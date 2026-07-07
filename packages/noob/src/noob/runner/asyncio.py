@@ -1,12 +1,13 @@
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, MutableSequence
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
+from noob import Event
 from noob.asset import AssetScope
-from noob.event import MetaEvent
-from noob.exceptions import InputMissingError
+from noob.event import MetaEvent, MetaSignal
+from noob.exceptions import InputMissingError, NodeExhaustedError
 from noob.input import InputScope
 from noob.node import Node, Return
 from noob.runner.base import TubeRunner
@@ -65,6 +66,8 @@ class AsyncRunner(TubeRunner):
         If a node raises an error, we allow the other running nodes to complete
         (with some timeout)
         """
+        if self._exhausted:
+            raise NodeExhaustedError("Tube was exhausted, need to reinit to run")
         input = self._validate_input(**kwargs)
         with self._asset_context(AssetScope.process):
             await self._before_process()
@@ -93,20 +96,23 @@ class AsyncRunner(TubeRunner):
         current_iter = 0
         has_return = any(isinstance(node, Return) for node in self.tube.nodes.values())
         try:
-            while n is None or current_iter < n:
+            while self.running and (n is None or current_iter < n):
                 ret = None
                 loop = 0
                 if not has_return:
                     ret = await self.process()
                 else:
-                    while ret is None:
+                    while self.running and ret is None:
                         ret = await self.process()
+                        await asyncio.sleep(0)
                         loop += 1
                         if loop > self.max_iter_loops:
                             raise RuntimeError("Reached maximum process calls per iteration")
 
                 yield ret
                 current_iter += 1
+        except NodeExhaustedError:
+            self._logger.info("Iteration stopped because node was exhausted")
         finally:
             await self.deinit()
 
@@ -133,6 +139,7 @@ class AsyncRunner(TubeRunner):
 
             self.inject_context(self.tube.state.deinit)(AssetScope.runner)
 
+        self._exhausted = False
         self._running.clear()
 
     @property
@@ -216,6 +223,7 @@ class AsyncRunner(TubeRunner):
                 self.tube.state.update(events)
             self.tube.state.deinit(AssetScope.node, node.edges)
             self._call_callbacks(all_events)
+            self._handle_exhaustion(all_events)
         self._task_sem.release()
         self._node_ready.set()
         self._logger.debug("Node %s emitted %s in epoch %s", node.id, value, epoch)
@@ -243,6 +251,14 @@ class AsyncRunner(TubeRunner):
             raise self._exception from e
         else:
             raise self._exception
+
+    def _handle_exhaustion(self, events: MutableSequence[Event | MetaEvent]) -> bool:
+        for e in events:
+            if e["value"] is MetaSignal.Exhausted:
+                self._running.clear()
+                self._exhausted = True
+                self._exception = NodeExhaustedError(f"Node {e['node_id']} is exhausted!")
+        return False
 
     def enable_node(self, node_id: str) -> None:
         self.tube.nodes[node_id].init()

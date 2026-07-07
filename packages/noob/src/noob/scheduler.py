@@ -375,7 +375,7 @@ class Scheduler:
             if (e["node_id"], e["signal"]) not in self.graph_signals:
                 continue
 
-            if e["value"] is MetaSignal.NoEvent:
+            if e["value"] is MetaSignal.NoEvent or e["value"] is MetaSignal.Exhausted:
                 end_events.extend(
                     self.expire(epoch=e["epoch"], node_id=e["node_id"], signal=e["signal"])
                 )
