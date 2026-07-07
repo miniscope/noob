@@ -11,7 +11,7 @@ from time import time
 from typing import Any, cast, overload
 
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import InputMissingError
+from noob.exceptions import InputMissingError, NodeExhaustedError
 from noob.input import InputScope
 from noob.network.message import ErrorMsg, ErrorValue, EventMsg, Message, MessageType
 from noob.node import Return
@@ -176,6 +176,8 @@ class ZMQRunner(TubeRunner):
             raise RuntimeError(
                 "Runner is already running in free run mode! use iter to gather results"
             )
+        if self._exhausted:
+            raise NodeExhaustedError("Tube is exhausted and can't be run again until re-inited")
         input = self.tube.input_collection.validate_input(InputScope.process, kwargs)
         self._running.set()
         try:
@@ -245,7 +247,7 @@ class ZMQRunner(TubeRunner):
         self._running.set()
         current_iter = 0
         try:
-            while n is None or current_iter < n:
+            while self.running and (n is None or current_iter < n):
                 ret = MetaSignal.NoEvent
                 loop = 0
                 while ret is MetaSignal.NoEvent:
@@ -266,6 +268,8 @@ class ZMQRunner(TubeRunner):
 
                 current_iter += 1
                 yield ret
+        except NodeExhaustedError:
+            self._logger.info("Iteration stopped because node was exhausted")
 
         finally:
             self.stop()
@@ -369,6 +373,9 @@ class ZMQRunner(TubeRunner):
                     with self._epoch_condition:
                         events.extend(self.tube.scheduler.expire(epoch, self._return_node.id))
 
+        if self._handle_exhaustion(events):
+            self.stop()
+
         ended = [
             e for e in events if e["node_id"] == "meta" and e["signal"] == MetaEventType.EpochEnded
         ]
@@ -383,6 +390,10 @@ class ZMQRunner(TubeRunner):
         for e in ended:
             if len(e["value"]) == 1:
                 await self.command.epoch_ended(e["value"])
+
+        for cb in self._callbacks:
+            for e in events:
+                cb(e)
 
     def on_router(self, msg: Message) -> None:
         if isinstance(msg, ErrorMsg):
@@ -412,11 +423,16 @@ class ZMQRunner(TubeRunner):
                 self.store.clear(epoch)
             return ret
 
-    def _handle_error(self, msg: ErrorMsg) -> None:
+    def _handle_error(self, msg: ErrorMsg | Exception) -> None:
         """Cancel current epoch, stash error for process method to throw"""
         self._logger.error("Received error from node: %s", msg)
-        exception = msg.to_exception()
-        self._to_throw = msg.value
+        if isinstance(msg, ErrorMsg):
+            exception = msg.to_exception()
+            self._to_throw = msg.value
+        else:
+            exception = msg
+            self._to_throw = msg
+
         if self._current_epoch is not None:
             # if we're waiting in the process method,
             # end epoch and raise error there
@@ -477,3 +493,13 @@ class ZMQRunner(TubeRunner):
             self._epoch_futures[epoch].set_result(epoch)
 
         return self._epoch_futures[epoch]
+
+    def _handle_exhaustion(self, events: MutableSequence[Event | MetaEvent]) -> bool:
+        for e in events:
+            if e["value"] is MetaSignal.Exhausted:
+                with self._running_lock:
+                    self._running.clear()
+                    self._exhausted = True
+                self._handle_error(NodeExhaustedError(f"Node {e['node_id']} is exhausted!"))
+                return True
+        return False

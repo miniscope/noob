@@ -112,3 +112,9 @@ class TerminateTaskGroup(NoobError):
     """
     https://docs.python.org/3/library/asyncio-task.html#terminating-a-task-group
     """
+
+
+class NodeExhaustedError(RunnerError, RuntimeError):
+    """
+    A node is exhausted, the tube can't be run until it's re-initialized
+    """

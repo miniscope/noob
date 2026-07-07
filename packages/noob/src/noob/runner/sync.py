@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import MutableSequence
 from dataclasses import dataclass
 from threading import Event as ThreadEvent
 from typing import Any
 
 from noob.asset import AssetScope
-from noob.event import MetaEvent
+from noob.event import Event, MetaEvent, MetaSignal
+from noob.exceptions import NodeExhaustedError
 from noob.node import Return
 from noob.runner.base import TubeRunner, call_async_from_sync
 from noob.scheduler import Scheduler
@@ -47,6 +49,7 @@ class SynchronousRunner(TubeRunner):
     def deinit(self) -> None:
         """Stop all nodes processing"""
         # TODO: lock to ensure we've been started
+        self._exhausted = False
         for node in self.tube.enabled_nodes.values():
             node_deinit = self.inject_context(node.deinit)
             if iscoroutinefunction_partial(node_deinit):
@@ -110,3 +113,15 @@ class SynchronousRunner(TubeRunner):
             return None
         ret_node = ret_nodes[0]
         return ret_node.get(keep=False)
+
+    def _handle_exhaustion(self, events: MutableSequence[Event | MetaEvent]) -> bool:
+        """Clear the self._running flag to stop a run"""
+        for e in events:
+            if e["value"] is MetaSignal.Exhausted:
+                self._running.clear()
+                self._exhausted = True
+
+                raise NodeExhaustedError(f"Node {e['node_id']} is exhausted")
+
+                # return True
+        return False

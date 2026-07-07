@@ -24,7 +24,7 @@ from pydantic import (
 )
 
 from noob.edge import Edge, Signal, Slot
-from noob.event import EventMaker
+from noob.event import EventMaker, MetaSignal
 from noob.logging import init_logger
 from noob.node.spec import NodeSpecification
 from noob.types import Epoch, EventMap
@@ -344,16 +344,19 @@ class Node(BaseModel):
     def logger(self) -> logging.Logger:
         return init_logger(f"node.{self.id}")
 
-    def _wrap_generator(self, proc: Callable[[], GeneratorType]) -> None:
+    def _wrap_generator(self, proc: Callable[[Any], GeneratorType], **params: Any) -> None:
         """
         Wrap a `process` method when it is a generator,
         invoked in `model_post_init`
         """
-        self._gen = proc()
+        self._gen = proc(**params)
 
         def _process():  # noqa: ANN202
             self._gen = cast(Generator, self._gen)
-            return next(self._gen)
+            try:
+                return next(self._gen)
+            except StopIteration:
+                return MetaSignal.Exhausted
 
         signature = inspect.signature(self.process)
 
@@ -466,12 +469,19 @@ class WrapFuncNode(Node):
         and create a :func:`functools.partial` of it if it is not.
         """
         if inspect.isgeneratorfunction(self.fn):
-            self._gen = self.fn(**self.params)
-            self.__dict__["process"] = lambda: next(self._gen)
+            self._wrap_generator(self.fn, **self.params)
         elif inspect.isasyncgenfunction(self.fn):
             raise NotImplementedError("async generators not supported")
         else:
             self.__dict__["process"] = functools.partial(self.fn, **self.params)
+
+    def init(self) -> None:
+        if inspect.isgeneratorfunction(self.fn) and self._gen is None:
+            self._wrap_generator(self.fn, **self.params)
+
+    def deinit(self) -> None:
+        if inspect.isgeneratorfunction(self.fn):
+            self._gen = None
 
     @model_validator(mode="wrap")
     @classmethod

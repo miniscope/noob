@@ -1,0 +1,13 @@
+noob_id: testing-exhaustion
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  A tube with a generator that exhausts after 3 epochs
+nodes:
+  a:
+    type: noob.testing.count_source
+    params:
+      limit: 3
+  c:
+    type: return
+    depends: a.index
