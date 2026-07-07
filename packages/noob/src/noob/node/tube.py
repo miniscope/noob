@@ -26,7 +26,7 @@ class TubeNode(Node):
         that is interpreted as a ``NoEvent``, as the return value of ``process``
         is ``None`` when no events are emitted.
 
-        Wrap ``None``s in a dictionary return to disambiguate them.
+        Wrap ``None`` s in a dictionary return to disambiguate them.
 
         i.e. rather than::
 
@@ -37,7 +37,7 @@ class TubeNode(Node):
             depends:
               - something: node.value
 
-        If you have a need for returning scalar ``None``s from a nested tube,
+        If you have a need for returning scalar ``None`` s from a nested tube,
         please raise an issue!
 
     """
