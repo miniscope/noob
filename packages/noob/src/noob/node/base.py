@@ -25,7 +25,6 @@ from pydantic import (
 
 from noob.edge import Edge, Signal, Slot
 from noob.event import EventMaker
-from noob.exceptions import GeneratorExhaustedError
 from noob.logging import init_logger
 from noob.node.spec import NodeSpecification
 from noob.types import Epoch, EventMap
@@ -354,10 +353,7 @@ class Node(BaseModel):
 
         def _process():  # noqa: ANN202
             self._gen = cast(Generator, self._gen)
-            try:
-                return next(self._gen)
-            except StopIteration as e:
-                raise GeneratorExhaustedError(f"Generator node {self.id!r} is exhausted") from e
+            return next(self._gen)
 
         signature = inspect.signature(self.process)
 
@@ -471,16 +467,7 @@ class WrapFuncNode(Node):
         """
         if inspect.isgeneratorfunction(self.fn):
             self._gen = self.fn(**self.params)
-
-            def _process():  # noqa: ANN202
-                try:
-                    return next(self._gen)
-                except StopIteration as e:
-                    raise GeneratorExhaustedError(
-                        f"Generator node {self.id!r} is exhausted"
-                    ) from e
-
-            self.__dict__["process"] = _process
+            self.__dict__["process"] = lambda: next(self._gen)
         elif inspect.isasyncgenfunction(self.fn):
             raise NotImplementedError("async generators not supported")
         else:

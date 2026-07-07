@@ -19,7 +19,7 @@ from noob import Tube, init_logger
 from noob.asset import AssetScope
 from noob.edge import Edge
 from noob.event import Event, MetaEvent
-from noob.exceptions import GeneratorExhaustedError, InputMissingError
+from noob.exceptions import InputMissingError
 from noob.input import InputScope
 from noob.node import Node, Return
 from noob.store import EventStore
@@ -51,7 +51,6 @@ class TubeRunner(ABC):
     """The max number of times that `iter` will call `process` to try and get a result"""
 
     _callbacks: list[Callable[[Event | MetaEvent], None]] = field(default_factory=list)
-    _exhausted: bool = field(default=False)
 
     _logger: Logger = None  # type: ignore[assignment]
     _runner_id: str | None = None
@@ -164,12 +163,6 @@ class TubeRunner(ABC):
                 "Use `process()` directly, providing required inputs to each call."
             ) from e
 
-        if self._exhausted:
-            raise GeneratorExhaustedError(
-                "Tube is exhausted: a generator node ran out of values in a previous run. "
-                "Create a new runner to run again."
-            )
-
         self.init()
         current_iter = 0
         has_return = any(isinstance(node, Return) for node in self.tube.nodes.values())
@@ -188,9 +181,6 @@ class TubeRunner(ABC):
 
                 yield ret
                 current_iter += 1
-        except GeneratorExhaustedError:
-            self._exhausted = True
-            return
         finally:
             self.deinit()
 
@@ -216,13 +206,6 @@ class TubeRunner(ABC):
                 "that was not provided when instantiating the tube! "
                 "Use `process()` directly, providing required inputs to each call."
             ) from e
-
-        if self._exhausted:
-            raise GeneratorExhaustedError(
-                "Tube is exhausted: a generator node ran out of values in a previous run. "
-                "Create a new runner to run again."
-            )
-
         outputs = []
         current_iter = 0
         if not self.running:
@@ -236,8 +219,6 @@ class TubeRunner(ABC):
         except (KeyboardInterrupt, StopIteration):
             # fine, just return
             pass
-        except GeneratorExhaustedError:
-            self._exhausted = True
         finally:
             self.deinit()
 

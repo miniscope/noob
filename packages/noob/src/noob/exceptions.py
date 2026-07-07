@@ -65,12 +65,6 @@ class AlreadyRunningError(RunnerError, RuntimeError):
     """
 
 
-class GeneratorExhaustedError(RunnerError, RuntimeError):
-    """
-    A generator node was exhausted and can produce no more events.
-    """
-
-
 class InputMissingError(InputError, ValueError):
     """
     A requested input was not provided in the given scope

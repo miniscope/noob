@@ -6,7 +6,7 @@ from typing import Any
 
 from noob.asset import AssetScope
 from noob.event import MetaEvent
-from noob.exceptions import GeneratorExhaustedError, InputMissingError
+from noob.exceptions import InputMissingError
 from noob.input import InputScope
 from noob.node import Node, Return
 from noob.runner.base import TubeRunner
@@ -89,12 +89,6 @@ class AsyncRunner(TubeRunner):
                 "Use `process()` directly, providing required inputs to each call."
             ) from e
 
-        if self._exhausted:
-            raise GeneratorExhaustedError(
-                "Tube is exhausted: a generator node ran out of values in a previous run. "
-                "Create a new runner to run again."
-            )
-
         await self.init()
         current_iter = 0
         has_return = any(isinstance(node, Return) for node in self.tube.nodes.values())
@@ -113,9 +107,6 @@ class AsyncRunner(TubeRunner):
 
                 yield ret
                 current_iter += 1
-        except GeneratorExhaustedError:
-            self._exhausted = True
-            return
         finally:
             await self.deinit()
 
