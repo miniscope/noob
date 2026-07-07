@@ -148,11 +148,11 @@ class TubeNode(Node):
         tube_spec = TubeSpecification.from_any(spec.params["tube"])
 
         signals = {}
-        return_node = [n for n in tube_spec.nodes.values() if n.type_ == "return"]
-        if not return_node:
+        return_nodes = [n for n in tube_spec.nodes.values() if n.type_ == "return"]
+        if not return_nodes:
             return {"value": Signal(name="value", annotation=Any)}
         else:
-            return_node = return_node[0]
+            return_node = return_nodes[0]
             if not return_node.depends or isinstance(return_node.depends, str):
                 return {"value": Signal(name="value", annotation=Any)}
 
