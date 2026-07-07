@@ -42,6 +42,8 @@
 - [`#237`](https://github.com/miniscope/noob/pull/237) - 
   {class}`~noob.node.Node`s now have an {attr}`~noob.node.Node.logger` property 
   that lazily instantiates a logger, if accessed.
+- [`#244`](https://github.com/miniscope/noob/issues/239) - 
+  Tube nodes propagate the signals of the enclosed tube by reading the deps of its "return" node.
 
 **Changed**
 

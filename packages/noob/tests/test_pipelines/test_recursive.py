@@ -52,10 +52,8 @@ def test_recursive_sporadic():
             if (i + 1) % 3 != 0:
                 assert res is None
                 assert (
-                    runner.store.events[Epoch(i)]["child"]["value"][0]["value"]
-                    == MetaSignal.NoEvent
+                    runner.store.events[Epoch(i)]["child"]["word"][0]["value"] == MetaSignal.NoEvent
                 )
-                assert "word" not in runner.store.events[Epoch(i)]["child"]
             else:
                 assert isinstance(res, dict)
                 assert "word" in res

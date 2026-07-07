@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Union
 
 from pydantic import ConfigDict
 
-from noob.edge import Slot
+from noob.edge import Signal, Slot
 from noob.event import MetaSignal
 from noob.exceptions import ExtraInputWarning
 from noob.node.base import Node
@@ -107,7 +107,13 @@ class TubeNode(Node):
                 for key, value in res.items()
             ]
         elif res is None:
-            return MetaSignal.NoEvent
+            now = datetime.now(UTC)
+            return [
+                self._event_maker.new_event(
+                    signal=key, epoch=epoch, value=MetaSignal.NoEvent, timestamp=now
+                )
+                for key in self.signals
+            ]
         else:
             return res
 
@@ -128,3 +134,31 @@ class TubeNode(Node):
             if in_val.scope == InputScope.process:
                 slots[in_key] = Slot(name=in_key, annotation=Any)
         return slots
+
+    @classmethod
+    def get_signals(cls, spec: NodeSpecification | None = None) -> dict[str, Signal]:
+        """Forward signals from the return node"""
+        if spec is None:
+            raise ValueError("Must pass a spec to get slots for a tube node")
+
+        from noob.tube import TubeSpecification
+
+        if not spec.params or "tube" not in spec.params:
+            raise ValueError("Tube node specifications must have a `tube` in their params")
+        tube_spec = TubeSpecification.from_any(spec.params["tube"])
+
+        signals = {}
+        return_node = [n for n in tube_spec.nodes.values() if n.type_ == "return"]
+        if not return_node:
+            return {"value": Signal(name="value", annotation=Any)}
+        else:
+            return_node = return_node[0]
+            if not return_node.depends or isinstance(return_node.depends, str):
+                return {"value": Signal(name="value", annotation=Any)}
+
+            for dep in return_node.depends:
+                if isinstance(dep, str):
+                    continue
+                name = list(dep.keys())[0]
+                signals[name] = Signal(name=name, annotation=Any)
+            return signals
