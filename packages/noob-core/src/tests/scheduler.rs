@@ -202,3 +202,131 @@ fn test_get_ready_at() {
     let ready = scheduler.get_ready_at(&Epoch::from(2));
     assert_eq!(ready, []);
 }
+
+#[test]
+fn test_done_without_signals() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let a1 = scheduler.interner.intern_signal("a", "a1");
+    let a2 = scheduler.interner.intern_signal("a", "a2");
+    let ep = scheduler.add_epoch();
+    scheduler.done(&ep, a, false).unwrap();
+
+    let sorter = scheduler.epochs.get(&ep).unwrap();
+
+    assert!(sorter.done.contains(&a));
+
+    assert!(sorter.ready.contains(&a1));
+    assert!(sorter.ready.contains(&a2));
+    assert!(!sorter.done.contains(&a1));
+    assert!(!sorter.done.contains(&a2));
+}
+
+#[test]
+fn test_done_with_signals() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let a1 = scheduler.interner.intern_signal("a", "a1");
+    let a2 = scheduler.interner.intern_signal("a", "a2");
+    let ep = scheduler.add_epoch();
+    scheduler.done(&ep, a, true).unwrap();
+
+    let sorter = scheduler.epochs.get(&ep).unwrap();
+
+    assert!(sorter.done.contains(&a));
+
+    assert!(!sorter.ready.contains(&a1));
+    assert!(!sorter.ready.contains(&a2));
+    assert!(sorter.done.contains(&a1));
+    assert!(sorter.done.contains(&a2));
+}
+
+/// Done creates a missing epoch and increments next_epoch
+#[test]
+fn test_done_on_missing_epoch() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let ep = Epoch::from(10);
+
+    scheduler.done(&ep, a, true).unwrap();
+
+    assert!(scheduler.epochs.contains_key(&ep));
+    assert_eq!(scheduler.next_epoch, 11);
+}
+
+#[test]
+fn test_done_on_completed_epoch() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+
+    let ep = scheduler.add_epoch();
+    scheduler.end_epoch(ep.clone()).unwrap();
+
+    let done = scheduler.done(&ep, a, false).unwrap();
+    assert_eq!(done, vec![]);
+    assert!(!scheduler.epochs.contains_key(&ep));
+}
+
+#[test]
+fn test_done_ends_epoch() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+    let c = scheduler.interner.intern_node("c");
+    let d = scheduler.interner.intern_node("d");
+    let ep = scheduler.add_epoch();
+    scheduler.done(&ep, a, true).unwrap();
+    scheduler.done(&ep, b, true).unwrap();
+    scheduler.done(&ep, c, true).unwrap();
+
+    let done_ep = scheduler.done(&ep, d, true).unwrap();
+    assert_eq!(done_ep, vec![ep])
+}
+
+/// Basic behavior: end epoch...
+/// - garbage collects the epoch
+/// - adds it to epoch_log
+/// - returns it in a vec
+#[test]
+fn test_end_epoch() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+
+    let ep = scheduler.add_epoch();
+    let done = scheduler.end_epoch(ep.clone()).unwrap();
+    assert!(!scheduler.epochs.contains_key(&ep));
+    assert!(scheduler.epoch_log.contains(&ep.root()));
+    assert_eq!(done, vec![ep]);
+}
+
+/// when stateful nodes, previous_epoch marked done
+#[test]
+fn test_end_epoch_stateful() {
+    let mut nodes = IndexMap::new();
+    nodes.insert(
+        "a".to_string(),
+        NodeFlags {
+            enabled: true,
+            stateful: Some(true),
+        },
+    );
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(nodes, edges).unwrap();
+
+    let ep = scheduler.add_epoch();
+    assert_eq!(ep.root(), 0);
+
+    scheduler.end_epoch(ep.clone()).unwrap();
+    let next = Epoch::from(1);
+    assert!(scheduler
+        .epochs
+        .get(&next)
+        .unwrap()
+        .done
+        .contains(&PREVIOUS_EPOCH));
+}

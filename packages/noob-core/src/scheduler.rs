@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 
 use crate::epoch::Epoch;
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{Interner, ASSETS_NODE, INPUT_NODE, PREVIOUS_EPOCH};
+use crate::item::{Interner, PREVIOUS_EPOCH};
 use crate::toposort::{EdgeRec, NodeFlags, Sorter};
 
 pub struct Scheduler {
@@ -105,7 +105,7 @@ impl Scheduler {
     }
 
     fn get_ready_at(&mut self, epoch: &Epoch) -> Vec<(Epoch, u16)> {
-        let graph = self.epochs.get_mut(&epoch);
+        let graph = self.epochs.get_mut(epoch);
         match graph {
             Some(graph) => graph
                 .get_ready(&self.interner)
@@ -114,6 +114,91 @@ impl Scheduler {
                 .collect(),
             None => Vec::new(),
         }
+    }
+
+    pub fn done(&mut self, epoch: &Epoch, item: u16, with_signals: bool) -> CoreResult<Vec<Epoch>> {
+        if self.epoch_log.contains(&epoch.root()) {
+            // TODO: debug logging
+            return Ok(Vec::new());
+        }
+
+        if !self.epochs.contains_key(epoch) {
+            self.add_epoch_at(epoch.clone())?;
+        }
+        let graph = self.epochs.get_mut(epoch).expect("Epoch was just added");
+
+        // TODO: Suppress error if subepochs
+        graph.done(&self.interner, &[item])?;
+
+        if !self.interner.is_signal(item) && with_signals {
+            if let Some(signals) = graph.signals.get(&item) {
+                let signals: Vec<u16> = signals.difference(&graph.done).copied().collect();
+                graph.done(&self.interner, &signals)?;
+            }
+        }
+
+        // TODO: mark subepochs done
+        let mut current = epoch.clone();
+        while let Some(parent) = current.parent() {
+            let parent_graph = self
+                .epochs
+                .get_mut(&parent)
+                .expect("Subepoch parents should always be active while subepochs are");
+            parent_graph.mark_expired(&[item], false);
+            current = parent;
+        }
+
+        // TODO: general add operator for epoch to check next subepoch
+        // let next = Epoch::from(epoch.root() + 1);
+        // TODO: add source_nodes collection for correct checking
+        // if epoch.segments().len() == 1
+        //     && !self.epochs.contains_key(&next)
+        //     && !self.epoch_log.contains(&next.root())
+        // {
+        //     self.add_epoch_at(next)?;
+        // }
+
+        if !self.is_active_at(epoch) {
+            return self.end_epoch(epoch.clone());
+        }
+
+        Ok(Vec::new())
+    }
+
+    pub fn end_epoch(&mut self, epoch: impl Into<Epoch>) -> CoreResult<Vec<Epoch>> {
+        let epoch = epoch.into();
+        // signal this epoch has been completed to any successive epochs
+        // we create root epoch graphs here -
+        // the most common place to do so for tubes with stateful nodes.
+        // epochs are created elsewhere when explicitly iterating epochs with `iter_epoch`
+        // or when we receive out of order events e.g. in `update`
+        // TODO: subepochs
+        let mut events: Vec<Epoch> = Vec::new();
+        let next = Epoch::from(epoch.root() + 1);
+        if !self.epochs.contains_key(&next) && !self.epoch_log.contains(&next.root()) {
+            self.add_epoch_at(next.clone())?;
+        }
+
+        // Mark this epoch done to unlock stateful nodes in successor epoch
+        if self.epochs.contains_key(&next) {
+            match self.done(&next, PREVIOUS_EPOCH, false) {
+                Ok(mut ended) => events.append(&mut ended),
+                Err(
+                    CoreError::AlreadyDone(_)
+                    | CoreError::NotAdded(_)
+                    | CoreError::EpochCompleted(_),
+                ) => {}
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Log the epoch as completed
+        // TODO: Trim epoch log
+        // TODO: Subepochs
+        self.epoch_log.insert(epoch.root());
+        self.epochs.remove(&epoch);
+        events.push(epoch);
+        Ok(events)
     }
 }
 
