@@ -1,12 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use indexmap::IndexMap;
-
 use crate::epoch::Epoch;
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{Interner, PREVIOUS_EPOCH};
+use crate::item::{Interner, Item, PREVIOUS_EPOCH};
 use crate::toposort::{EdgeRec, NodeFlags, Sorter};
+use crate::tube::downstream_nodes;
 use crate::FxIndexSet;
+use indexmap::IndexMap;
+use rustc_hash::FxHashMap;
 
 const DEFAULT_EPOCH_LOG_LEN: u32 = 1000;
 
@@ -18,6 +19,7 @@ pub struct Scheduler {
 
     /// A frozen initial-state topo sorter to copy from
     template: Sorter,
+    subgraph_templates: FxHashMap<u16, Sorter>,
     source_nodes: FxIndexSet<u16>,
 
     epochs: BTreeMap<Epoch, Sorter>,
@@ -26,8 +28,7 @@ pub struct Scheduler {
 
     next_epoch: u32,
     // TODO: the rest of the fields
-    // subepochs: HashMap<Epoch, IndexSet<Epoch>>,
-    // source_nodes: Vec<String>,
+    subepochs: FxHashMap<Epoch, FxIndexSet<Epoch>>,
 }
 
 impl Scheduler {
@@ -43,11 +44,13 @@ impl Scheduler {
             edges,
             interner,
             template,
+            subgraph_templates: FxHashMap::default(),
             source_nodes,
             epochs: BTreeMap::new(),
             epoch_log: BTreeSet::new(),
             epoch_log_len: DEFAULT_EPOCH_LOG_LEN,
             next_epoch: 0,
+            subepochs: FxHashMap::default(),
         })
     }
 
@@ -72,6 +75,18 @@ impl Scheduler {
         }
     }
 
+    pub fn add_subepoch(&mut self, epoch: impl Into<Epoch>) -> CoreResult<Epoch> {
+        let epoch = epoch.into();
+        if self.epochs.contains_key(&epoch) {
+            Err(CoreError::EpochExists(epoch))
+        } else if self.epoch_completed(&epoch) {
+            Err(CoreError::EpochCompleted(epoch))
+        } else {
+            self.init_subgraph(epoch.clone())?;
+            Ok(epoch)
+        }
+    }
+
     /// Clone the topo sorter, add it to the epochs map, and mark previous epoch if completed
     /// TODO: subgraphs for subepochs
     fn init_graph(&mut self, epoch: Epoch) -> CoreResult<()> {
@@ -85,6 +100,104 @@ impl Scheduler {
 
         self.epochs.insert(epoch, graph);
         Ok(())
+    }
+
+    fn init_subgraph(&mut self, epoch: Epoch) -> CoreResult<()> {
+        let Some(immediate_parent) = epoch.parent() else {
+            return Err(CoreError::Value(format!(
+                "Cannot create a subepoch for root epoch {epoch}"
+            )));
+        };
+        let node_id = epoch.segments().last().unwrap().node;
+
+        let mut subgraph = self.get_subgraph_template(&node_id)?;
+        let parent = match self.epochs.get(&immediate_parent) {
+            Some(parent) => parent,
+            None => {
+                if immediate_parent.segments().len() > 1 {
+                    self.init_subgraph(immediate_parent.clone())?;
+                } else {
+                    self.init_graph(immediate_parent.clone())?;
+                }
+                self.epochs
+                    .get(&immediate_parent)
+                    .expect("Epoch was just created")
+            }
+        };
+
+        // update the subgraph to match the parent state
+        // mark any nodes that are completed in the parent as completed in the subepoch
+        // EXCEPT don't expire the node that induced the subepoch or its signals -
+        // we expect that the subepoch is typically created during an `update` call
+        // where we'll be handling done or expiredness of the signals separately.
+
+        let mut exclude_current = parent
+            .signals
+            .get(&node_id)
+            .cloned()
+            .unwrap_or(FxIndexSet::default());
+        exclude_current.insert(node_id);
+        let subgraph_keys: Vec<u16> = subgraph.info.keys().copied().collect();
+        for parent_dep in subgraph_keys {
+            if parent.ran.contains(&parent_dep) {
+                subgraph.done(&self.interner, &[parent_dep])?;
+            } else if parent.done.contains(&parent_dep) && !exclude_current.contains(&parent_dep) {
+                subgraph.mark_expired(&[parent_dep], false);
+            } else if parent.out.contains(&parent_dep) {
+                subgraph.mark_out(&FxIndexSet::from_iter([parent_dep]));
+            }
+        }
+
+        let done_in_parent = parent.done.contains(&node_id);
+
+        for parent_ep in epoch.parents() {
+            self.subepochs
+                .entry(parent_ep)
+                .or_default()
+                .insert(epoch.clone());
+        }
+
+        self.epochs.insert(epoch, subgraph);
+
+        // a node inducing subepochs expires the node in the (immediate) parent epoch
+        if !done_in_parent {
+            self.expire(&immediate_parent, node_id, false, false)?;
+        }
+
+        Ok(())
+    }
+
+    /// Get or make a cached subgraph template
+    fn get_subgraph_template(&mut self, node_id: &u16) -> CoreResult<Sorter> {
+        if let Some(template) = self.subgraph_templates.get(&node_id) {
+            Ok(template.clone())
+        } else {
+            let node_name = match self.interner.resolve(*node_id) {
+                Item::Node(node_name) => node_name,
+                Item::Signal(_, _) => {
+                    return Err(CoreError::Value(
+                        "Subgraphs can only be created by nodes".parse().unwrap(),
+                    ))
+                }
+            };
+
+            let downstream = downstream_nodes(&self.edges, &node_name, &FxIndexSet::default());
+            let nodes: IndexMap<String, NodeFlags> = downstream
+                .iter()
+                .copied()
+                .filter(|n| self.nodes.contains_key(*n))
+                .map(|n| (String::from(n), self.nodes.get(n).unwrap().clone()))
+                .collect();
+            let edges: Vec<EdgeRec> = self
+                .edges
+                .iter()
+                .filter(|e| downstream.contains(e.target_node.as_str()))
+                .cloned()
+                .collect();
+            let subgraph = Sorter::from_graph(&mut self.interner, &nodes, &edges)?;
+            self.subgraph_templates.insert(*node_id, subgraph.clone());
+            Ok(subgraph)
+        }
     }
 
     pub fn iter_epoch(&mut self) -> EpochIter<'_> {
@@ -178,14 +291,12 @@ impl Scheduler {
         }
 
         // TODO: mark subepochs done
-        let mut current = epoch.clone();
-        while let Some(parent) = current.parent() {
+        for parent in epoch.parents() {
             let parent_graph = self
                 .epochs
                 .get_mut(&parent)
                 .expect("Subepoch parents should always be active while subepochs are");
             parent_graph.mark_expired(&[item], false);
-            current = parent;
         }
 
         // TODO: general add operator for epoch to check next subepoch

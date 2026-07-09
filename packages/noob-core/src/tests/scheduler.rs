@@ -602,3 +602,116 @@ fn test_iter_ready_crosses_epochs() {
 
     assert_eq!(epochs_seen, vec![0, 0, 0, 1]);
 }
+
+/// a root epoch has no parent to hang a subepoch on
+#[test]
+fn test_add_subepoch_root() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+
+    let err = scheduler.add_subepoch(Epoch::from(5)).unwrap_err();
+    assert!(matches!(err, CoreError::Value(_)));
+}
+
+
+#[test]
+fn test_add_subepoch() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let a1 = scheduler.interner.intern_signal("a", "a1");
+    let b = scheduler.interner.intern_node("b");
+    let c = scheduler.interner.intern_node("c");
+
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, true).unwrap();
+    // pull [b, c] - both pass out, as they would be mid-update
+    scheduler.get_ready_at(&ep);
+
+    let subep = scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+
+    // registered under the parent
+    assert!(scheduler.subepochs[&ep].contains(&subep));
+
+    // nothing is ready to issue in the fresh subepoch
+    let subgraph = scheduler.epochs.get(&subep).unwrap();
+    assert!(subgraph.done.contains(&a1));
+    assert!(subgraph.out.contains(&b));
+    assert!(subgraph.out.contains(&c));
+    assert_eq!(scheduler.get_ready_at(&subep), vec![]);
+
+    // inducing node expired in the parent: done there, but never ran
+    let parent = scheduler.epochs.get(&ep).unwrap();
+    assert!(parent.done.contains(&b));
+    assert!(!parent.ran.contains(&b));
+}
+
+/// nodes that are expired in the parent carry over
+/// so the subepoch doesn't wait on signals that will never fire.
+/// c stays out in the parent so the parent survives the inducing-node expiry
+#[test]
+fn test_add_subepoch_expired_state() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+    let c1 = scheduler.interner.intern_signal("c", "c1");
+    let d = scheduler.interner.intern_node("d");
+
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, true).unwrap();
+    scheduler.get_ready_at(&ep);
+    // c ran but emitted NoEvent on c1
+    scheduler.expire(&ep, c1, false, false).unwrap();
+
+    let subep = scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+
+    // c1 expires in the parent carries into the subepoch as expired
+    let subgraph = scheduler.epochs.get(&subep).unwrap();
+    assert!(subgraph.done.contains(&c1));
+    assert!(!subgraph.ran.contains(&c1));
+
+    // b's events complete cleanly, but d stays blocked: an expired required
+    // predecessor never unblocks its successors - the subepoch mirrors the
+    // parent's fate for d
+    scheduler.done(&subep, b, true).unwrap();
+    assert!(!scheduler.epochs[&subep].ready.contains(&d));
+    assert_eq!(scheduler.get_ready_at(&subep), vec![]);
+}
+
+/// subgraph templates are cached per inducing node: sibling subepochs
+/// share one template
+#[test]
+fn test_subgraph_template_cached() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, true).unwrap();
+
+    scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+    scheduler.add_subepoch(&ep / (b, 1)).unwrap();
+
+    assert_eq!(scheduler.subgraph_templates.len(), 1);
+    assert!(scheduler.epochs.contains_key(&(&ep / (b, 0))));
+    assert!(scheduler.epochs.contains_key(&(&ep / (b, 1))));
+}
+
+/// out-of-order subepoch creation materializes the missing parent chain
+#[test]
+fn test_add_subepoch_missing_parent() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let b = scheduler.interner.intern_node("b");
+
+    let subep = scheduler.add_subepoch(Epoch::from(0) / (b, 0)).unwrap();
+
+    assert!(scheduler.epochs.contains_key(&Epoch::from(0)));
+    assert!(scheduler.epochs.contains_key(&subep));
+    assert!(scheduler.subepochs[&Epoch::from(0)].contains(&subep));
+}
