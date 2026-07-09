@@ -87,6 +87,38 @@ impl Scheduler {
         Ok(())
     }
 
+    pub fn iter_epoch(&mut self) -> EpochIter<'_> {
+        let epoch = self
+            .epochs
+            .iter()
+            .find(|(_, sorter)| sorter.is_active())
+            .map(|(epoch, _)| epoch.clone())
+            .unwrap_or_else(|| self.add_epoch());
+
+        EpochIter {
+            scheduler: self,
+            epoch,
+        }
+    }
+
+    pub fn iter_epoch_at(&mut self, epoch: impl Into<Epoch>) -> CoreResult<EpochIter<'_>> {
+        let epoch = epoch.into();
+        if !self.epochs.contains_key(&epoch) {
+            self.add_epoch_at(epoch.clone())?;
+        }
+        Ok(EpochIter {
+            scheduler: self,
+            epoch,
+        })
+    }
+
+    pub fn iter_ready(&mut self) -> ReadyIter<'_> {
+        if !self.is_active() {
+            self.add_epoch();
+        }
+        ReadyIter { scheduler: self }
+    }
+
     /// Is the scheduler active in any epoch?
     pub fn is_active(&self) -> bool {
         self.epochs.values().any(|sorter| sorter.is_active())
@@ -273,6 +305,71 @@ impl Scheduler {
                 (&epoch.root() < first || self.epoch_log.contains(&epoch.root()))
                     && !self.epochs.contains_key(epoch)
             }
+        }
+    }
+}
+
+pub struct EpochIter<'a> {
+    scheduler: &'a mut Scheduler,
+    epoch: Epoch,
+}
+
+impl EpochIter<'_> {
+    pub fn done(&mut self, item: u16, with_signals: bool) -> CoreResult<Vec<Epoch>> {
+        self.scheduler.done(&self.epoch, item, with_signals)
+    }
+
+    pub fn expire(
+        &mut self,
+        item: u16,
+        with_signals: bool,
+        unlock_optionals: bool,
+    ) -> CoreResult<Vec<Epoch>> {
+        self.scheduler
+            .expire(&self.epoch, item, with_signals, unlock_optionals)
+    }
+}
+
+impl Iterator for EpochIter<'_> {
+    type Item = Vec<(Epoch, u16)>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.scheduler.is_active_at(&self.epoch) {
+            None
+        } else {
+            Some(self.scheduler.get_ready_at(&self.epoch))
+        }
+    }
+}
+
+pub struct ReadyIter<'a> {
+    scheduler: &'a mut Scheduler,
+}
+
+impl ReadyIter<'_> {
+    pub fn done(&mut self, epoch: &Epoch, item: u16, with_signals: bool) -> CoreResult<Vec<Epoch>> {
+        self.scheduler.done(epoch, item, with_signals)
+    }
+
+    pub fn expire(
+        &mut self,
+        epoch: &Epoch,
+        item: u16,
+        with_signals: bool,
+        unlock_optionals: bool,
+    ) -> CoreResult<Vec<Epoch>> {
+        self.scheduler
+            .expire(epoch, item, with_signals, unlock_optionals)
+    }
+}
+
+impl Iterator for ReadyIter<'_> {
+    type Item = Vec<(Epoch, u16)>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let ready = self.scheduler.get_ready();
+        if ready.is_empty() {
+            None
+        } else {
+            Some(ready)
         }
     }
 }

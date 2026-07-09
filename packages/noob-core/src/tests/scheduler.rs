@@ -499,3 +499,106 @@ fn test_expire_completed_epoch() {
     scheduler.end_epoch(ep.clone()).unwrap();
     scheduler.expire(&ep, a, true, true).unwrap();
 }
+
+#[test]
+fn test_iter_epoch_to_completion() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+    let c = scheduler.interner.intern_node("c");
+    let d = scheduler.interner.intern_node("d");
+
+    let mut batches: Vec<Vec<u16>> = Vec::new();
+    let mut it = scheduler.iter_epoch();
+    while let Some(batch) = it.next() {
+        let nodes: Vec<u16> = batch.iter().map(|(_, node)| *node).collect();
+        for &node in &nodes {
+            it.done(node, true).unwrap();
+        }
+        batches.push(nodes);
+    }
+
+    assert_eq!(batches, vec![vec![a], vec![b, c], vec![d]]);
+    assert!(scheduler.epoch_completed(&Epoch::from(0)));
+}
+
+#[test]
+fn test_iter_epoch_at_completed_epoch() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let ep = scheduler.add_epoch();
+    scheduler.end_epoch(ep.clone()).unwrap();
+
+    let Err(err) = scheduler.iter_epoch_at(ep.clone()) else {
+        panic!("iterating a completed epoch should fail");
+    };
+    assert_eq!(err, CoreError::EpochCompleted(ep));
+}
+
+/// iter_epoch_at on an epoch that doesn't exist yet creates it, like done()
+#[test]
+fn test_iter_epoch_at_missing_epoch() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+
+    let mut it = scheduler.iter_epoch_at(5).unwrap();
+    assert_eq!(it.next().unwrap(), vec![(Epoch::from(5), a)]);
+
+    assert!(scheduler.epochs.contains_key(&Epoch::from(5)));
+    assert_eq!(scheduler.next_epoch, 6);
+}
+
+/// iter_epoch trusts the caller: an epoch stalled by an unreported batch
+/// keeps yielding empty batches rather than terminating
+#[test]
+fn test_iter_epoch_stalls_with_empty_batches() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+
+    let mut it = scheduler.iter_epoch();
+    assert_eq!(it.next().unwrap(), vec![(Epoch::from(0), a)]);
+    assert_eq!(it.next().unwrap(), vec![]);
+    assert_eq!(it.next().unwrap(), vec![]);
+}
+
+#[test]
+fn test_iter_ready_stops_on_stall() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+
+    let mut it = scheduler.iter_ready();
+    assert_eq!(it.next().unwrap(), vec![(Epoch::from(0), a)]);
+    assert_eq!(it.next(), None);
+}
+
+/// iter_ready keeps yielding across an epoch boundary: ending epoch 0
+/// unlocks the stateful source in the eagerly-created epoch 1
+#[test]
+fn test_iter_ready_crosses_epochs() {
+    let edges = diamond();
+    let mut nodes = IndexMap::new();
+    nodes.insert(
+        "a".to_string(),
+        NodeFlags {
+            enabled: true,
+            stateful: Some(true),
+        },
+    );
+    let mut scheduler = Scheduler::from_graph(nodes, edges).unwrap();
+
+    let mut epochs_seen: Vec<u32> = Vec::new();
+    let mut it = scheduler.iter_ready();
+    for _ in 0..4 {
+        let batch = it.next().unwrap();
+        epochs_seen.push(batch[0].0.root());
+        for (ep, node) in batch {
+            it.done(&ep, node, true).unwrap();
+        }
+    }
+
+    assert_eq!(epochs_seen, vec![0, 0, 0, 1]);
+}

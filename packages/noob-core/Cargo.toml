@@ -30,6 +30,7 @@ semicolon_if_nothing_returned = "warn"
 trivially_copy_pass_by_ref = "warn"
 let_underscore_must_use = "warn"
 unused_result_ok = "warn"
+len_zero = "warn"
 
 [lints.rust]
 unused_must_use = "deny"
