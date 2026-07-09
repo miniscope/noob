@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 use rustc_hash::FxHashMap;
 
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{Interner, Item, PREVIOUS_EPOCH};
+use crate::item::{Interner, Item, ASSETS_NODE, INPUT_NODE, PREVIOUS_EPOCH};
 use crate::{FxIndexMap, FxIndexSet};
 
 /// The fields of `noob.edge.Edge` the sorter cares about.
@@ -320,6 +320,10 @@ impl Sorter {
             if self.expire_node(node) {
                 newly_expired.push(node);
             }
+            // clear any immediate successors from ready, if they already were added
+            if let Some(info) = self.info.get(&node) {
+                self.ready.retain(|x| !info.successors.contains(x));
+            }
         }
         if !unlock_optionals {
             return;
@@ -433,6 +437,20 @@ impl Sorter {
             .optional_successors
             .iter()
             .copied()
+            .collect()
+    }
+
+    /// Nodes within the graph that have no dependencies (except PREVIOUS_EPOCH)
+    pub fn source_nodes(&self) -> FxIndexSet<u16> {
+        let ignore = FxIndexSet::from_iter([PREVIOUS_EPOCH]);
+        self.info
+            .iter()
+            .filter(|&(&id, info)| {
+                info.predecessors.is_subset(&ignore)
+                    && !matches!(id, PREVIOUS_EPOCH | INPUT_NODE | ASSETS_NODE)
+                    && !self.disabled.contains(&id)
+            })
+            .map(|(id, _)| *id)
             .collect()
     }
 

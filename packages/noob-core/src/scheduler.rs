@@ -6,6 +6,9 @@ use crate::epoch::Epoch;
 use crate::exceptions::{CoreError, CoreResult};
 use crate::item::{Interner, PREVIOUS_EPOCH};
 use crate::toposort::{EdgeRec, NodeFlags, Sorter};
+use crate::FxIndexSet;
+
+const DEFAULT_EPOCH_LOG_LEN: u32 = 1000;
 
 pub struct Scheduler {
     nodes: IndexMap<String, NodeFlags>,
@@ -15,9 +18,11 @@ pub struct Scheduler {
 
     /// A frozen initial-state topo sorter to copy from
     template: Sorter,
+    source_nodes: FxIndexSet<u16>,
 
     epochs: BTreeMap<Epoch, Sorter>,
     epoch_log: BTreeSet<u32>,
+    epoch_log_len: u32,
 
     next_epoch: u32,
     // TODO: the rest of the fields
@@ -32,13 +37,16 @@ impl Scheduler {
     ) -> CoreResult<Scheduler> {
         let mut interner = Interner::default();
         let template = Sorter::from_graph(&mut interner, &nodes, &edges)?;
+        let source_nodes = template.source_nodes();
         Ok(Scheduler {
             nodes,
             edges,
             interner,
             template,
+            source_nodes,
             epochs: BTreeMap::new(),
             epoch_log: BTreeSet::new(),
+            epoch_log_len: DEFAULT_EPOCH_LOG_LEN,
             next_epoch: 0,
         })
     }
@@ -55,7 +63,7 @@ impl Scheduler {
         let epoch = epoch.into();
         if self.epochs.contains_key(&epoch) {
             Err(CoreError::EpochExists(epoch))
-        } else if self.epoch_log.contains(&epoch.root()) {
+        } else if self.epoch_completed(&epoch) {
             Err(CoreError::EpochCompleted(epoch))
         } else {
             self.next_epoch = self.next_epoch.max(epoch.root() + 1);
@@ -117,7 +125,7 @@ impl Scheduler {
     }
 
     pub fn done(&mut self, epoch: &Epoch, item: u16, with_signals: bool) -> CoreResult<Vec<Epoch>> {
-        if self.epoch_log.contains(&epoch.root()) {
+        if self.epoch_completed(epoch) {
             // TODO: debug logging
             return Ok(Vec::new());
         }
@@ -149,20 +157,65 @@ impl Scheduler {
         }
 
         // TODO: general add operator for epoch to check next subepoch
-        // let next = Epoch::from(epoch.root() + 1);
-        // TODO: add source_nodes collection for correct checking
-        // if epoch.segments().len() == 1
-        //     && !self.epochs.contains_key(&next)
-        //     && !self.epoch_log.contains(&next.root())
-        // {
-        //     self.add_epoch_at(next)?;
-        // }
+        let next = Epoch::from(epoch.root() + 1);
+        if epoch.segments().len() == 1
+            && self.source_nodes.contains(&item)
+            && !self.epochs.contains_key(&next)
+            && !self.epoch_log.contains(&next.root())
+            && self.sources_finished(epoch)
+        {
+            self.add_epoch_at(next)?;
+        }
 
         if !self.is_active_at(epoch) {
             return self.end_epoch(epoch.clone());
         }
 
         Ok(Vec::new())
+    }
+
+    pub fn expire(
+        &mut self,
+        epoch: &Epoch,
+        item: u16,
+        with_signals: bool,
+        unlock_optionals: bool,
+    ) -> CoreResult<Vec<Epoch>> {
+        let mut events: Vec<Epoch> = Vec::new();
+        if self.epoch_completed(epoch) {
+            // TODO: debug logging
+            return Ok(Vec::new());
+        }
+
+        if !self.epochs.contains_key(epoch) {
+            self.add_epoch_at(epoch.clone())?;
+        }
+
+        let graph = self.epochs.get_mut(epoch).expect("Epoch was just added");
+        graph.mark_expired(&[item], unlock_optionals);
+
+        if !self.interner.is_signal(item) && with_signals {
+            if let Some(signals) = graph.signals.get(&item) {
+                let signals = signals.clone();
+                for signal in signals {
+                    events.append(&mut self.expire(
+                        epoch,
+                        signal,
+                        with_signals,
+                        unlock_optionals,
+                    )?);
+                }
+            }
+        }
+
+        // TODO: expire subepochs
+
+        // end the epoch if it's over, don't double-tap in case expiring subepochs ended this epoch
+        if !self.is_active_at(epoch) && !self.epoch_completed(epoch) {
+            events.append(&mut self.end_epoch(epoch.clone())?);
+        }
+
+        Ok(events)
     }
 
     pub fn end_epoch(&mut self, epoch: impl Into<Epoch>) -> CoreResult<Vec<Epoch>> {
@@ -193,12 +246,34 @@ impl Scheduler {
         }
 
         // Log the epoch as completed
-        // TODO: Trim epoch log
         // TODO: Subepochs
         self.epoch_log.insert(epoch.root());
+        if self.epoch_log.len() > self.epoch_log_len as usize {
+            self.epoch_log.pop_first();
+        }
         self.epochs.remove(&epoch);
         events.push(epoch);
         Ok(events)
+    }
+
+    fn sources_finished(&self, epoch: &Epoch) -> bool {
+        // TODO: use epoch_completed check to handle trimmed epoch_log
+        if self.epoch_completed(epoch) {
+            return true;
+        }
+        self.epochs
+            .get(epoch)
+            .is_some_and(|sorter| self.source_nodes.is_subset(&sorter.done))
+    }
+
+    pub fn epoch_completed(&self, epoch: &Epoch) -> bool {
+        match self.epoch_log.first() {
+            None => false,
+            Some(first) => {
+                (&epoch.root() < first || self.epoch_log.contains(&epoch.root()))
+                    && !self.epochs.contains_key(epoch)
+            }
+        }
     }
 }
 

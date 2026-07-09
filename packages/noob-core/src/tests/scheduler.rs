@@ -60,6 +60,23 @@ fn test_add_epoch_at() {
     assert_eq!(next_epoch, Epoch::from(expected.root() + 1));
 }
 
+/// an epoch can't be created when it would fall below the epoch log, even if it's never actually been run
+#[test]
+fn test_add_epoch_at_below_log() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    scheduler.epoch_log_len = 5;
+
+    // epoch below log
+    for _ in 1..10 {
+        let ep = scheduler.add_epoch();
+        scheduler.end_epoch(ep.clone()).unwrap();
+    }
+
+    let err = scheduler.add_epoch_at(Epoch::from(0)).unwrap_err();
+    assert_eq!(err, CoreError::EpochCompleted(Epoch::from(0)));
+}
+
 #[test]
 fn test_add_epoch_at_out_of_order() {
     let mut scheduler = Scheduler::from_graph(IndexMap::new(), Vec::new()).unwrap();
@@ -254,7 +271,9 @@ fn test_done_on_missing_epoch() {
     scheduler.done(&ep, a, true).unwrap();
 
     assert!(scheduler.epochs.contains_key(&ep));
-    assert_eq!(scheduler.next_epoch, 11);
+    // since 'a' is a source node, epoch 11 should have been added
+    assert!(scheduler.epochs.contains_key(&Epoch::from(11)));
+    assert_eq!(scheduler.next_epoch, 12);
 }
 
 #[test]
@@ -329,4 +348,154 @@ fn test_end_epoch_stateful() {
         .unwrap()
         .done
         .contains(&PREVIOUS_EPOCH));
+}
+
+#[test]
+fn test_sources_finished() {
+    let edges = diamond();
+    let mut nodes = IndexMap::new();
+    nodes.insert(
+        "a".to_string(),
+        NodeFlags {
+            enabled: true,
+            stateful: Some(true),
+        },
+    );
+    let mut scheduler = Scheduler::from_graph(nodes, edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    assert_eq!(scheduler.source_nodes, FxIndexSet::from_iter(vec![a]));
+
+    let ep = scheduler.add_epoch();
+    assert!(!scheduler.sources_finished(&ep));
+    scheduler.done(&ep, a, true).unwrap();
+    assert!(scheduler.sources_finished(&ep));
+    assert!(scheduler.epochs.contains_key(&Epoch::from(ep.root() + 1)));
+
+    // false for epochs that haven't been added yet
+    assert!(!scheduler.sources_finished(&Epoch::from(99)))
+}
+
+#[test]
+fn test_eager_epoch_creation_when_sources_done() {
+    let edges = diamond();
+    let mut nodes = IndexMap::new();
+    nodes.insert(
+        "a".to_string(),
+        NodeFlags {
+            enabled: true,
+            stateful: Some(true),
+        },
+    );
+    let mut scheduler = Scheduler::from_graph(nodes, edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    assert_eq!(scheduler.source_nodes, FxIndexSet::from_iter(vec![a]));
+
+    // does not fire when next epoch already exists
+    let ep = scheduler.add_epoch();
+    let next = scheduler.add_epoch();
+    scheduler.done(&ep, a, true).unwrap();
+    assert!(!scheduler.epochs.contains_key(&Epoch::from(next.root() + 1)));
+
+    // does not fire when next epoch already done
+    let ep = scheduler.add_epoch();
+    let next = scheduler.add_epoch();
+    scheduler.end_epoch(next.clone()).unwrap();
+    scheduler.done(&ep, a, true).unwrap();
+    assert!(!scheduler.epochs.contains_key(&next));
+
+    // does not fire when not a source node
+    let b = scheduler.interner.intern_node("b");
+    let ep = scheduler.add_epoch();
+    let next = Epoch::from(ep.root() + 1);
+    scheduler.done(&ep, b, true).unwrap();
+    assert!(!scheduler.epochs.contains_key(&next));
+}
+
+#[test]
+fn test_epoch_log_trim() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    scheduler.epoch_log_len = 5;
+    for i in 0..20 {
+        scheduler.add_epoch_at(Epoch::from(i)).unwrap();
+    }
+
+    // normal behavior, in-order epoch completions keep the latest
+    for i in 0..10 {
+        scheduler.end_epoch(Epoch::from(i)).unwrap();
+    }
+    assert_eq!(BTreeSet::from_iter(5..10), scheduler.epoch_log);
+
+    // out of order - we still keep the highest vals
+    for i in [18, 17, 10, 19, 12, 11, 15, 16, 13, 14] {
+        scheduler.end_epoch(Epoch::from(i)).unwrap();
+    }
+    assert_eq!(BTreeSet::from_iter(15..20), scheduler.epoch_log);
+}
+
+#[test]
+fn test_epoch_completed() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    scheduler.epoch_log_len = 5;
+
+    // empty log, nothing completed
+    assert!(!scheduler.epoch_completed(&Epoch::from(0)));
+
+    // active epoch
+    let ep = scheduler.add_epoch();
+    assert!(!scheduler.epoch_completed(&ep));
+
+    // completed epoch
+    scheduler.end_epoch(ep.clone()).unwrap();
+    assert!(scheduler.epoch_completed(&ep));
+
+    // epoch below log
+    for _ in 0..10 {
+        let ep = scheduler.add_epoch();
+        scheduler.end_epoch(ep.clone()).unwrap();
+    }
+    assert!(scheduler.epoch_completed(&Epoch::from(0)));
+}
+
+/// one signal can be expired while the other lives
+#[test]
+fn test_expire_signal() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let a1 = scheduler.interner.intern_signal("a", "a1");
+    let a2 = scheduler.interner.intern_signal("a", "a2");
+    let b = scheduler.interner.intern_node("b");
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, false).unwrap();
+    scheduler.done(&ep, a1, false).unwrap();
+    scheduler.expire(&ep, a2, false, false).unwrap();
+
+    let ready = scheduler.get_ready_at(&ep);
+    assert_eq!(vec![(ep, b)], ready);
+}
+
+/// expiring a node with its signals handles ending the epoch only once
+#[test]
+fn test_expire_node() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    let ended = scheduler.expire(&ep, a, true, true).unwrap();
+    assert_eq!(ended, vec![ep]);
+}
+
+/// cleanup from python - expiring a node in a completed epoch is suppressed
+#[test]
+fn test_expire_completed_epoch() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let ep = scheduler.add_epoch();
+    scheduler.end_epoch(ep.clone()).unwrap();
+    scheduler.expire(&ep, a, true, true).unwrap();
 }

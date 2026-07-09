@@ -2,8 +2,7 @@ use indexmap::IndexSet;
 
 use super::*;
 
-fn chain() -> (Interner, Sorter) {
-    let mut interner = Interner::default();
+fn chain_graph(stateful: Option<bool>) -> (IndexMap<String, NodeFlags>, Vec<EdgeRec>) {
     let nodes: IndexMap<String, NodeFlags> = ["a", "b", "c"]
         .into_iter()
         .map(|n| {
@@ -11,7 +10,7 @@ fn chain() -> (Interner, Sorter) {
                 n.to_string(),
                 NodeFlags {
                     enabled: true,
-                    stateful: None,
+                    stateful,
                 },
             )
         })
@@ -30,6 +29,12 @@ fn chain() -> (Interner, Sorter) {
             required: true,
         },
     ];
+    (nodes, edges)
+}
+
+fn chain(stateful: Option<bool>) -> (Interner, Sorter) {
+    let (nodes, edges) = chain_graph(stateful);
+    let mut interner = Interner::default();
     let sorter = Sorter::from_graph(&mut interner, &nodes, &edges).unwrap();
     (interner, sorter)
 }
@@ -256,7 +261,7 @@ fn test_cycle() {
 #[test]
 fn test_no_cycle() {
     // a DAG has no cycle; also exercises the `chain` fixture
-    let (_interner, sorter) = chain();
+    let (_interner, sorter) = chain(None);
     assert_eq!(sorter.find_cycle(), None);
 }
 
@@ -418,4 +423,26 @@ fn test_disabled_stateful_not_added() {
     let mut interner = Interner::default();
     let sorter = Sorter::from_graph(&mut interner, &nodes, &Vec::new()).unwrap();
     assert!(!sorter.info.contains_key(&interner.intern_node("a")))
+}
+
+#[test]
+fn test_source_nodes() {
+    let (mut interner, sorter) = chain(Some(true));
+    let a = interner.intern_node("a");
+    assert_eq!(FxIndexSet::from_iter(vec![a]), sorter.source_nodes());
+}
+
+/// A disabled node is not considered a source node
+/// e.g. in the graph
+/// a -> b
+/// c -> d
+/// where `a` is disabled, `b` will never run,
+/// but a new graph should be created when `c` is done.
+#[test]
+fn test_source_nodes_disabled() {
+    let (mut nodes, edges) = chain_graph(Some(true));
+    nodes["a"].enabled = false;
+    let mut interner = Interner::default();
+    let sorter = Sorter::from_graph(&mut interner, &nodes, &edges).unwrap();
+    assert!(sorter.source_nodes().is_empty());
 }

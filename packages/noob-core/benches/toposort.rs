@@ -57,7 +57,7 @@ fn random_graph_edges(layers: u64, width: u64, seed: u64) -> Vec<EdgeRec> {
 
 fn drive(interner: &Interner, sorter: &mut Sorter) {
     while sorter.is_active() {
-        sorter.get_ready(interner, None);
+        sorter.get_ready(interner);
         let out: Vec<u16> = sorter.out.iter().copied().collect();
         sorter.done(interner, &out).unwrap();
     }
