@@ -105,15 +105,30 @@ fn test_previous_epoch_completed() {
         .contains(&PREVIOUS_EPOCH));
 
     // But not on a successive epoch whose previous epoch hasn't been completed
-    scheduler.add_epoch();
-    assert!(!scheduler.epochs[&Epoch::from(1)]
+    let ep = scheduler.add_epoch();
+    assert!(!scheduler.epochs[&ep].done.contains(&PREVIOUS_EPOCH));
+
+    // Yes marked done in the normal case
+    scheduler.end_epoch(ep.clone()).unwrap();
+    assert!(scheduler.epochs[&(ep + 1)].done.contains(&PREVIOUS_EPOCH));
+
+    // And is also marked done if out of order
+    let ep = scheduler.add_epoch_at(Epoch::from(10)).unwrap();
+    assert!(!scheduler.epochs[&ep].done.contains(&PREVIOUS_EPOCH));
+    scheduler.end_epoch(Epoch::from(9)).unwrap();
+    assert!(scheduler.epochs[&ep].done.contains(&PREVIOUS_EPOCH));
+
+    // for subepochs, sibling subepochs are marked as done
+    let root = Epoch::from(20);
+    let a = scheduler.interner.intern_node("a");
+    scheduler.add_epoch_at(root.clone()).unwrap();
+    scheduler.add_epoch_at(&root / (a, 0)).unwrap();
+    scheduler.add_epoch_at(&root / (a, 1)).unwrap();
+    assert!(!scheduler.epochs[&(&root / (a, 1))]
         .done
         .contains(&PREVIOUS_EPOCH));
-
-    // And is marked done when a later epoch is marked done
-    scheduler.epoch_log.insert(1);
-    scheduler.add_epoch();
-    assert!(scheduler.epochs[&Epoch::from(2)]
+    scheduler.end_epoch(&root / (a, 0)).unwrap();
+    assert!(scheduler.epochs[&(&root / (a, 1))]
         .done
         .contains(&PREVIOUS_EPOCH));
 }
@@ -613,7 +628,6 @@ fn test_add_subepoch_root() {
     assert!(matches!(err, CoreError::Value(_)));
 }
 
-
 #[test]
 fn test_add_subepoch() {
     let edges = diamond();
@@ -714,4 +728,294 @@ fn test_add_subepoch_missing_parent() {
     assert!(scheduler.epochs.contains_key(&Epoch::from(0)));
     assert!(scheduler.epochs.contains_key(&subep));
     assert!(scheduler.subepochs[&Epoch::from(0)].contains(&subep));
+}
+
+#[test]
+fn test_is_active_at_parent_survives_via_subepoch() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+    let c = scheduler.interner.intern_node("c");
+
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, true).unwrap();
+    scheduler.expire(&ep, c, true, true).unwrap();
+
+    // expiring b (the inducing node) drains the parent's own work entirely
+    let subep = scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+
+    assert!(!scheduler.epoch_log.contains(&ep.root()));
+    assert!(scheduler.epochs.contains_key(&ep));
+    // active purely through the subepoch
+    assert!(scheduler.is_active_at(&ep));
+
+    // fully draining the subepoch cascades:
+    // subepoch inactive -> parent inactive -> root ends.
+    // Parent's end events precede the subepoch's own
+    let ended = scheduler.done(&subep, b, true).unwrap();
+    assert_eq!(ended, vec![ep.clone(), subep.clone()]);
+
+    assert!(scheduler.epoch_log.contains(&ep.root()));
+    assert!(!scheduler.epochs.contains_key(&ep));
+    // root-end GCs the subepoch SORTERS too
+    assert!(!scheduler.epochs.contains_key(&subep));
+    // and prunes the registry
+    assert!(!scheduler.subepochs.contains_key(&ep));
+}
+
+/// a stale registry entry (subepoch GC'd, registration lingering) is
+/// tolerated - python KeyErrors here (scheduler.py:236)
+#[test]
+fn test_is_active_at_stale_registry() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let b = scheduler.interner.intern_node("b");
+
+    scheduler
+        .subepochs
+        .entry(Epoch::from(7))
+        .or_default()
+        .insert(Epoch::from(7) / (b, 0));
+
+    assert!(!scheduler.is_active_at(&Epoch::from(7)));
+}
+
+/// get_ready over an epoch includes its subepochs' ready nodes,
+/// parent first (Epoch's Ord: a prefix sorts before its extensions).
+#[test]
+fn test_get_ready_at_includes_subepochs() {
+    let mut edges = diamond();
+    edges.push(edge("x", "x1", "y", true));
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+    let c = scheduler.interner.intern_node("c");
+    let d = scheduler.interner.intern_node("d");
+    let x = scheduler.interner.intern_node("x");
+    let y = scheduler.interner.intern_node("y");
+
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep); // [a, x] out
+    scheduler.done(&ep, a, true).unwrap();
+    scheduler.get_ready_at(&ep); // [b, c] out
+
+    // c completes in the parent BEFORE the subepoch exists, so the state
+    // sync carries c1 over as genuinely done (with decrement) - the only
+    // way d can ever become ready inside the subepoch
+    scheduler.done(&ep, c, true).unwrap();
+
+    let subep = scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+    scheduler.done(&subep, b, true).unwrap(); // unblocks d in the subepoch
+    scheduler.done(&ep, x, true).unwrap(); // unblocks y in the parent
+
+    let ready = scheduler.get_ready_at(&ep);
+    assert_eq!(ready, vec![(ep.clone(), y), (subep.clone(), d)]);
+}
+
+/// done() on a missing subepoch key materializes a SUBGRAPH via the
+/// add_epoch_at fork, not a root-template clone: upstream nodes are absent
+#[test]
+fn test_done_creates_subgraph_for_subepoch_key() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, true).unwrap();
+
+    let subep = &ep / (b, 0);
+    scheduler.done(&subep, b, false).unwrap();
+
+    // a2's edge targets c, which is outside downstream(b) - its absence is
+    // what distinguishes a subgraph from a root-template clone (a itself IS
+    // present, as a1's signal-linkage parent)
+    let a2 = scheduler.interner.intern_signal("a", "a2");
+    let subgraph = scheduler.epochs.get(&subep).unwrap();
+    assert!(!subgraph.info.contains_key(&a2));
+    assert!(subgraph.done.contains(&b));
+    // the get-or-create ran the full add_subepoch semantics:
+    // registration + inducing-node expiry in the parent
+    assert!(scheduler.subepochs[&ep].contains(&subep));
+    assert!(scheduler.epochs[&ep].done.contains(&b));
+    assert!(!scheduler.epochs[&ep].ran.contains(&b));
+}
+
+/// ending a subepoch under a still-active parent: no root logging, no GC of
+/// anything (only root-end removes sorters, scheduler.py:547-562), and no
+/// eager sibling creation - we only make subepochs when told they exist,
+/// unlike root epochs, which always "theoretically exist" i guess,
+/// and we only gc when the whole epoch is done, including subepochs.
+#[test]
+fn test_end_subepoch_live_parent() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, true).unwrap();
+    scheduler.get_ready_at(&ep); // [b, c] out - parent stays active via c
+    let subep = scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+
+    let ended = scheduler.end_epoch(subep.clone()).unwrap();
+    assert_eq!(ended, vec![subep.clone()]);
+
+    assert!(!scheduler.epoch_log.contains(&ep.root()));
+    assert!(scheduler.epochs.contains_key(&ep));
+    // the subepoch's sorter survives until the ROOT ends
+    assert!(scheduler.epochs.contains_key(&subep));
+    // and no sibling was eagerly created
+    assert!(!scheduler.epochs.contains_key(&(&ep / (b, 1))));
+}
+
+/// AlreadyDone propagates on a plain epoch but is suppressed when the epoch
+/// has subepochs (scheduler.py:415-417) - subepoch bookkeeping may
+/// legitimately have marked the node first
+#[test]
+fn test_already_done_suppressed_with_subepochs() {
+    // plain epoch: second done errors
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let ep = scheduler.add_epoch();
+    scheduler.done(&ep, a, false).unwrap();
+    let err = scheduler.done(&ep, a, false).unwrap_err();
+    assert!(matches!(err, CoreError::AlreadyDone(_)));
+
+    // epoch with subepochs: second done is swallowed
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, true).unwrap();
+    scheduler.get_ready_at(&ep);
+    scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+
+    assert_eq!(scheduler.done(&ep, a, false).unwrap(), vec![]);
+}
+
+/// expiring a non-inducing node in the parent recurses into subepochs
+#[test]
+fn test_expire_recurses_subepochs() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+    let c = scheduler.interner.intern_node("c");
+
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, true).unwrap();
+    scheduler.get_ready_at(&ep); // [b, c] out
+    let subep = scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+
+    // c did not induce the subepoch: its expiry propagates there
+    scheduler.expire(&ep, c, false, false).unwrap();
+    let subgraph = scheduler.epochs.get(&subep).unwrap();
+    assert!(subgraph.done.contains(&c));
+    assert!(!subgraph.ran.contains(&c));
+
+    // b induced it: expiring b in the parent leaves the subepoch's b alone
+    scheduler.expire(&ep, b, false, false).unwrap();
+    assert!(!scheduler.epochs[&subep].done.contains(&b));
+}
+
+/// the inducing-node skip goes by the item's NODE: expiring a *signal* of
+/// the inducing node in the parent must also skip that node's subepoch
+/// (python compares node_id, scheduler.py:477)
+#[test]
+fn test_expire_signal_skips_inducing_subepoch() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+    let b1 = scheduler.interner.intern_signal("b", "b1");
+
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, true).unwrap();
+    scheduler.get_ready_at(&ep);
+    let subep = scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+
+    // b1 belongs to b, the inducing node - the subepoch handles its own b1
+    scheduler.expire(&ep, b1, false, false).unwrap();
+    assert!(!scheduler.epochs[&subep].done.contains(&b1));
+}
+
+/// a node expired in the parent carries into the
+/// subepoch as expired; when the node later completes for real, the parent
+/// hits AlreadyDone (suppressed - subepochs exist), and done_subepochs
+/// resurrects the subepoch's expired entry into properly-done.
+#[test]
+fn test_done_subepochs_resurrects_expired() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+    let c = scheduler.interner.intern_node("c");
+
+    let ep = scheduler.add_epoch();
+    scheduler.get_ready_at(&ep);
+    scheduler.done(&ep, a, true).unwrap();
+    scheduler.get_ready_at(&ep); // [b, c] out
+    scheduler.expire(&ep, c, false, false).unwrap();
+
+    let subep = scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+    // carried over as expired
+    assert!(scheduler.epochs[&subep].done.contains(&c));
+    assert!(!scheduler.epochs[&subep].ran.contains(&c));
+
+    // the late "c actually completed" event
+    scheduler.done(&ep, c, false).unwrap();
+    assert!(scheduler.epochs[&subep].ran.contains(&c));
+}
+
+/// Exclusive-downstream expiry (the gather case):
+/// with a subepoch induced by b, completing a marks c - downstream of a but
+/// unreachable from b - as expired in the subepoch: c only runs in the
+/// parent. Deliberate divergence: python filters our_subgraph through the
+/// spec'd-nodes map purely for convention reasons, noob tubes always have node specs;
+/// rust moves nodes by topology alone, so edge-only nodes are treated the same as spec'd ones.
+#[test]
+fn test_done_subepochs_exclusive_expiry() {
+    let edges = diamond();
+    let nodes: IndexMap<String, NodeFlags> = ["a", "b", "c", "d"]
+        .into_iter()
+        .map(|n| {
+            (
+                n.to_string(),
+                NodeFlags {
+                    enabled: true,
+                    stateful: None,
+                },
+            )
+        })
+        .collect();
+    let mut scheduler = Scheduler::from_graph(nodes, edges).unwrap();
+    let a = scheduler.interner.intern_node("a");
+    let b = scheduler.interner.intern_node("b");
+    let c = scheduler.interner.intern_node("c");
+
+    let ep = scheduler.add_epoch();
+    // subepoch exists before a completes
+    let subep = scheduler.add_subepoch(&ep / (b, 0)).unwrap();
+
+    scheduler.done(&ep, a, false).unwrap();
+
+    let subgraph = scheduler.epochs.get(&subep).unwrap();
+    // a propagated as properly done
+    assert!(subgraph.ran.contains(&a));
+    // c is exclusively downstream of a (unreachable from b): expired
+    assert!(subgraph.done.contains(&c));
+    assert!(!subgraph.ran.contains(&c));
+
+    // skip-if-ran: a second completion event is inert, not an error
+    scheduler.done(&ep, a, false).unwrap();
 }

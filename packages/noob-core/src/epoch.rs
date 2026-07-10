@@ -59,6 +59,10 @@ impl Epoch {
     pub fn root(&self) -> u32 {
         self.0[0].epoch
     }
+
+    pub fn leaf(&self) -> &EpochSegment {
+        self.0.last().expect("Epoch can't be empty")
+    }
 }
 
 impl From<u32> for Epoch {

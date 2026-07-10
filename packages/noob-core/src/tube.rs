@@ -1,10 +1,11 @@
+//! Tube helpers from rust :)
+//! Just mirroring the python structure for now for ported code
+
 use crate::toposort::EdgeRec;
 use crate::FxIndexMap;
 use crate::FxIndexSet;
 
-/// Tube helpers from rust :)
-/// Just mirroring the python structure for now for ported code
-
+/// Compute all the nodes downsream (that depend on) a given node.
 pub fn downstream_nodes<'a>(
     edges: &'a [EdgeRec],
     node: &'a str,
