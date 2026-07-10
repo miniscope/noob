@@ -3,9 +3,9 @@
 //! exactly in sync with `_random_graph_edges` there.
 use criterion::{criterion_group, criterion_main, Criterion};
 use indexmap::IndexMap;
-
 use noob_core::item::Interner;
 use noob_core::toposort::{EdgeRec, Sorter};
+use noob_core::FxIndexMap;
 
 /// Tiny deterministic PRNG, implemented identically in python
 struct Lcg(u64);
@@ -70,12 +70,12 @@ fn bench_sorter(c: &mut Criterion) {
         c.bench_function(&format!("random_graph_creation/{name}"), |b| {
             b.iter(|| {
                 let mut interner = Interner::default();
-                Sorter::from_graph(&mut interner, &IndexMap::new(), &edges).unwrap()
+                Sorter::from_graph(&mut interner, &FxIndexMap::default(), &edges).unwrap()
             })
         });
 
         let mut interner = Interner::default();
-        let template = Sorter::from_graph(&mut interner, &IndexMap::new(), &edges).unwrap();
+        let template = Sorter::from_graph(&mut interner, &FxIndexMap::default(), &edges).unwrap();
 
         // counterpart of python's deepcopy: per-epoch frozen-template copy
         c.bench_function(&format!("random_graph_clone/{name}"), |b| {

@@ -22,7 +22,7 @@ fn diamond() -> Vec<EdgeRec> {
 #[test]
 fn test_from_graph() {
     let edges = diamond();
-    let scheduler = Scheduler::from_graph(IndexMap::new(), edges.clone())
+    let scheduler = Scheduler::from_graph(FxIndexMap::default(), edges.clone())
         .expect("couldnt even create the most basic graph");
     assert_eq!(scheduler.edges, edges);
     assert!(scheduler.epochs.is_empty())
@@ -30,7 +30,7 @@ fn test_from_graph() {
 
 #[test]
 fn test_add_epoch() {
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), Vec::new()).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), Vec::new()).unwrap();
     let epoch = scheduler.add_epoch();
     assert_eq!(epoch.root(), 0);
     assert!(scheduler.epochs.contains_key(&epoch));
@@ -41,7 +41,7 @@ fn test_add_epoch() {
 
 #[test]
 fn test_add_epoch_at() {
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), Vec::new()).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), Vec::new()).unwrap();
     let expected = Epoch::from(10);
     let epoch = scheduler.add_epoch_at(expected.clone()).unwrap();
     assert_eq!(epoch, expected);
@@ -79,7 +79,7 @@ fn test_add_epoch_at_below_log() {
 
 #[test]
 fn test_add_epoch_at_out_of_order() {
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), Vec::new()).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), Vec::new()).unwrap();
     scheduler.add_epoch_at(Epoch::from(10)).unwrap();
     scheduler.add_epoch_at(Epoch::from(7)).unwrap();
     let epoch = scheduler.add_epoch();
@@ -88,7 +88,7 @@ fn test_add_epoch_at_out_of_order() {
 
 #[test]
 fn test_previous_epoch_completed() {
-    let mut nodes = IndexMap::new();
+    let mut nodes = FxIndexMap::default();
     nodes.insert(
         "a".to_string(),
         NodeFlags {
@@ -135,7 +135,7 @@ fn test_previous_epoch_completed() {
 
 #[test]
 fn test_is_active() {
-    let mut nodes = IndexMap::new();
+    let mut nodes = FxIndexMap::default();
     nodes.insert(
         "a".to_string(),
         NodeFlags {
@@ -163,7 +163,7 @@ fn test_is_active() {
 
 #[test]
 fn test_is_active_at() {
-    let mut nodes = IndexMap::new();
+    let mut nodes = FxIndexMap::default();
     nodes.insert(
         "a".to_string(),
         NodeFlags {
@@ -189,7 +189,7 @@ fn test_is_active_at() {
 #[test]
 fn test_get_ready() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let a = scheduler.interner.intern_node("a");
     let a1 = scheduler.interner.intern_signal("a", "a1");
     let a2 = scheduler.interner.intern_signal("a", "a2");
@@ -216,7 +216,7 @@ fn test_get_ready() {
 #[test]
 fn test_get_ready_at() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let a = scheduler.interner.intern_node("a");
     let a1 = scheduler.interner.intern_signal("a", "a1");
     let a2 = scheduler.interner.intern_signal("a", "a2");
@@ -238,7 +238,7 @@ fn test_get_ready_at() {
 #[test]
 fn test_done_without_signals() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let a = scheduler.interner.intern_node("a");
     let a1 = scheduler.interner.intern_signal("a", "a1");
     let a2 = scheduler.interner.intern_signal("a", "a2");
@@ -258,7 +258,7 @@ fn test_done_without_signals() {
 #[test]
 fn test_done_with_signals() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let a = scheduler.interner.intern_node("a");
     let a1 = scheduler.interner.intern_signal("a", "a1");
     let a2 = scheduler.interner.intern_signal("a", "a2");
@@ -279,7 +279,7 @@ fn test_done_with_signals() {
 #[test]
 fn test_done_on_missing_epoch() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let a = scheduler.interner.intern_node("a");
     let ep = Epoch::from(10);
 
@@ -294,7 +294,7 @@ fn test_done_on_missing_epoch() {
 #[test]
 fn test_done_on_completed_epoch() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let a = scheduler.interner.intern_node("a");
 
     let ep = scheduler.add_epoch();
@@ -308,7 +308,7 @@ fn test_done_on_completed_epoch() {
 #[test]
 fn test_done_ends_epoch() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let a = scheduler.interner.intern_node("a");
     let b = scheduler.interner.intern_node("b");
     let c = scheduler.interner.intern_node("c");
@@ -329,7 +329,7 @@ fn test_done_ends_epoch() {
 #[test]
 fn test_end_epoch() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::new(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
 
     let ep = scheduler.add_epoch();
     let done = scheduler.end_epoch(ep.clone()).unwrap();
@@ -341,7 +341,7 @@ fn test_end_epoch() {
 /// when stateful nodes, previous_epoch marked done
 #[test]
 fn test_end_epoch_stateful() {
-    let mut nodes = IndexMap::new();
+    let mut nodes = FxIndexMap::default();
     nodes.insert(
         "a".to_string(),
         NodeFlags {
@@ -368,7 +368,7 @@ fn test_end_epoch_stateful() {
 #[test]
 fn test_sources_finished() {
     let edges = diamond();
-    let mut nodes = IndexMap::new();
+    let mut nodes = FxIndexMap::default();
     nodes.insert(
         "a".to_string(),
         NodeFlags {
@@ -393,7 +393,7 @@ fn test_sources_finished() {
 #[test]
 fn test_eager_epoch_creation_when_sources_done() {
     let edges = diamond();
-    let mut nodes = IndexMap::new();
+    let mut nodes = FxIndexMap::default();
     nodes.insert(
         "a".to_string(),
         NodeFlags {
@@ -595,7 +595,7 @@ fn test_iter_ready_stops_on_stall() {
 #[test]
 fn test_iter_ready_crosses_epochs() {
     let edges = diamond();
-    let mut nodes = IndexMap::new();
+    let mut nodes = FxIndexMap::default();
     nodes.insert(
         "a".to_string(),
         NodeFlags {
@@ -986,7 +986,7 @@ fn test_done_subepochs_resurrects_expired() {
 #[test]
 fn test_done_subepochs_exclusive_expiry() {
     let edges = diamond();
-    let nodes: IndexMap<String, NodeFlags> = ["a", "b", "c", "d"]
+    let nodes: FxIndexMap<String, NodeFlags> = ["a", "b", "c", "d"]
         .into_iter()
         .map(|n| {
             (

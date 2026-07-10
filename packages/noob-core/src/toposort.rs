@@ -68,7 +68,7 @@ impl Sorter {
     /// Port of `TopoSorter.__init__` from a node map and edge list
     pub fn from_graph(
         interner: &mut Interner,
-        nodes: &IndexMap<String, NodeFlags>,
+        nodes: &FxIndexMap<String, NodeFlags>,
         edges: &[EdgeRec],
     ) -> CoreResult<Sorter> {
         let mut sorter = Sorter::default();

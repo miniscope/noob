@@ -11,6 +11,9 @@ readme = "README.md"
 repository = "https://github.com/miniscope/noob"
 license = {text = "MIT"}
 
+[dependency-groups]
+test = ["pytest", "noob"]
+
 [project.urls]
 homepage = "https://noob.readthedocs.io"
 documentation = "https://noob.readthedocs.io"

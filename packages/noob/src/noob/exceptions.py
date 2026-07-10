@@ -1,4 +1,8 @@
-class NoobError(Exception):
+from noob_core.exceptions import *  # noqa: F403
+from noob_core.exceptions import NoobCoreError
+
+
+class NoobError(NoobCoreError):
     """Base exception type"""
 
 
@@ -18,10 +22,6 @@ class ConfigError(NoobError):
 
 class ConfigWarning(NoobWarning):
     """Base config warning type"""
-
-
-class SchedulerError(NoobError):
-    """Base error in the scheduler"""
 
 
 class StoreError(NoobError):
@@ -81,30 +81,6 @@ class ExtraInputWarning(InputWarning, RuntimeWarning):
     """
     Extra input was provided in some scope where it was not specified,
     but it was ignorable
-    """
-
-
-class EpochCompletedError(SchedulerError, ValueError):
-    """
-    An epoch was already completed, but some attempt was made to update it or use it.
-    """
-
-
-class EpochExistsError(SchedulerError, ValueError):
-    """
-    Epoch already exists and is active, but attempted to create it.
-    """
-
-
-class NotAddedError(SchedulerError, ValueError):
-    """
-    Node was marked done but wasn't added!
-    """
-
-
-class AlreadyDoneError(SchedulerError, ValueError):
-    """
-    Node was marked done, but it was already done!
     """
 
 

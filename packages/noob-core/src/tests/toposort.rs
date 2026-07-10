@@ -2,8 +2,8 @@ use indexmap::IndexSet;
 
 use super::*;
 
-fn chain_graph(stateful: Option<bool>) -> (IndexMap<String, NodeFlags>, Vec<EdgeRec>) {
-    let nodes: IndexMap<String, NodeFlags> = ["a", "b", "c"]
+fn chain_graph(stateful: Option<bool>) -> (FxIndexMap<String, NodeFlags>, Vec<EdgeRec>) {
+    let nodes: FxIndexMap<String, NodeFlags> = ["a", "b", "c"]
         .into_iter()
         .map(|n| {
             (
@@ -298,7 +298,7 @@ fn optional_graph() -> (Interner, Sorter) {
         edge("b", "b1", "c", true),
         edge("c", "c1", "d", false),
     ];
-    let sorter = Sorter::from_graph(&mut interner, &IndexMap::new(), &edges).unwrap();
+    let sorter = Sorter::from_graph(&mut interner, &FxIndexMap::default(), &edges).unwrap();
     (interner, sorter)
 }
 
@@ -412,7 +412,7 @@ fn test_unlock_optionals_false() {
 /// Regression - ensure that nodes that are disabled are not added to the graph even when stateful
 #[test]
 fn test_disabled_stateful_not_added() {
-    let mut nodes: IndexMap<String, NodeFlags> = IndexMap::new();
+    let mut nodes: FxIndexMap<String, NodeFlags> = FxIndexMap::default();
     nodes.insert(
         "a".to_string(),
         NodeFlags {

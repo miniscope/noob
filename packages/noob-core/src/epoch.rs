@@ -1,7 +1,7 @@
+use crate::exceptions::CoreError;
+use crate::item::TUBE_NODE;
 use std::fmt;
 use std::ops::{Add, Div};
-
-use crate::item::TUBE_NODE;
 
 // TODO: Make some frozen "SmallEpoch" with a burned in tube ID?
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
@@ -71,6 +71,17 @@ impl From<u32> for Epoch {
             node: TUBE_NODE,
             epoch: number,
         }])
+    }
+}
+
+impl TryFrom<Vec<EpochSegment>> for Epoch {
+    type Error = CoreError;
+    fn try_from(segments: Vec<EpochSegment>) -> Result<Epoch, CoreError> {
+        if segments.is_empty() {
+            Err(CoreError::Value("Epochs may not be empty".to_string()))
+        } else {
+            Ok(Epoch(segments))
+        }
     }
 }
 

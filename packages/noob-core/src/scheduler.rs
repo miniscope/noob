@@ -1,21 +1,23 @@
+use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::epoch::Epoch;
+use crate::event::UpdateEvent;
 use crate::exceptions::{CoreError, CoreResult};
 use crate::item::{Interner, Item, PREVIOUS_EPOCH};
 use crate::toposort::{EdgeRec, NodeFlags, Sorter};
 use crate::tube::downstream_nodes;
-use crate::FxIndexSet;
+use crate::{FxIndexMap, FxIndexSet};
 use indexmap::IndexMap;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 const DEFAULT_EPOCH_LOG_LEN: u32 = 1000;
 
 pub struct Scheduler {
-    nodes: IndexMap<String, NodeFlags>,
+    nodes: FxIndexMap<String, NodeFlags>,
     edges: Vec<EdgeRec>,
     /// Mapping between string and int representation of node ids and signals.
-    interner: Interner,
+    pub(crate) interner: Interner,
 
     /// A frozen initial-state topo sorter to copy from
     template: Sorter,
@@ -42,7 +44,7 @@ pub struct Scheduler {
 
 impl Scheduler {
     pub fn from_graph(
-        nodes: IndexMap<String, NodeFlags>,
+        nodes: FxIndexMap<String, NodeFlags>,
         edges: Vec<EdgeRec>,
     ) -> CoreResult<Scheduler> {
         let mut interner = Interner::default();
@@ -63,6 +65,36 @@ impl Scheduler {
             subgraphs: FxHashMap::default(),
             exclusive_subgraphs: FxHashMap::default(),
         })
+    }
+
+    pub fn update(&mut self, mut events: Vec<UpdateEvent>) -> CoreResult<Vec<Epoch>> {
+        events.sort_by_key(|e| Reverse(e.epoch.segments().len()));
+        let mut done_nodes: FxHashSet<(Epoch, u16)> = FxHashSet::default();
+        let mut done_epochs: Vec<Epoch> = Vec::new();
+        for e in events {
+            if done_nodes.insert((e.epoch.clone(), e.node)) {
+                match self.done(&e.epoch, e.node, false) {
+                    Ok(mut epochs) if !epochs.is_empty() => {
+                        done_epochs.append(&mut epochs);
+                        continue;
+                    }
+                    Ok(_) => {}
+                    Err(CoreError::AlreadyDone(_) | CoreError::NotAdded(_)) => {}
+                    Err(e) => return Err(e),
+                }
+            }
+            match e.signal {
+                Some(signal) => {
+                    if e.no_event {
+                        done_epochs.append(&mut self.expire(&e.epoch, signal, true, true)?);
+                    } else {
+                        done_epochs.append(&mut self.done(&e.epoch, signal, true)?)
+                    }
+                }
+                None => {}
+            }
+        }
+        Ok(done_epochs)
     }
 
     pub fn add_epoch(&mut self) -> Epoch {
@@ -196,7 +228,7 @@ impl Scheduler {
             };
 
             let downstream = downstream_nodes(&self.edges, node_name, &FxIndexSet::default());
-            let nodes: IndexMap<String, NodeFlags> = downstream
+            let nodes: FxIndexMap<String, NodeFlags> = downstream
                 .iter()
                 .copied()
                 .filter(|n| self.nodes.contains_key(*n))
@@ -262,7 +294,7 @@ impl Scheduler {
                 .is_some_and(|subeps| subeps.iter().any(|subep| self.is_active_at(subep)))
     }
 
-    fn get_ready(&mut self) -> Vec<(Epoch, u16)> {
+    pub(crate) fn get_ready(&mut self) -> Vec<(Epoch, u16)> {
         self.epochs
             .iter_mut()
             .flat_map(|(epoch, graph)| {
@@ -274,7 +306,7 @@ impl Scheduler {
             .collect()
     }
 
-    fn get_ready_at(&mut self, epoch: &Epoch) -> Vec<(Epoch, u16)> {
+    pub(crate) fn get_ready_at(&mut self, epoch: &Epoch) -> Vec<(Epoch, u16)> {
         let epochs: Vec<&Epoch> = match self.subepochs.get(epoch) {
             Some(epochs) => {
                 let mut epoch_vec: Vec<&Epoch> = epochs.iter().collect();
