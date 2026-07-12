@@ -3,7 +3,7 @@
 //! exactly in sync with `_random_graph_edges` there.
 use criterion::{criterion_group, criterion_main, Criterion};
 use indexmap::IndexMap;
-use noob_core::item::Interner;
+use noob_core::item::{Interner, ItemID};
 use noob_core::toposort::{EdgeRec, Sorter};
 use noob_core::FxIndexMap;
 
@@ -58,7 +58,7 @@ fn random_graph_edges(layers: u64, width: u64, seed: u64) -> Vec<EdgeRec> {
 fn drive(interner: &Interner, sorter: &mut Sorter) {
     while sorter.is_active() {
         sorter.get_ready(interner);
-        let out: Vec<u16> = sorter.out.iter().copied().collect();
+        let out: Vec<ItemID> = sorter.out.iter().copied().collect();
         sorter.done(interner, &out).unwrap();
     }
 }

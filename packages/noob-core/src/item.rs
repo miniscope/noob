@@ -2,6 +2,8 @@ use std::fmt;
 
 use crate::FxIndexSet;
 
+pub type ItemID = u32;
+
 /// A graph item: either a node id, or a (node id, signal name) pair.
 ///
 /// The native representation of `noob.types.NodeID | noob.types.NodeSignal`:
@@ -42,13 +44,13 @@ impl fmt::Display for Item {
 /// Stateful nodes depend on it so they can't run before their previous
 /// epoch completes; the scheduler controls when it is marked done.
 /// Every [`Interner`] interns it at construction, so it is always id 0.
-pub const PREVIOUS_EPOCH: u16 = 0;
+pub const PREVIOUS_EPOCH: ItemID = 0;
 /// The marker that indicates the root of an epoch, Epoch(("tube", 0))
-pub const TUBE_NODE: u16 = 1;
-pub const INPUT_NODE: u16 = 2;
-pub const ASSETS_NODE: u16 = 3;
+pub const TUBE_NODE: ItemID = 1;
+pub const INPUT_NODE: ItemID = 2;
+pub const ASSETS_NODE: ItemID = 3;
 
-/// Interns [`Item`]s to dense `u16` ids shared by all sorters in a scheduler,
+/// Interns [`Item`]s to dense `ItemID` ids shared by all sorters in a scheduler,
 /// so that all graph algorithms operate on integers rather than strings.
 #[derive(Clone, Debug)]
 pub struct Interner {
@@ -70,35 +72,35 @@ impl Default for Interner {
 }
 
 impl Interner {
-    pub fn intern(&mut self, item: Item) -> u16 {
-        self.items.insert_full(item).0 as u16
+    pub fn intern(&mut self, item: Item) -> ItemID {
+        self.items.insert_full(item).0 as ItemID
     }
 
-    pub fn intern_node(&mut self, id: &str) -> u16 {
+    pub fn intern_node(&mut self, id: &str) -> ItemID {
         self.intern(Item::Node(id.to_owned()))
     }
 
-    pub fn intern_signal(&mut self, node: &str, signal: &str) -> u16 {
+    pub fn intern_signal(&mut self, node: &str, signal: &str) -> ItemID {
         self.intern(Item::Signal(node.to_owned(), signal.to_owned()))
     }
 
-    pub fn get(&self, item: &Item) -> Option<u16> {
-        self.items.get_index_of(item).map(|i| i as u16)
+    pub fn get(&self, item: &Item) -> Option<ItemID> {
+        self.items.get_index_of(item).map(|i| i as ItemID)
     }
 
-    pub fn resolve(&self, id: u16) -> &Item {
+    pub fn resolve(&self, id: ItemID) -> &Item {
         self.items
             .get_index(id as usize)
             .expect("interner ids are never removed")
     }
 
-    pub fn is_signal(&self, id: u16) -> bool {
+    pub fn is_signal(&self, id: ItemID) -> bool {
         self.resolve(id).is_signal()
     }
 
     /// For a signal item, the interned id of its node part.
     /// For a node item, its own id.
-    pub fn node_part(&mut self, id: u16) -> u16 {
+    pub fn node_part(&mut self, id: ItemID) -> ItemID {
         let node = self.resolve(id).node_id().to_owned();
         self.intern_node(&node)
     }

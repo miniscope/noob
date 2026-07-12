@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::epoch::Epoch;
 use crate::event::UpdateEvent;
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{Interner, Item, PREVIOUS_EPOCH};
+use crate::item::{Interner, Item, PREVIOUS_EPOCH, ItemID};
 use crate::toposort::{EdgeRec, NodeFlags, Sorter};
 use crate::tube::downstream_nodes;
 use crate::{FxIndexMap, FxIndexSet};
@@ -21,8 +21,8 @@ pub struct Scheduler {
 
     /// A frozen initial-state topo sorter to copy from
     template: Sorter,
-    subgraph_templates: FxHashMap<u16, Sorter>,
-    source_nodes: FxIndexSet<u16>,
+    subgraph_templates: FxHashMap<ItemID, Sorter>,
+    source_nodes: FxIndexSet<ItemID>,
 
     epochs: BTreeMap<Epoch, Sorter>,
     epoch_log: BTreeSet<u32>,
@@ -31,7 +31,7 @@ pub struct Scheduler {
     next_epoch: u32,
     subepochs: FxHashMap<Epoch, FxIndexSet<Epoch>>,
     /// cache - sets of graph items that are downstream from the key node
-    subgraphs: FxHashMap<u16, FxIndexSet<u16>>,
+    subgraphs: FxHashMap<ItemID, FxIndexSet<ItemID>>,
     /// cache - the set of graph items that in the subgraph of the first key,
     /// but *not* downstream of the second.
     /// used for expiring items in subepochs when they are closed in a parent epoch,
@@ -39,7 +39,7 @@ pub struct Scheduler {
     ///
     /// Stored as a vec because it is deduplicated on construction and passed directly
     /// into the sorter's `mark_expired`.
-    exclusive_subgraphs: FxHashMap<(u16, u16), Vec<u16>>,
+    exclusive_subgraphs: FxHashMap<(ItemID, ItemID), Vec<ItemID>>,
 }
 
 impl Scheduler {
@@ -69,7 +69,7 @@ impl Scheduler {
 
     pub fn update(&mut self, mut events: Vec<UpdateEvent>) -> CoreResult<Vec<Epoch>> {
         events.sort_by_key(|e| Reverse(e.epoch.segments().len()));
-        let mut done_nodes: FxHashSet<(Epoch, u16)> = FxHashSet::default();
+        let mut done_nodes: FxHashSet<(Epoch, ItemID)> = FxHashSet::default();
         let mut done_epochs: Vec<Epoch> = Vec::new();
         for e in events {
             if done_nodes.insert((e.epoch.clone(), e.node)) {
@@ -183,7 +183,7 @@ impl Scheduler {
             .cloned()
             .unwrap_or(FxIndexSet::default());
         exclude_current.insert(node_id);
-        let subgraph_keys: Vec<u16> = subgraph.info.keys().copied().collect();
+        let subgraph_keys: Vec<ItemID> = subgraph.info.keys().copied().collect();
         for parent_dep in subgraph_keys {
             if parent.ran.contains(&parent_dep) {
                 subgraph.done(&self.interner, &[parent_dep])?;
@@ -214,7 +214,7 @@ impl Scheduler {
     }
 
     /// Get or make a cached subgraph template
-    fn get_subgraph_template(&mut self, node_id: u16) -> CoreResult<Sorter> {
+    fn get_subgraph_template(&mut self, node_id: ItemID) -> CoreResult<Sorter> {
         if let Some(template) = self.subgraph_templates.get(&node_id) {
             Ok(template.clone())
         } else {
@@ -303,7 +303,7 @@ impl Scheduler {
                 .is_some_and(|subeps| subeps.iter().any(|subep| self.is_active_at(subep)))
     }
 
-    pub(crate) fn get_ready(&mut self) -> Vec<(Epoch, u16)> {
+    pub(crate) fn get_ready(&mut self) -> Vec<(Epoch, ItemID)> {
         self.epochs
             .iter_mut()
             .flat_map(|(epoch, graph)| {
@@ -315,7 +315,7 @@ impl Scheduler {
             .collect()
     }
 
-    pub(crate) fn get_ready_at(&mut self, epoch: &Epoch) -> Vec<(Epoch, u16)> {
+    pub(crate) fn get_ready_at(&mut self, epoch: &Epoch) -> Vec<(Epoch, ItemID)> {
         let epochs: Vec<&Epoch> = match self.subepochs.get(epoch) {
             Some(epochs) => {
                 let mut epoch_vec: Vec<&Epoch> = epochs.iter().collect();
@@ -341,7 +341,7 @@ impl Scheduler {
             .collect()
     }
 
-    pub fn done(&mut self, epoch: &Epoch, item: u16, with_signals: bool) -> CoreResult<Vec<Epoch>> {
+    pub fn done(&mut self, epoch: &Epoch, item: ItemID, with_signals: bool) -> CoreResult<Vec<Epoch>> {
         if self.epoch_completed(epoch) {
             // TODO: debug logging
             return Ok(Vec::new());
@@ -364,7 +364,7 @@ impl Scheduler {
 
         if !self.interner.is_signal(item) && with_signals {
             if let Some(signals) = graph.signals.get(&item) {
-                let signals: Vec<u16> = signals.difference(&graph.done).copied().collect();
+                let signals: Vec<ItemID> = signals.difference(&graph.done).copied().collect();
                 graph.done(&self.interner, &signals)?;
             }
         }
@@ -410,7 +410,7 @@ impl Scheduler {
     /// This is to support gather-like operations from non-gather nodes in 3rd party tubes:
     /// nodes downstream of both this node and other nodes in the subepoch run in subepochs,
     /// but nodes that are exclusively downstream of this node only run in the parent epoch
-    fn done_subepochs(&mut self, epoch: &Epoch, item: u16) -> CoreResult<()> {
+    fn done_subepochs(&mut self, epoch: &Epoch, item: ItemID) -> CoreResult<()> {
         let Some(subepochs) = self.subepochs.get(epoch) else {
             return Ok(());
         };
@@ -457,8 +457,8 @@ impl Scheduler {
     }
 
     /// utility for done_subepochs
-    /// create a u16'd version of the downstream nodes from a graph item
-    fn make_subgraph(interner: &mut Interner, edges: &[EdgeRec], item: u16) -> FxIndexSet<u16> {
+    /// create a ItemID'd version of the downstream nodes from a graph item
+    fn make_subgraph(interner: &mut Interner, edges: &[EdgeRec], item: ItemID) -> FxIndexSet<ItemID> {
         let node_str = interner.resolve(item).node_id().to_owned();
         let subgraph = downstream_nodes(edges, &node_str, &FxIndexSet::default());
         subgraph.iter().map(|n| interner.intern_node(n)).collect()
@@ -470,11 +470,11 @@ impl Scheduler {
     /// but *not* in the penumbra of the excluded item.
     fn make_exclusive_subgraph(
         interner: &mut Interner,
-        subgraph: &FxIndexSet<u16>,
+        subgraph: &FxIndexSet<ItemID>,
         edges: &[EdgeRec],
-        item: u16,
-        excluded: u16,
-    ) -> Vec<u16> {
+        item: ItemID,
+        excluded: ItemID,
+    ) -> Vec<ItemID> {
         let node_str = interner.resolve(item).node_id().to_owned();
         let subep_name = interner.resolve(excluded).node_id().to_owned();
         let downstream = downstream_nodes(
@@ -482,7 +482,7 @@ impl Scheduler {
             &subep_name,
             &FxIndexSet::from_iter([node_str.as_str()]),
         );
-        let downstream_ids: FxIndexSet<u16> =
+        let downstream_ids: FxIndexSet<ItemID> =
             downstream.iter().map(|n| interner.intern_node(n)).collect();
         subgraph
             .difference(&downstream_ids)
@@ -494,7 +494,7 @@ impl Scheduler {
     pub fn expire(
         &mut self,
         epoch: &Epoch,
-        item: u16,
+        item: ItemID,
         with_signals: bool,
         unlock_optionals: bool,
     ) -> CoreResult<Vec<Epoch>> {
@@ -628,13 +628,13 @@ pub struct EpochIter<'a> {
 }
 
 impl EpochIter<'_> {
-    pub fn done(&mut self, item: u16, with_signals: bool) -> CoreResult<Vec<Epoch>> {
+    pub fn done(&mut self, item: ItemID, with_signals: bool) -> CoreResult<Vec<Epoch>> {
         self.scheduler.done(&self.epoch, item, with_signals)
     }
 
     pub fn expire(
         &mut self,
-        item: u16,
+        item: ItemID,
         with_signals: bool,
         unlock_optionals: bool,
     ) -> CoreResult<Vec<Epoch>> {
@@ -644,7 +644,7 @@ impl EpochIter<'_> {
 }
 
 impl Iterator for EpochIter<'_> {
-    type Item = Vec<(Epoch, u16)>;
+    type Item = Vec<(Epoch, ItemID)>;
     fn next(&mut self) -> Option<Self::Item> {
         if !self.scheduler.is_active_at(&self.epoch) {
             None
@@ -659,14 +659,14 @@ pub struct ReadyIter<'a> {
 }
 
 impl ReadyIter<'_> {
-    pub fn done(&mut self, epoch: &Epoch, item: u16, with_signals: bool) -> CoreResult<Vec<Epoch>> {
+    pub fn done(&mut self, epoch: &Epoch, item: ItemID, with_signals: bool) -> CoreResult<Vec<Epoch>> {
         self.scheduler.done(epoch, item, with_signals)
     }
 
     pub fn expire(
         &mut self,
         epoch: &Epoch,
-        item: u16,
+        item: ItemID,
         with_signals: bool,
         unlock_optionals: bool,
     ) -> CoreResult<Vec<Epoch>> {
@@ -676,7 +676,7 @@ impl ReadyIter<'_> {
 }
 
 impl Iterator for ReadyIter<'_> {
-    type Item = Vec<(Epoch, u16)>;
+    type Item = Vec<(Epoch, ItemID)>;
     fn next(&mut self) -> Option<Self::Item> {
         let ready = self.scheduler.get_ready();
         if ready.is_empty() {

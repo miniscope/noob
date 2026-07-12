@@ -524,10 +524,10 @@ fn test_iter_epoch_to_completion() {
     let c = scheduler.interner.intern_node("c");
     let d = scheduler.interner.intern_node("d");
 
-    let mut batches: Vec<Vec<u16>> = Vec::new();
+    let mut batches: Vec<Vec<ItemID>> = Vec::new();
     let mut it = scheduler.iter_epoch();
     while let Some(batch) = it.next() {
-        let nodes: Vec<u16> = batch.iter().map(|(_, node)| *node).collect();
+        let nodes: Vec<ItemID> = batch.iter().map(|(_, node)| *node).collect();
         for &node in &nodes {
             it.done(node, true).unwrap();
         }

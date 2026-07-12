@@ -1,8 +1,9 @@
 use crate::epoch::Epoch;
+use crate::item::ItemID;
 
 pub struct UpdateEvent {
     pub epoch: Epoch,
-    pub node: u16,
-    pub signal: Option<u16>,
+    pub node: ItemID,
+    pub signal: Option<ItemID>,
     pub no_event: bool,
 }

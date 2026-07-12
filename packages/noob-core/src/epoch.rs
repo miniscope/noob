@@ -1,17 +1,17 @@
 use crate::exceptions::CoreError;
-use crate::item::TUBE_NODE;
+use crate::item::{TUBE_NODE, ItemID};
 use std::fmt;
 use std::ops::{Add, Div};
 
 // TODO: Make some frozen "SmallEpoch" with a burned in tube ID?
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct EpochSegment {
-    pub node: u16,
+    pub node: ItemID,
     pub epoch: u32,
 }
 
-impl From<(u16, u32)> for EpochSegment {
-    fn from(segment: (u16, u32)) -> EpochSegment {
+impl From<(ItemID, u32)> for EpochSegment {
+    fn from(segment: (ItemID, u32)) -> EpochSegment {
         EpochSegment {
             node: segment.0,
             epoch: segment.1,
@@ -50,7 +50,7 @@ impl Epoch {
         self
     }
 
-    pub fn make_subepochs(&self, node: u16, n: u32) -> Vec<Epoch> {
+    pub fn make_subepochs(&self, node: ItemID, n: u32) -> Vec<Epoch> {
         (0..n)
             .map(|i| self.clone().child(EpochSegment { epoch: i, node }))
             .collect()

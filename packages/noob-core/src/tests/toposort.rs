@@ -45,7 +45,7 @@ fn static_order_with_groups(interner: &mut Interner, sorter: &mut Sorter) -> Vec
     let mut groups = Vec::new();
     while sorter.is_active() {
         let ready = sorter.get_ready(interner);
-        let out: Vec<u16> = sorter.out.iter().copied().collect();
+        let out: Vec<ItemID> = sorter.out.iter().copied().collect();
         if ready.is_empty() && out.is_empty() {
             // python's generator would loop forever here; fail loudly instead
             panic!("sorter is_active() but nothing is ready or out");
@@ -69,7 +69,7 @@ fn test_graph(graph: &[(&str, &[&str])], expected: &[&[&str]]) {
     let mut sorter = Sorter::default();
     for (node, deps) in graph {
         let node_id = interner.intern_node(node);
-        let dep_ids: Vec<u16> = deps.iter().map(|d| interner.intern_node(d)).collect();
+        let dep_ids: Vec<ItemID> = deps.iter().map(|d| interner.intern_node(d)).collect();
         sorter.add(&mut interner, node_id, &dep_ids, true).unwrap();
     }
 
@@ -200,7 +200,7 @@ fn assert_cycle(graph: &[(&str, &[&str])], cycle: &[&str]) {
     let mut sorter = Sorter::default();
     for (node, deps) in graph {
         let node_id = interner.intern_node(node);
-        let dep_ids: Vec<u16> = deps.iter().map(|d| interner.intern_node(d)).collect();
+        let dep_ids: Vec<ItemID> = deps.iter().map(|d| interner.intern_node(d)).collect();
         sorter.add(&mut interner, node_id, &dep_ids, true).unwrap();
     }
     let found: Option<Vec<String>> = sorter.find_cycle().map(|c| {
@@ -366,7 +366,7 @@ fn test_optional_dependencies() {
 
     sorter.mark_expired(&[a_a1], true);
     sorter.done(&interner, &[a_a2]).unwrap();
-    let ready: IndexSet<u16> = sorter.get_ready(&interner).into_iter().collect();
+    let ready: IndexSet<ItemID> = sorter.get_ready(&interner).into_iter().collect();
     assert_eq!(ready, IndexSet::from([only_optional, mixed, b]));
 
     sorter.done(&interner, &[only_optional, mixed]).unwrap();
@@ -385,9 +385,9 @@ fn unlock_optionals_case(unlock_optionals: bool) {
     let ready = sorter.get_ready(&interner);
     sorter.done(&interner, &ready).unwrap();
 
-    let out: Vec<u16> = sorter.out.iter().copied().collect();
+    let out: Vec<ItemID> = sorter.out.iter().copied().collect();
     sorter.mark_expired(&out, unlock_optionals);
-    let ready: IndexSet<u16> = sorter.get_ready(&interner).into_iter().collect();
+    let ready: IndexSet<ItemID> = sorter.get_ready(&interner).into_iter().collect();
     if unlock_optionals {
         let expected = IndexSet::from([
             interner.intern_node("only_optional"),

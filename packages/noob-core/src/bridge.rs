@@ -1,7 +1,7 @@
 use crate::epoch::{Epoch, EpochSegment};
 use crate::event::UpdateEvent;
 use crate::exceptions::CoreError;
-use crate::item::{Interner, Item};
+use crate::item::{Interner, Item, ItemID};
 use crate::scheduler::Scheduler;
 use crate::toposort::{EdgeRec, NodeFlags};
 use crate::FxIndexMap;
@@ -189,7 +189,7 @@ fn epoch_to_python(interner: &Interner, epoch: &Epoch) -> PyEpoch {
         .collect()
 }
 
-fn item_from_python(interner: &Interner, node_id: String, signal: Option<String>) -> u16 {
+fn item_from_python(interner: &Interner, node_id: String, signal: Option<String>) -> ItemID {
     let item = match signal {
         Some(signal) => Item::Signal(node_id, signal),
         None => Item::Node(node_id),
@@ -199,7 +199,7 @@ fn item_from_python(interner: &Interner, node_id: String, signal: Option<String>
         .expect("Nodes and signals must be added when the scheduler is created")
 }
 
-fn ready_to_python(interner: &Interner, ready: Vec<(Epoch, u16)>) -> Vec<(PyEpoch, String)> {
+fn ready_to_python(interner: &Interner, ready: Vec<(Epoch, ItemID)>) -> Vec<(PyEpoch, String)> {
     ready
         .iter()
         .map(|(epoch, node)| {
