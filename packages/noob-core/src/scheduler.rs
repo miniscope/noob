@@ -283,6 +283,15 @@ impl Scheduler {
         self.epochs.values().any(|sorter| sorter.is_active())
     }
 
+    /// The lowest root epoch that is active, directly or via subepochs -
+    /// python's `iter_epoch` no-arg resolution (scheduler.py:111-120)
+    pub fn first_active_epoch(&self) -> Option<Epoch> {
+        self.epochs
+            .keys()
+            .map(|epoch| Epoch::from(epoch.root()))
+            .find(|root| self.is_active_at(root))
+    }
+
     /// Is the scheduler active in a specific epoch?
     pub fn is_active_at(&self, epoch: &Epoch) -> bool {
         self.epochs
@@ -593,7 +602,7 @@ impl Scheduler {
         Ok(events)
     }
 
-    fn sources_finished(&self, epoch: &Epoch) -> bool {
+    pub(crate) fn sources_finished(&self, epoch: &Epoch) -> bool {
         if self.epoch_completed(epoch) {
             return true;
         }

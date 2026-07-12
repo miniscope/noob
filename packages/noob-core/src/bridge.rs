@@ -84,6 +84,17 @@ impl PyScheduler {
         Ok(self.0.epoch_completed(&ep))
     }
 
+    fn first_active_epoch(&self) -> Option<PyEpoch> {
+        self.0
+            .first_active_epoch()
+            .map(|ep| epoch_to_python(&self.0.interner, &ep))
+    }
+
+    fn sources_finished(&self, epoch: EpochArg) -> PyResult<bool> {
+        let ep = epoch_from_python(&self.0.interner, epoch)?;
+        Ok(self.0.sources_finished(&ep))
+    }
+
     fn get_ready(&mut self) -> Vec<(PyEpoch, String)> {
         let ready = self.0.get_ready();
         ready_to_python(&self.0.interner, ready)
