@@ -1,8 +1,25 @@
 use std::fmt;
+use std::sync::{Arc, LazyLock, RwLock, RwLockWriteGuard};
 
 use crate::FxIndexSet;
 
 pub type ItemID = u32;
+
+static INTERNER: LazyLock<RwLock<Arc<Interner>>> =
+    LazyLock::new(|| RwLock::new(Arc::new(Interner::default())));
+
+pub fn interner() -> Arc<Interner> {
+    INTERNER
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+}
+pub(crate) fn interner_mut() -> RwLockWriteGuard<'static, Arc<Interner>> {
+    INTERNER
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    // INTERNER.write().unwrap()
+}
 
 /// A graph item: either a node id, or a (node id, signal name) pair.
 ///
@@ -45,10 +62,11 @@ impl fmt::Display for Item {
 /// epoch completes; the scheduler controls when it is marked done.
 /// Every [`Interner`] interns it at construction, so it is always id 0.
 pub const PREVIOUS_EPOCH: ItemID = 0;
+pub const META_NODE: ItemID = 1;
 /// The marker that indicates the root of an epoch, Epoch(("tube", 0))
-pub const TUBE_NODE: ItemID = 1;
-pub const INPUT_NODE: ItemID = 2;
-pub const ASSETS_NODE: ItemID = 3;
+pub const TUBE_NODE: ItemID = 2;
+pub const INPUT_NODE: ItemID = 3;
+pub const ASSETS_NODE: ItemID = 4;
 
 /// Interns [`Item`]s to dense `ItemID` ids shared by all sorters in a scheduler,
 /// so that all graph algorithms operate on integers rather than strings.
@@ -81,7 +99,9 @@ impl Interner {
     }
 
     pub fn intern_signal(&mut self, node: &str, signal: &str) -> ItemID {
-        self.intern(Item::Signal(node.to_owned(), signal.to_owned()))
+        let id = self.intern(Item::Signal(node.to_owned(), signal.to_owned()));
+        self.intern_node(node);
+        id
     }
 
     pub fn get(&self, item: &Item) -> Option<ItemID> {
@@ -91,7 +111,7 @@ impl Interner {
     pub fn resolve(&self, id: ItemID) -> &Item {
         self.items
             .get_index(id as usize)
-            .expect("interner ids are never removed")
+            .expect("interner ids are never removed, and always added before they are resolved")
     }
 
     pub fn is_signal(&self, id: ItemID) -> bool {
@@ -100,9 +120,9 @@ impl Interner {
 
     /// For a signal item, the interned id of its node part.
     /// For a node item, its own id.
-    pub fn node_part(&mut self, id: ItemID) -> ItemID {
+    pub fn node_part(&self, id: ItemID) -> ItemID {
         let node = self.resolve(id).node_id().to_owned();
-        self.intern_node(&node)
+        self.get(&Item::Node(node)).unwrap()
     }
 }
 

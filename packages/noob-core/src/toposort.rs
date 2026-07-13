@@ -1,8 +1,7 @@
-use indexmap::IndexMap;
 use rustc_hash::FxHashMap;
 
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{Interner, Item, ASSETS_NODE, INPUT_NODE, PREVIOUS_EPOCH, ItemID};
+use crate::item::{Interner, Item, ItemID, ASSETS_NODE, INPUT_NODE, PREVIOUS_EPOCH};
 use crate::{FxIndexMap, FxIndexSet};
 
 /// The fields of `noob.edge.Edge` the sorter cares about.

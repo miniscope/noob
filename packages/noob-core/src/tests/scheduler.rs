@@ -64,7 +64,7 @@ fn test_add_epoch_at() {
 #[test]
 fn test_add_epoch_at_below_log() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     scheduler.epoch_log_len = 5;
 
     // epoch below log
@@ -120,7 +120,7 @@ fn test_previous_epoch_completed() {
 
     // for subepochs, sibling subepochs are marked as done
     let root = Epoch::from(20);
-    let a = scheduler.interner.intern_node("a");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
     scheduler.add_epoch_at(root.clone()).unwrap();
     scheduler.add_epoch_at(&root / (a, 0)).unwrap();
     scheduler.add_epoch_at(&root / (a, 1)).unwrap();
@@ -150,14 +150,14 @@ fn test_is_active() {
     scheduler.add_epoch();
 
     // still active if one of the sorters is no longer active
-    let node_int = scheduler.interner.intern_node("a");
+    let node_int = interner().get(&Item::Node("a".to_string())).unwrap();
     let sorter = scheduler.epochs.get_mut(&Epoch::from(0)).unwrap();
-    sorter.done(&scheduler.interner, &[node_int]).unwrap();
+    sorter.done(&interner(), &[node_int]).unwrap();
     assert!(scheduler.is_active());
 
     // no longer active when both are inactive
     let sorter = scheduler.epochs.get_mut(&Epoch::from(1)).unwrap();
-    sorter.done(&scheduler.interner, &[node_int]).unwrap();
+    sorter.done(&interner(), &[node_int]).unwrap();
     assert!(!scheduler.is_active());
 }
 
@@ -177,9 +177,9 @@ fn test_is_active_at() {
     scheduler.add_epoch();
 
     assert!(scheduler.is_active_at(&Epoch::from(0)));
-    let node_int = scheduler.interner.intern_node("a");
+    let node_int = interner().get(&Item::Node("a".to_string())).unwrap();
     let sorter = scheduler.epochs.get_mut(&Epoch::from(0)).unwrap();
-    sorter.done(&scheduler.interner, &[node_int]).unwrap();
+    sorter.done(&interner(), &[node_int]).unwrap();
     assert!(!scheduler.is_active_at(&Epoch::from(0)));
 
     // Not active for an epoch that doesn't exist
@@ -190,17 +190,21 @@ fn test_is_active_at() {
 fn test_get_ready() {
     let edges = diamond();
     let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let a1 = scheduler.interner.intern_signal("a", "a1");
-    let a2 = scheduler.interner.intern_signal("a", "a2");
-    let b = scheduler.interner.intern_node("b");
-    let c = scheduler.interner.intern_node("c");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let a1 = interner()
+        .get(&Item::Signal("a".to_string(), "a1".to_string()))
+        .unwrap();
+    let a2 = interner()
+        .get(&Item::Signal("a".to_string(), "a2".to_string()))
+        .unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
 
     scheduler.add_epoch();
     scheduler.add_epoch();
 
     let sorter = scheduler.epochs.get_mut(&Epoch::from(0)).unwrap();
-    sorter.done(&scheduler.interner, &[a, a1, a2]).unwrap();
+    sorter.done(&interner(), &[a, a1, a2]).unwrap();
     let ready = scheduler.get_ready();
 
     assert_eq!(
@@ -217,15 +221,19 @@ fn test_get_ready() {
 fn test_get_ready_at() {
     let edges = diamond();
     let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let a1 = scheduler.interner.intern_signal("a", "a1");
-    let a2 = scheduler.interner.intern_signal("a", "a2");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let a1 = interner()
+        .get(&Item::Signal("a".to_string(), "a1".to_string()))
+        .unwrap();
+    let a2 = interner()
+        .get(&Item::Signal("a".to_string(), "a2".to_string()))
+        .unwrap();
 
     scheduler.add_epoch();
     scheduler.add_epoch();
 
     let sorter = scheduler.epochs.get_mut(&Epoch::from(0)).unwrap();
-    sorter.done(&scheduler.interner, &[a, a1, a2]).unwrap();
+    sorter.done(&interner(), &[a, a1, a2]).unwrap();
     let ready = scheduler.get_ready_at(&Epoch::from(1));
 
     assert_eq!(ready, [(Epoch::from(1), a)]);
@@ -239,9 +247,13 @@ fn test_get_ready_at() {
 fn test_done_without_signals() {
     let edges = diamond();
     let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let a1 = scheduler.interner.intern_signal("a", "a1");
-    let a2 = scheduler.interner.intern_signal("a", "a2");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let a1 = interner()
+        .get(&Item::Signal("a".to_string(), "a1".to_string()))
+        .unwrap();
+    let a2 = interner()
+        .get(&Item::Signal("a".to_string(), "a2".to_string()))
+        .unwrap();
     let ep = scheduler.add_epoch();
     scheduler.done(&ep, a, false).unwrap();
 
@@ -259,9 +271,13 @@ fn test_done_without_signals() {
 fn test_done_with_signals() {
     let edges = diamond();
     let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let a1 = scheduler.interner.intern_signal("a", "a1");
-    let a2 = scheduler.interner.intern_signal("a", "a2");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let a1 = interner()
+        .get(&Item::Signal("a".to_string(), "a1".to_string()))
+        .unwrap();
+    let a2 = interner()
+        .get(&Item::Signal("a".to_string(), "a2".to_string()))
+        .unwrap();
     let ep = scheduler.add_epoch();
     scheduler.done(&ep, a, true).unwrap();
 
@@ -280,7 +296,7 @@ fn test_done_with_signals() {
 fn test_done_on_missing_epoch() {
     let edges = diamond();
     let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
     let ep = Epoch::from(10);
 
     scheduler.done(&ep, a, true).unwrap();
@@ -295,7 +311,7 @@ fn test_done_on_missing_epoch() {
 fn test_done_on_completed_epoch() {
     let edges = diamond();
     let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.end_epoch(ep.clone()).unwrap();
@@ -309,10 +325,10 @@ fn test_done_on_completed_epoch() {
 fn test_done_ends_epoch() {
     let edges = diamond();
     let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
-    let c = scheduler.interner.intern_node("c");
-    let d = scheduler.interner.intern_node("d");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
+    let d = interner().get(&Item::Node("d".to_string())).unwrap();
     let ep = scheduler.add_epoch();
     scheduler.done(&ep, a, true).unwrap();
     scheduler.done(&ep, b, true).unwrap();
@@ -377,7 +393,7 @@ fn test_sources_finished() {
         },
     );
     let mut scheduler = Scheduler::from_graph(nodes, edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
     assert_eq!(scheduler.source_nodes, FxIndexSet::from_iter(vec![a]));
 
     let ep = scheduler.add_epoch();
@@ -402,7 +418,7 @@ fn test_eager_epoch_creation_when_sources_done() {
         },
     );
     let mut scheduler = Scheduler::from_graph(nodes, edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
     assert_eq!(scheduler.source_nodes, FxIndexSet::from_iter(vec![a]));
 
     // does not fire when next epoch already exists
@@ -419,7 +435,7 @@ fn test_eager_epoch_creation_when_sources_done() {
     assert!(!scheduler.epochs.contains_key(&next));
 
     // does not fire when not a source node
-    let b = scheduler.interner.intern_node("b");
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
     let ep = scheduler.add_epoch();
     let next = Epoch::from(ep.root() + 1);
     scheduler.done(&ep, b, true).unwrap();
@@ -429,7 +445,7 @@ fn test_eager_epoch_creation_when_sources_done() {
 #[test]
 fn test_epoch_log_trim() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     scheduler.epoch_log_len = 5;
     for i in 0..20 {
         scheduler.add_epoch_at(Epoch::from(i)).unwrap();
@@ -451,7 +467,7 @@ fn test_epoch_log_trim() {
 #[test]
 fn test_epoch_completed() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     scheduler.epoch_log_len = 5;
 
     // empty log, nothing completed
@@ -477,11 +493,15 @@ fn test_epoch_completed() {
 #[test]
 fn test_expire_signal() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let a1 = scheduler.interner.intern_signal("a", "a1");
-    let a2 = scheduler.interner.intern_signal("a", "a2");
-    let b = scheduler.interner.intern_node("b");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let a1 = interner()
+        .get(&Item::Signal("a".to_string(), "a1".to_string()))
+        .unwrap();
+    let a2 = interner()
+        .get(&Item::Signal("a".to_string(), "a2".to_string()))
+        .unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
     scheduler.done(&ep, a, false).unwrap();
@@ -496,8 +516,8 @@ fn test_expire_signal() {
 #[test]
 fn test_expire_node() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
     let ended = scheduler.expire(&ep, a, true, true).unwrap();
@@ -508,8 +528,8 @@ fn test_expire_node() {
 #[test]
 fn test_expire_completed_epoch() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
     let ep = scheduler.add_epoch();
     scheduler.end_epoch(ep.clone()).unwrap();
     scheduler.expire(&ep, a, true, true).unwrap();
@@ -518,11 +538,11 @@ fn test_expire_completed_epoch() {
 #[test]
 fn test_iter_epoch_to_completion() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
-    let c = scheduler.interner.intern_node("c");
-    let d = scheduler.interner.intern_node("d");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
+    let d = interner().get(&Item::Node("d".to_string())).unwrap();
 
     let mut batches: Vec<Vec<ItemID>> = Vec::new();
     let mut it = scheduler.iter_epoch();
@@ -541,7 +561,7 @@ fn test_iter_epoch_to_completion() {
 #[test]
 fn test_iter_epoch_at_completed_epoch() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let ep = scheduler.add_epoch();
     scheduler.end_epoch(ep.clone()).unwrap();
 
@@ -555,8 +575,8 @@ fn test_iter_epoch_at_completed_epoch() {
 #[test]
 fn test_iter_epoch_at_missing_epoch() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
 
     let mut it = scheduler.iter_epoch_at(5).unwrap();
     assert_eq!(it.next().unwrap(), vec![(Epoch::from(5), a)]);
@@ -570,8 +590,8 @@ fn test_iter_epoch_at_missing_epoch() {
 #[test]
 fn test_iter_epoch_stalls_with_empty_batches() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
 
     let mut it = scheduler.iter_epoch();
     assert_eq!(it.next().unwrap(), vec![(Epoch::from(0), a)]);
@@ -582,8 +602,8 @@ fn test_iter_epoch_stalls_with_empty_batches() {
 #[test]
 fn test_iter_ready_stops_on_stall() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
 
     let mut it = scheduler.iter_ready();
     assert_eq!(it.next().unwrap(), vec![(Epoch::from(0), a)]);
@@ -622,7 +642,7 @@ fn test_iter_ready_crosses_epochs() {
 #[test]
 fn test_add_subepoch_root() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
 
     let err = scheduler.add_subepoch(Epoch::from(5)).unwrap_err();
     assert!(matches!(err, CoreError::Value(_)));
@@ -631,11 +651,13 @@ fn test_add_subepoch_root() {
 #[test]
 fn test_add_subepoch() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let a1 = scheduler.interner.intern_signal("a", "a1");
-    let b = scheduler.interner.intern_node("b");
-    let c = scheduler.interner.intern_node("c");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let a1 = interner()
+        .get(&Item::Signal("a".to_string(), "a1".to_string()))
+        .unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
@@ -667,11 +689,13 @@ fn test_add_subepoch() {
 #[test]
 fn test_add_subepoch_expired_state() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
-    let c1 = scheduler.interner.intern_signal("c", "c1");
-    let d = scheduler.interner.intern_node("d");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c1 = interner()
+        .get(&Item::Signal("c".to_string(), "c1".to_string()))
+        .unwrap();
+    let d = interner().get(&Item::Node("d".to_string())).unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
@@ -700,9 +724,9 @@ fn test_add_subepoch_expired_state() {
 #[test]
 fn test_subgraph_template_cached() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
@@ -720,8 +744,8 @@ fn test_subgraph_template_cached() {
 #[test]
 fn test_add_subepoch_missing_parent() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let b = scheduler.interner.intern_node("b");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
 
     let subep = scheduler.add_subepoch(Epoch::from(0) / (b, 0)).unwrap();
 
@@ -733,10 +757,10 @@ fn test_add_subepoch_missing_parent() {
 #[test]
 fn test_is_active_at_parent_survives_via_subepoch() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
-    let c = scheduler.interner.intern_node("c");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
@@ -770,8 +794,8 @@ fn test_is_active_at_parent_survives_via_subepoch() {
 #[test]
 fn test_is_active_at_stale_registry() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let b = scheduler.interner.intern_node("b");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
 
     scheduler
         .subepochs
@@ -788,13 +812,13 @@ fn test_is_active_at_stale_registry() {
 fn test_get_ready_at_includes_subepochs() {
     let mut edges = diamond();
     edges.push(edge("x", "x1", "y", true));
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
-    let c = scheduler.interner.intern_node("c");
-    let d = scheduler.interner.intern_node("d");
-    let x = scheduler.interner.intern_node("x");
-    let y = scheduler.interner.intern_node("y");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
+    let d = interner().get(&Item::Node("d".to_string())).unwrap();
+    let x = interner().get(&Item::Node("x".to_string())).unwrap();
+    let y = interner().get(&Item::Node("y".to_string())).unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep); // [a, x] out
@@ -819,9 +843,12 @@ fn test_get_ready_at_includes_subepochs() {
 #[test]
 fn test_done_creates_subgraph_for_subepoch_key() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let a2 = interner()
+        .get(&Item::Signal("a".to_string(), "a2".to_string()))
+        .unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
@@ -833,7 +860,7 @@ fn test_done_creates_subgraph_for_subepoch_key() {
     // a2's edge targets c, which is outside downstream(b) - its absence is
     // what distinguishes a subgraph from a root-template clone (a itself IS
     // present, as a1's signal-linkage parent)
-    let a2 = scheduler.interner.intern_signal("a", "a2");
+
     let subgraph = scheduler.epochs.get(&subep).unwrap();
     assert!(!subgraph.info.contains_key(&a2));
     assert!(subgraph.done.contains(&b));
@@ -852,9 +879,9 @@ fn test_done_creates_subgraph_for_subepoch_key() {
 #[test]
 fn test_end_subepoch_live_parent() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
@@ -880,8 +907,8 @@ fn test_end_subepoch_live_parent() {
 fn test_already_done_suppressed_with_subepochs() {
     // plain epoch: second done errors
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
     let ep = scheduler.add_epoch();
     scheduler.done(&ep, a, false).unwrap();
     let err = scheduler.done(&ep, a, false).unwrap_err();
@@ -889,9 +916,9 @@ fn test_already_done_suppressed_with_subepochs() {
 
     // epoch with subepochs: second done is swallowed
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
     scheduler.done(&ep, a, true).unwrap();
@@ -905,10 +932,10 @@ fn test_already_done_suppressed_with_subepochs() {
 #[test]
 fn test_expire_recurses_subepochs() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
-    let c = scheduler.interner.intern_node("c");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
@@ -933,10 +960,12 @@ fn test_expire_recurses_subepochs() {
 #[test]
 fn test_expire_signal_skips_inducing_subepoch() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
-    let b1 = scheduler.interner.intern_signal("b", "b1");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let b1 = interner()
+        .get(&Item::Signal("b".to_string(), "b1".to_string()))
+        .unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
@@ -956,10 +985,10 @@ fn test_expire_signal_skips_inducing_subepoch() {
 #[test]
 fn test_done_subepochs_resurrects_expired() {
     let edges = diamond();
-    let mut scheduler = Scheduler::from_graph(IndexMap::default(), edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
-    let c = scheduler.interner.intern_node("c");
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
 
     let ep = scheduler.add_epoch();
     scheduler.get_ready_at(&ep);
@@ -999,9 +1028,9 @@ fn test_done_subepochs_exclusive_expiry() {
         })
         .collect();
     let mut scheduler = Scheduler::from_graph(nodes, edges).unwrap();
-    let a = scheduler.interner.intern_node("a");
-    let b = scheduler.interner.intern_node("b");
-    let c = scheduler.interner.intern_node("c");
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
 
     let ep = scheduler.add_epoch();
     // subepoch exists before a completes

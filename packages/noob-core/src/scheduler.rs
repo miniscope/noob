@@ -1,23 +1,20 @@
-use std::cmp::Reverse;
-use std::collections::{BTreeMap, BTreeSet};
-
 use crate::epoch::Epoch;
 use crate::event::UpdateEvent;
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{Interner, Item, PREVIOUS_EPOCH, ItemID};
+use crate::item::{interner, interner_mut, Interner, Item, ItemID, PREVIOUS_EPOCH};
 use crate::toposort::{EdgeRec, NodeFlags, Sorter};
 use crate::tube::downstream_nodes;
 use crate::{FxIndexMap, FxIndexSet};
-use indexmap::IndexMap;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::cmp::Reverse;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 const DEFAULT_EPOCH_LOG_LEN: u32 = 1000;
 
 pub struct Scheduler {
     nodes: FxIndexMap<String, NodeFlags>,
     edges: Vec<EdgeRec>,
-    /// Mapping between string and int representation of node ids and signals.
-    pub(crate) interner: Interner,
 
     /// A frozen initial-state topo sorter to copy from
     template: Sorter,
@@ -47,13 +44,15 @@ impl Scheduler {
         nodes: FxIndexMap<String, NodeFlags>,
         edges: Vec<EdgeRec>,
     ) -> CoreResult<Scheduler> {
-        let mut interner = Interner::default();
+        let mut slot = interner_mut();
+        let mut interner = (**slot).clone();
+        // let mut interner = interner_mut();
         let template = Sorter::from_graph(&mut interner, &nodes, &edges)?;
         let source_nodes = template.source_nodes();
+        *slot = Arc::new(interner);
         Ok(Scheduler {
             nodes,
             edges,
-            interner,
             template,
             subgraph_templates: FxHashMap::default(),
             source_nodes,
@@ -83,15 +82,12 @@ impl Scheduler {
                     Err(e) => return Err(e),
                 }
             }
-            match e.signal {
-                Some(signal) => {
-                    if e.no_event {
-                        done_epochs.append(&mut self.expire(&e.epoch, signal, true, true)?);
-                    } else {
-                        done_epochs.append(&mut self.done(&e.epoch, signal, true)?)
-                    }
+            if let Some(signal) = e.signal {
+                if e.no_event {
+                    done_epochs.append(&mut self.expire(&e.epoch, signal, true, true)?);
+                } else {
+                    done_epochs.append(&mut self.done(&e.epoch, signal, true)?);
                 }
-                None => {}
             }
         }
         Ok(done_epochs)
@@ -138,7 +134,8 @@ impl Scheduler {
     fn init_graph(&mut self, epoch: Epoch) -> CoreResult<()> {
         let mut graph = self.template.clone();
         if epoch.root() == 0 || self.epoch_completed(&Epoch::from(epoch.root() - 1)) {
-            match graph.done(&self.interner, &[PREVIOUS_EPOCH]) {
+            let interner = interner();
+            match graph.done(&interner, &[PREVIOUS_EPOCH]) {
                 Ok(()) | Err(CoreError::NotAdded(_)) => {}
                 Err(e) => return Err(e),
             }
@@ -186,7 +183,8 @@ impl Scheduler {
         let subgraph_keys: Vec<ItemID> = subgraph.info.keys().copied().collect();
         for parent_dep in subgraph_keys {
             if parent.ran.contains(&parent_dep) {
-                subgraph.done(&self.interner, &[parent_dep])?;
+                let interner = interner();
+                subgraph.done(&interner, &[parent_dep])?;
             } else if parent.done.contains(&parent_dep) && !exclude_current.contains(&parent_dep) {
                 subgraph.mark_expired(&[parent_dep], false);
             } else if parent.out.contains(&parent_dep) {
@@ -218,29 +216,36 @@ impl Scheduler {
         if let Some(template) = self.subgraph_templates.get(&node_id) {
             Ok(template.clone())
         } else {
-            let node_name = match self.interner.resolve(node_id) {
-                Item::Node(node_name) => node_name,
-                Item::Signal(_, _) => {
-                    return Err(CoreError::Value(
-                        "Subgraphs can only be created by nodes".to_string(),
-                    ))
-                }
-            };
+            let (nodes, edges) = {
+                let interner = interner();
+                let node_name = match interner.resolve(node_id) {
+                    Item::Node(node_name) => node_name,
+                    Item::Signal(_, _) => {
+                        return Err(CoreError::Value(
+                            "Subgraphs can only be created by nodes".to_string(),
+                        ))
+                    }
+                };
 
-            let downstream = downstream_nodes(&self.edges, node_name, &FxIndexSet::default());
-            let nodes: FxIndexMap<String, NodeFlags> = downstream
-                .iter()
-                .copied()
-                .filter(|n| self.nodes.contains_key(*n))
-                .map(|n| (String::from(n), *self.nodes.get(n).unwrap()))
-                .collect();
-            let edges: Vec<EdgeRec> = self
-                .edges
-                .iter()
-                .filter(|e| downstream.contains(e.target_node.as_str()))
-                .cloned()
-                .collect();
-            let subgraph = Sorter::from_graph(&mut self.interner, &nodes, &edges)?;
+                let downstream = downstream_nodes(&self.edges, node_name, &FxIndexSet::default());
+                let nodes: FxIndexMap<String, NodeFlags> = downstream
+                    .iter()
+                    .copied()
+                    .filter(|n| self.nodes.contains_key(*n))
+                    .map(|n| (String::from(n), *self.nodes.get(n).unwrap()))
+                    .collect();
+                let edges: Vec<EdgeRec> = self
+                    .edges
+                    .iter()
+                    .filter(|e| downstream.contains(e.target_node.as_str()))
+                    .cloned()
+                    .collect();
+                (nodes, edges)
+            };
+            let mut slot = interner_mut();
+            let mut interner = (**slot).clone();
+            let subgraph = Sorter::from_graph(&mut interner, &nodes, &edges)?;
+            *slot = Arc::new(interner);
             self.subgraph_templates.insert(node_id, subgraph.clone());
             Ok(subgraph)
         }
@@ -304,11 +309,12 @@ impl Scheduler {
     }
 
     pub(crate) fn get_ready(&mut self) -> Vec<(Epoch, ItemID)> {
+        let interner = interner();
         self.epochs
             .iter_mut()
             .flat_map(|(epoch, graph)| {
                 graph
-                    .get_ready(&self.interner)
+                    .get_ready(&interner)
                     .into_iter()
                     .map(|ready| (epoch.clone(), ready))
             })
@@ -316,6 +322,7 @@ impl Scheduler {
     }
 
     pub(crate) fn get_ready_at(&mut self, epoch: &Epoch) -> Vec<(Epoch, ItemID)> {
+        let interner = interner();
         let epochs: Vec<&Epoch> = match self.subepochs.get(epoch) {
             Some(epochs) => {
                 let mut epoch_vec: Vec<&Epoch> = epochs.iter().collect();
@@ -332,7 +339,7 @@ impl Scheduler {
                 let sorter = self.epochs.get_mut(e)?;
                 Some(
                     sorter
-                        .get_ready(&self.interner)
+                        .get_ready(&interner)
                         .into_iter()
                         .map(|node| (e.clone(), node)),
                 )
@@ -341,7 +348,12 @@ impl Scheduler {
             .collect()
     }
 
-    pub fn done(&mut self, epoch: &Epoch, item: ItemID, with_signals: bool) -> CoreResult<Vec<Epoch>> {
+    pub fn done(
+        &mut self,
+        epoch: &Epoch,
+        item: ItemID,
+        with_signals: bool,
+    ) -> CoreResult<Vec<Epoch>> {
         if self.epoch_completed(epoch) {
             // TODO: debug logging
             return Ok(Vec::new());
@@ -351,21 +363,25 @@ impl Scheduler {
             self.add_epoch_at(epoch.clone())?;
         }
         let graph = self.epochs.get_mut(epoch).expect("Epoch was just added");
-
-        match graph.done(&self.interner, &[item]) {
-            Err(CoreError::AlreadyDone(_))
-                if self.subepochs.get(epoch).is_some_and(|s| !s.is_empty()) => {}
-            other => other?,
+        {
+            let interner = interner();
+            match graph.done(&interner, &[item]) {
+                Err(CoreError::AlreadyDone(_))
+                    if self.subepochs.get(epoch).is_some_and(|s| !s.is_empty()) => {}
+                other => other?,
+            }
         }
 
         self.done_subepochs(epoch, item)?;
 
         let graph = self.epochs.get_mut(epoch).expect("Epoch was just added");
-
-        if !self.interner.is_signal(item) && with_signals {
-            if let Some(signals) = graph.signals.get(&item) {
-                let signals: Vec<ItemID> = signals.difference(&graph.done).copied().collect();
-                graph.done(&self.interner, &signals)?;
+        {
+            let interner = interner();
+            if !interner.is_signal(item) && with_signals {
+                if let Some(signals) = graph.signals.get(&item) {
+                    let signals: Vec<ItemID> = signals.difference(&graph.done).copied().collect();
+                    graph.done(&interner, &signals)?;
+                }
             }
         }
 
@@ -411,18 +427,19 @@ impl Scheduler {
     /// nodes downstream of both this node and other nodes in the subepoch run in subepochs,
     /// but nodes that are exclusively downstream of this node only run in the parent epoch
     fn done_subepochs(&mut self, epoch: &Epoch, item: ItemID) -> CoreResult<()> {
+        let interner = interner();
         let Some(subepochs) = self.subepochs.get(epoch) else {
             return Ok(());
         };
         if subepochs.is_empty() {
             return Ok(());
         };
-        let node_part = self.interner.node_part(item);
+        let node_part = interner.node_part(item);
 
         let our_subgraph = self
             .subgraphs
             .entry(node_part)
-            .or_insert_with(|| Self::make_subgraph(&mut self.interner, &self.edges, node_part));
+            .or_insert_with(|| Self::make_subgraph(&interner, &self.edges, node_part));
 
         for subepoch in subepochs.iter() {
             let Some(sorter) = self.epochs.get_mut(subepoch) else {
@@ -432,10 +449,10 @@ impl Scheduler {
                 continue;
             }
             if sorter.done.contains(&item) {
-                sorter.resurrect(&self.interner, &[item])?;
+                sorter.resurrect(&interner, &[item])?;
             }
 
-            sorter.done(&self.interner, &[item])?;
+            sorter.done(&interner, &[item])?;
 
             let leaf = subepoch.leaf().node;
             let exclusive_subgraph = self
@@ -443,7 +460,7 @@ impl Scheduler {
                 .entry((node_part, leaf))
                 .or_insert_with(|| {
                     Self::make_exclusive_subgraph(
-                        &mut self.interner,
+                        &interner,
                         our_subgraph,
                         &self.edges,
                         node_part,
@@ -458,10 +475,13 @@ impl Scheduler {
 
     /// utility for done_subepochs
     /// create a ItemID'd version of the downstream nodes from a graph item
-    fn make_subgraph(interner: &mut Interner, edges: &[EdgeRec], item: ItemID) -> FxIndexSet<ItemID> {
+    fn make_subgraph(interner: &Interner, edges: &[EdgeRec], item: ItemID) -> FxIndexSet<ItemID> {
         let node_str = interner.resolve(item).node_id().to_owned();
         let subgraph = downstream_nodes(edges, &node_str, &FxIndexSet::default());
-        subgraph.iter().map(|n| interner.intern_node(n)).collect()
+        subgraph
+            .iter()
+            .map(|n| interner.get(&Item::Node(n.to_string())).unwrap())
+            .collect()
     }
 
     /// utility for done_subepochs
@@ -469,7 +489,7 @@ impl Scheduler {
     /// finds the nodes that are in the penumbra of the subgraph (induced by item)
     /// but *not* in the penumbra of the excluded item.
     fn make_exclusive_subgraph(
-        interner: &mut Interner,
+        interner: &Interner,
         subgraph: &FxIndexSet<ItemID>,
         edges: &[EdgeRec],
         item: ItemID,
@@ -482,8 +502,10 @@ impl Scheduler {
             &subep_name,
             &FxIndexSet::from_iter([node_str.as_str()]),
         );
-        let downstream_ids: FxIndexSet<ItemID> =
-            downstream.iter().map(|n| interner.intern_node(n)).collect();
+        let downstream_ids: FxIndexSet<ItemID> = downstream
+            .iter()
+            .map(|n| interner.get(&Item::Node(n.to_string())).unwrap())
+            .collect();
         subgraph
             .difference(&downstream_ids)
             .filter(|n| **n != item)
@@ -498,6 +520,7 @@ impl Scheduler {
         with_signals: bool,
         unlock_optionals: bool,
     ) -> CoreResult<Vec<Epoch>> {
+        let interner = interner();
         let mut events: Vec<Epoch> = Vec::new();
         if self.epoch_completed(epoch) {
             // TODO: debug logging
@@ -511,7 +534,7 @@ impl Scheduler {
         let graph = self.epochs.get_mut(epoch).expect("Epoch was just added");
         graph.mark_expired(&[item], unlock_optionals);
 
-        if !self.interner.is_signal(item) && with_signals {
+        if !interner.is_signal(item) && with_signals {
             if let Some(signals) = graph.signals.get(&item) {
                 let signals = signals.clone();
                 for signal in signals {
@@ -528,7 +551,7 @@ impl Scheduler {
         // if a node that *did not induce* the subepochs is expired,
         // it expires itself in subepochs.
         if let Some(subeps) = self.subepochs.get(epoch) {
-            let node = self.interner.node_part(item);
+            let node = interner.node_part(item);
             let subeps: Vec<Epoch> = subeps
                 .iter()
                 .filter(|ep| ep.leaf().node != node && self.epochs.contains_key(ep))
@@ -659,7 +682,12 @@ pub struct ReadyIter<'a> {
 }
 
 impl ReadyIter<'_> {
-    pub fn done(&mut self, epoch: &Epoch, item: ItemID, with_signals: bool) -> CoreResult<Vec<Epoch>> {
+    pub fn done(
+        &mut self,
+        epoch: &Epoch,
+        item: ItemID,
+        with_signals: bool,
+    ) -> CoreResult<Vec<Epoch>> {
         self.scheduler.done(epoch, item, with_signals)
     }
 

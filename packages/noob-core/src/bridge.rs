@@ -1,7 +1,7 @@
 use crate::epoch::{Epoch, EpochSegment};
 use crate::event::UpdateEvent;
 use crate::exceptions::CoreError;
-use crate::item::{Interner, Item, ItemID};
+use crate::item::{interner, Interner, Item, ItemID};
 use crate::scheduler::Scheduler;
 use crate::toposort::{EdgeRec, NodeFlags};
 use crate::FxIndexMap;
@@ -38,13 +38,14 @@ impl PyScheduler {
     }
 
     fn update(&mut self, events: Vec<(EpochArg, String, String, bool)>) -> PyResult<Vec<PyEpoch>> {
+        let interner = interner();
         let mut core_events = Vec::with_capacity(events.len());
         for (epoch, node_id, signal, no_event) in events {
-            let epoch = epoch_from_python(&self.0.interner, epoch)?;
-            let Some(node) = self.0.interner.get(&Item::Node(node_id.clone())) else {
+            let epoch = epoch_from_python(&interner, epoch)?;
+            let Some(node) = interner.get(&Item::Node(node_id.clone())) else {
                 continue; // not in the graph — logged divergence vs python's epoch-creating no-op
             };
-            let signal = self.0.interner.get(&Item::Signal(node_id, signal));
+            let signal = interner.get(&Item::Signal(node_id, signal));
             core_events.push(UpdateEvent {
                 epoch,
                 node,
@@ -55,19 +56,21 @@ impl PyScheduler {
         let ended = self.0.update(core_events)?;
         Ok(ended
             .iter()
-            .map(|ep| epoch_to_python(&self.0.interner, ep))
+            .map(|ep| epoch_to_python(&interner, ep))
             .collect())
     }
 
     fn add_epoch(&mut self) -> PyEpoch {
+        let interner = interner();
         let ep = self.0.add_epoch();
-        epoch_to_python(&self.0.interner, &ep)
+        epoch_to_python(&interner, &ep)
     }
 
     fn add_epoch_at(&mut self, epoch: EpochArg) -> PyResult<PyEpoch> {
-        let ep = epoch_from_python(&self.0.interner, epoch)?;
+        let interner = interner();
+        let ep = epoch_from_python(&interner, epoch)?;
         let ep = self.0.add_epoch_at(ep)?;
-        Ok(epoch_to_python(&self.0.interner, &ep))
+        Ok(epoch_to_python(&interner, &ep))
     }
 
     fn is_active(&self) -> bool {
@@ -75,35 +78,41 @@ impl PyScheduler {
     }
 
     fn is_active_at(&self, epoch: EpochArg) -> PyResult<bool> {
-        let ep = epoch_from_python(&self.0.interner, epoch)?;
+        let interner = interner();
+        let ep = epoch_from_python(&interner, epoch)?;
         Ok(self.0.is_active_at(&ep))
     }
 
     fn epoch_completed(&self, epoch: EpochArg) -> PyResult<bool> {
-        let ep = epoch_from_python(&self.0.interner, epoch)?;
+        let interner = interner();
+        let ep = epoch_from_python(&interner, epoch)?;
         Ok(self.0.epoch_completed(&ep))
     }
 
     fn first_active_epoch(&self) -> Option<PyEpoch> {
+        let interner = interner();
         self.0
             .first_active_epoch()
-            .map(|ep| epoch_to_python(&self.0.interner, &ep))
+            .map(|ep| epoch_to_python(&interner, &ep))
     }
 
     fn sources_finished(&self, epoch: EpochArg) -> PyResult<bool> {
-        let ep = epoch_from_python(&self.0.interner, epoch)?;
+        let interner = interner();
+        let ep = epoch_from_python(&interner, epoch)?;
         Ok(self.0.sources_finished(&ep))
     }
 
     fn get_ready(&mut self) -> Vec<(PyEpoch, String)> {
+        let interner = interner();
         let ready = self.0.get_ready();
-        ready_to_python(&self.0.interner, ready)
+        ready_to_python(&interner, ready)
     }
 
     fn get_ready_at(&mut self, epoch: EpochArg) -> PyResult<Vec<(PyEpoch, String)>> {
-        let epoch = epoch_from_python(&self.0.interner, epoch)?;
+        let interner = interner();
+        let epoch = epoch_from_python(&interner, epoch)?;
         let ready = self.0.get_ready_at(&epoch);
-        Ok(ready_to_python(&self.0.interner, ready))
+        Ok(ready_to_python(&interner, ready))
     }
 
     #[pyo3(signature = (epoch, node_id, signal=None, with_signals=true))]
@@ -114,12 +123,13 @@ impl PyScheduler {
         signal: Option<String>,
         with_signals: bool,
     ) -> PyResult<Vec<PyEpoch>> {
-        let item = item_from_python(&self.0.interner, node_id, signal);
-        let epoch = epoch_from_python(&self.0.interner, epoch)?;
+        let interner = interner();
+        let item = item_from_python(&interner, node_id, signal);
+        let epoch = epoch_from_python(&interner, epoch)?;
         let res = self.0.done(&epoch, item, with_signals)?;
         let ended = res
             .iter()
-            .map(|ep| epoch_to_python(&self.0.interner, ep))
+            .map(|ep| epoch_to_python(&interner, ep))
             .collect();
         Ok(ended)
     }
@@ -133,24 +143,26 @@ impl PyScheduler {
         with_signals: bool,
         unlock_optionals: bool,
     ) -> PyResult<Vec<PyEpoch>> {
-        let item = item_from_python(&self.0.interner, node_id, signal);
-        let epoch = epoch_from_python(&self.0.interner, epoch)?;
+        let interner = interner();
+        let item = item_from_python(&interner, node_id, signal);
+        let epoch = epoch_from_python(&interner, epoch)?;
         let res = self
             .0
             .expire(&epoch, item, with_signals, unlock_optionals)?;
         let ended = res
             .iter()
-            .map(|ep| epoch_to_python(&self.0.interner, ep))
+            .map(|ep| epoch_to_python(&interner, ep))
             .collect();
         Ok(ended)
     }
 
     fn end_epoch(&mut self, epoch: EpochArg) -> PyResult<Vec<PyEpoch>> {
-        let epoch = epoch_from_python(&self.0.interner, epoch)?;
+        let interner = interner();
+        let epoch = epoch_from_python(&interner, epoch)?;
         let res = self.0.end_epoch(epoch)?;
         Ok(res
             .iter()
-            .map(|ep| epoch_to_python(&self.0.interner, ep))
+            .map(|ep| epoch_to_python(&interner, ep))
             .collect())
     }
 }
