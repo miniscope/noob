@@ -1,16 +1,20 @@
 use super::*;
 
-use crate::item::TUBE_NODE;
+#[test]
+fn test_display() {
+    assert_eq!(Epoch::from(0).to_string(), "0");
+    assert_eq!((Epoch::from(1) / (1, 2)).to_string(), "(1, (1, 2))");
+}
 
 /// Epochs can be created by an int
 #[test]
 fn test_from_int() {
     assert_eq!(
         Epoch::from(10),
-        Epoch(vec![EpochSegment {
-            node: TUBE_NODE,
-            epoch: 10
-        }])
+        Epoch {
+            root: 10,
+            path: Vec::new()
+        }
     )
 }
 
@@ -21,31 +25,13 @@ fn test_root_has_no_parent() {
 
 #[test]
 fn test_subepochs_have_parent() {
-    let subepoch = Epoch(vec![
-        EpochSegment {
-            node: TUBE_NODE,
-            epoch: 10,
-        },
-        EpochSegment {
-            node: 100,
-            epoch: 0,
-        },
-    ]);
+    let subepoch = Epoch::from(10) / (100, 0);
     assert_eq!(subepoch.parent(), Some(Epoch::from(10)));
 }
 
 #[test]
 fn test_child() {
-    let subepoch = Epoch(vec![
-        EpochSegment {
-            node: TUBE_NODE,
-            epoch: 10,
-        },
-        EpochSegment {
-            node: 100,
-            epoch: 0,
-        },
-    ]);
+    let subepoch = Epoch::from(10) / (100, 0);
     let parent = Epoch::from(10);
     assert_eq!(
         parent.child(EpochSegment {
@@ -58,16 +44,7 @@ fn test_child() {
 
 #[test]
 fn test_child_from_div() {
-    let subepoch = Epoch(vec![
-        EpochSegment {
-            node: TUBE_NODE,
-            epoch: 10,
-        },
-        EpochSegment {
-            node: 100,
-            epoch: 0,
-        },
-    ]);
+    let subepoch = Epoch::from(10) / (100, 0);
     let parent = Epoch::from(10);
     assert_eq!(
         &parent
@@ -109,16 +86,9 @@ fn test_parents() {
 
 #[test]
 fn test_parents_subepoch() {
-    let subep = Epoch(vec![
-        EpochSegment { node: 0, epoch: 0 },
-        EpochSegment { node: 1, epoch: 0 },
-        EpochSegment { node: 2, epoch: 0 },
-    ]);
-    let parent1 = Epoch(vec![
-        EpochSegment { node: 0, epoch: 0 },
-        EpochSegment { node: 1, epoch: 0 },
-    ]);
-    let parent2 = Epoch(vec![EpochSegment { node: 0, epoch: 0 }]);
+    let subep = Epoch::from(0) / (1, 0) / (2, 0);
+    let parent1 = Epoch::from(0) / (1, 0);
+    let parent2 = Epoch::from(0);
 
     let parents: Vec<Epoch> = subep.parents().collect();
     assert_eq!(parents, vec![parent1, parent2]);
@@ -137,17 +107,8 @@ fn test_add() {
 
 #[test]
 fn test_add_subepoch() {
-    let subep = Epoch(vec![
-        EpochSegment { node: 0, epoch: 0 },
-        EpochSegment { node: 1, epoch: 0 },
-        EpochSegment { node: 2, epoch: 0 },
-    ]);
-
-    let expected = Epoch(vec![
-        EpochSegment { node: 0, epoch: 0 },
-        EpochSegment { node: 1, epoch: 0 },
-        EpochSegment { node: 2, epoch: 1 },
-    ]);
+    let subep = Epoch::from(0) / (1, 0) / (2, 0);
+    let expected = Epoch::from(0) / (1, 0) / (2, 1);
 
     assert_eq!(subep + 1, expected);
 }

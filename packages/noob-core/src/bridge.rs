@@ -186,8 +186,10 @@ fn epoch_from_python(interner: &Interner, arg: EpochArg) -> PyResult<Epoch> {
                     epoch: ep,
                 })
                 .collect();
-            let ep = Epoch::try_from(segments)
-                .expect("Nodes and signals must be added when the scheduler is created");
+            // TODO: Won't need this conversion when epoch is pure-rust.
+            let ep = Epoch::new(segments[0].epoch, segments[1..].to_vec());
+            // let ep = Epoch::try_from(segments)
+            //     .expect("Nodes and signals must be added when the scheduler is created");
             Ok(ep)
         }
     }
@@ -196,7 +198,6 @@ fn epoch_from_python(interner: &Interner, arg: EpochArg) -> PyResult<Epoch> {
 fn epoch_to_python(interner: &Interner, epoch: &Epoch) -> PyEpoch {
     epoch
         .segments()
-        .iter()
         .map(|seg| (interner.resolve(seg.node).node_id().to_owned(), seg.epoch))
         .collect()
 }

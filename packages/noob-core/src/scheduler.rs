@@ -67,7 +67,7 @@ impl Scheduler {
     }
 
     pub fn update(&mut self, mut events: Vec<UpdateEvent>) -> CoreResult<Vec<Epoch>> {
-        events.sort_by_key(|e| Reverse(e.epoch.segments().len()));
+        events.sort_by_key(|e| Reverse(e.epoch.n_segments()));
         let mut done_nodes: FxHashSet<(Epoch, ItemID)> = FxHashSet::default();
         let mut done_epochs: Vec<Epoch> = Vec::new();
         for e in events {
@@ -109,7 +109,7 @@ impl Scheduler {
             Err(CoreError::EpochCompleted(epoch))
         } else {
             self.next_epoch = self.next_epoch.max(epoch.root() + 1);
-            if epoch.segments().len() == 1 {
+            if epoch.is_root() {
                 self.init_graph(epoch.clone())?;
             } else {
                 self.init_subgraph(epoch.clone())?;
@@ -151,13 +151,16 @@ impl Scheduler {
                 "Cannot create a subepoch for root epoch {epoch}"
             )));
         };
-        let node_id = epoch.leaf().node;
+        let node_id = epoch
+            .leaf()
+            .expect("parent() returned Some, so path is not empty")
+            .node;
 
         let mut subgraph = self.get_subgraph_template(node_id)?;
         let parent = match self.epochs.get(&immediate_parent) {
             Some(parent) => parent,
             None => {
-                if immediate_parent.segments().len() > 1 {
+                if !immediate_parent.is_root() {
                     self.init_subgraph(immediate_parent.clone())?;
                 } else {
                     self.init_graph(immediate_parent.clone())?;
@@ -400,10 +403,7 @@ impl Scheduler {
         // Eagerly add the next epoch whenever the source nodes in a root epoch are done -
         // for async/multi-epoch runners,
         // this allows nodes to run as soon as they are topologically available.
-        if epoch.segments().len() == 1
-            && self.source_nodes.contains(&item)
-            && self.sources_finished(epoch)
-        {
+        if epoch.is_root() && self.source_nodes.contains(&item) && self.sources_finished(epoch) {
             let next = epoch + 1;
             if !self.epochs.contains_key(&next) && !self.epoch_completed(&next) {
                 self.add_epoch_at(next)?;
@@ -454,7 +454,10 @@ impl Scheduler {
 
             sorter.done(&interner, &[item])?;
 
-            let leaf = subepoch.leaf().node;
+            let leaf = subepoch
+                .leaf()
+                .expect("Subepochs always have leaf nodes defined")
+                .node;
             let exclusive_subgraph = self
                 .exclusive_subgraphs
                 .entry((node_part, leaf))
@@ -554,7 +557,10 @@ impl Scheduler {
             let node = interner.node_part(item);
             let subeps: Vec<Epoch> = subeps
                 .iter()
-                .filter(|ep| ep.leaf().node != node && self.epochs.contains_key(ep))
+                .filter(|ep| {
+                    ep.leaf().expect("Subepochs always have nodes defined").node != node
+                        && self.epochs.contains_key(ep)
+                })
                 .cloned()
                 .collect();
             for subep in subeps {
@@ -579,15 +585,12 @@ impl Scheduler {
         // or when we receive out of order events e.g. in `update`
         let mut events: Vec<Epoch> = Vec::new();
         let next = &epoch + 1;
-        if next.segments().len() == 1
-            && !self.epochs.contains_key(&next)
-            && !self.epoch_completed(&next)
-        {
+        if next.is_root() && !self.epochs.contains_key(&next) && !self.epoch_completed(&next) {
             self.add_epoch_at(next.clone())?;
         }
 
         // Mark this epoch done to unlock stateful nodes in successor epoch
-        if epoch.segments().len() == 1 || self.epochs.contains_key(&next) {
+        if epoch.is_root() || self.epochs.contains_key(&next) {
             match self.done(&next, PREVIOUS_EPOCH, false) {
                 Ok(mut ended) => events.append(&mut ended),
                 Err(
@@ -600,7 +603,7 @@ impl Scheduler {
         }
 
         // Log the epoch as completed
-        if epoch.segments().len() == 1 {
+        if epoch.is_root() {
             self.epoch_log.insert(epoch.root());
             if self.epoch_log.len() > self.epoch_log_len as usize {
                 self.epoch_log.pop_first();

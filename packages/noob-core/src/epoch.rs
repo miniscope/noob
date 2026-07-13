@@ -1,9 +1,8 @@
-use crate::exceptions::CoreError;
 use crate::item::{ItemID, TUBE_NODE};
 use std::fmt;
+use std::iter::once;
 use std::ops::{Add, Div};
 
-// TODO: Make some frozen "SmallEpoch" with a burned in tube ID?
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct EpochSegment {
     pub node: ItemID,
@@ -26,27 +25,51 @@ impl fmt::Display for EpochSegment {
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Epoch(Vec<EpochSegment>);
+pub struct Epoch {
+    root: u32,
+    path: Vec<EpochSegment>,
+}
 
 impl Epoch {
-    pub fn segments(&self) -> &[EpochSegment] {
-        &self.0
-    }
-
-    pub fn parent(&self) -> Option<Epoch> {
-        if self.0.len() > 1 {
-            Some(Epoch(self.0[..self.0.len() - 1].to_vec()))
-        } else {
-            None
+    pub fn new(root: u32, path: impl IntoIterator<Item = impl Into<EpochSegment>>) -> Epoch {
+        Epoch {
+            root,
+            path: path.into_iter().map(Into::into).collect(),
         }
     }
 
+    pub fn is_root(&self) -> bool {
+        self.path.is_empty()
+    }
+
+    pub fn n_segments(&self) -> usize {
+        self.path.len() + 1
+    }
+
+    pub fn segments(&self) -> impl Iterator<Item = EpochSegment> + '_ {
+        once(EpochSegment {
+            node: TUBE_NODE,
+            epoch: self.root,
+        })
+        .chain(self.path.iter().copied())
+    }
+
+    pub fn parent(&self) -> Option<Epoch> {
+        self.path.split_last().map(|(_leaf, rest)| Epoch {
+            root: self.root,
+            path: rest.to_vec(),
+        })
+    }
+
     pub fn parents(&self) -> impl Iterator<Item = Epoch> + '_ {
-        (1..self.0.len()).rev().map(|i| Epoch(self.0[..i].to_vec()))
+        (0..self.path.len()).rev().map(|i| Epoch {
+            root: self.root,
+            path: self.path[..i].to_vec(),
+        })
     }
 
     pub fn child(mut self, subep: EpochSegment) -> Epoch {
-        self.0.push(subep);
+        self.path.push(subep);
         self
     }
 
@@ -57,30 +80,19 @@ impl Epoch {
     }
 
     pub fn root(&self) -> u32 {
-        self.0[0].epoch
+        self.root
     }
 
-    pub fn leaf(&self) -> &EpochSegment {
-        self.0.last().expect("Epoch can't be empty")
+    pub fn leaf(&self) -> Option<&EpochSegment> {
+        self.path.last()
     }
 }
 
 impl From<u32> for Epoch {
     fn from(number: u32) -> Self {
-        Epoch(vec![EpochSegment {
-            node: TUBE_NODE,
-            epoch: number,
-        }])
-    }
-}
-
-impl TryFrom<Vec<EpochSegment>> for Epoch {
-    type Error = CoreError;
-    fn try_from(segments: Vec<EpochSegment>) -> Result<Epoch, CoreError> {
-        if segments.is_empty() {
-            Err(CoreError::Value("Epochs may not be empty".to_string()))
-        } else {
-            Ok(Epoch(segments))
+        Epoch {
+            root: number,
+            path: Vec::new(),
         }
     }
 }
@@ -103,7 +115,10 @@ impl<T: Into<EpochSegment>> Div<T> for &Epoch {
 impl Add<u32> for Epoch {
     type Output = Epoch;
     fn add(mut self, rhs: u32) -> Epoch {
-        self.0.last_mut().expect("Epoch can't be empty").epoch += rhs;
+        match self.path.last_mut() {
+            Some(seg) => seg.epoch += rhs,
+            None => self.root += rhs,
+        }
         self
     }
 }
@@ -117,15 +132,13 @@ impl Add<u32> for &Epoch {
 
 impl fmt::Display for Epoch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.len() == 1 {
+        if self.is_root() {
             write!(f, "{}", self.root())
         } else {
             write!(f, "(")?;
-            for (i, seg) in self.0.iter().enumerate() {
-                if i > 0 {
-                    write!(f, ", ")?;
-                }
-                write!(f, "{seg}")?;
+            write!(f, "{}", self.root)?;
+            for (i, seg) in self.path.iter().enumerate() {
+                write!(f, ", {seg}")?;
             }
             write!(f, ")")
         }
