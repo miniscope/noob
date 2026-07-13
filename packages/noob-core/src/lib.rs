@@ -15,5 +15,6 @@ pub mod tube;
 #[pymodule]
 fn _core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<bridge::PyScheduler>()?;
+    m.add_class::<epoch::Epoch>()?;
     Ok(())
 }

@@ -791,6 +791,11 @@ class NodeRunner(EventloopMixin):
                 if self.asset_specs[asset].depends is not None:
                     # no idea why mypy can't tell `depends` is a string here
                     node_id, signal = self.asset_specs[asset].depends.split(".")  # type: ignore[union-attr]
+                    if len(epoch) == 1 and epoch[0].epoch == 0:
+                        return True
+                    elif epoch[-1].epoch == 0:
+                        return False
+
                     try:
                         self.store.get(node_id, signal, epoch - 1)
                     except KeyError:

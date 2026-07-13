@@ -9,7 +9,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::import_exception;
 use pyo3::prelude::*;
 
-#[pyclass(name = "Scheduler")]
+#[pyclass(name = "Scheduler", module = "noob_core._core")]
 pub struct PyScheduler(Scheduler);
 
 #[pymethods]

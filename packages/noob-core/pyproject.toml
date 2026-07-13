@@ -12,7 +12,7 @@ repository = "https://github.com/miniscope/noob"
 license = {text = "MIT"}
 
 [dependency-groups]
-test = ["pytest", "noob"]
+test = ["pytest", "pydantic>=2", "noob"]
 
 [project.urls]
 homepage = "https://noob.readthedocs.io"

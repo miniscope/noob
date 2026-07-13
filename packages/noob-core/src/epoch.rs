@@ -1,7 +1,10 @@
-use crate::item::{ItemID, TUBE_NODE};
+use crate::item::{interner, resolve_or_intern_node, ItemID, TUBE_NODE};
+use pyo3::exceptions::{PyIndexError, PyValueError};
+use pyo3::prelude::*;
+use pyo3::types::{IntoPyDict, PyType};
 use std::fmt;
 use std::iter::once;
-use std::ops::{Add, Div};
+use std::ops::{Add, Div, Sub};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct EpochSegment {
@@ -18,12 +21,16 @@ impl From<(ItemID, u32)> for EpochSegment {
     }
 }
 
+/// Takes the interner arc lock - don't be string formatting while mutating interns
 impl fmt::Display for EpochSegment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({}, {})", self.node, self.epoch)
+        let interner = interner();
+        let node = interner.resolve(self.node);
+        write!(f, "('{}', {})", node.node_id(), self.epoch)
     }
 }
 
+#[pyclass(module = "noob_core._core", frozen, eq, ord, hash, str)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Epoch {
     root: u32,
@@ -86,6 +93,203 @@ impl Epoch {
     pub fn leaf(&self) -> Option<&EpochSegment> {
         self.path.last()
     }
+
+    pub fn checked_sub(mut self, rhs: u32) -> Option<Epoch> {
+        let slot = match self.path.last_mut() {
+            Some(seg) => &mut seg.epoch,
+            None => &mut self.root,
+        };
+        *slot = slot.checked_sub(rhs)?;
+        Some(self)
+    }
+}
+
+#[pymethods]
+impl Epoch {
+    #[new]
+    #[pyo3(signature = (root, path=Vec::new()))]
+    fn py_new(root: u32, path: Vec<(String, u32)>) -> Self {
+        Epoch {
+            root,
+            path: path
+                .into_iter()
+                .map(|(node_id, epoch)| EpochSegment {
+                    node: resolve_or_intern_node(&node_id),
+                    epoch,
+                })
+                .collect(),
+        }
+    }
+
+    #[getter(root)]
+    fn py_root(&self) -> u32 {
+        self.root()
+    }
+
+    #[getter(parents)]
+    fn py_parents(&self) -> Vec<Epoch> {
+        self.parents().collect()
+    }
+
+    #[pyo3(name = "make_subepochs")]
+    fn py_make_subepochs(&self, node: &str, n: u32) -> Vec<Epoch> {
+        let id = resolve_or_intern_node(node);
+        self.make_subepochs(id, n)
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{self}")
+    }
+
+    fn __truediv__(&self, rhs: (String, u32)) -> Epoch {
+        self / (resolve_or_intern_node(&rhs.0), rhs.1)
+    }
+
+    fn __add__(&self, rhs: u32) -> Epoch {
+        self + rhs
+    }
+
+    fn __sub__(&self, rhs: u32) -> PyResult<Epoch> {
+        self.clone()
+            .checked_sub(rhs)
+            .ok_or_else(|| PyValueError::new_err("Negative epochs are invalid"))
+    }
+
+    fn __len__(&self) -> usize {
+        self.n_segments()
+    }
+
+    fn __getitem__(&self, index: isize) -> PyResult<(String, u32)> {
+        let len = self.n_segments();
+        let idx = if index < 0 {
+            index + len as isize
+        } else {
+            index
+        };
+        usize::try_from(idx)
+            .ok()
+            .and_then(|i| self.segments().nth(i))
+            .map(|seg| (interner().resolve(seg.node).node_id().to_owned(), seg.epoch))
+            .ok_or_else(|| {
+                PyIndexError::new_err(format!(
+                    "Index {index} out of range for epoch of length {len}"
+                ))
+            })
+    }
+
+    fn __reduce__<'py>(&self, py: Python<'py>) -> (Bound<'py, PyType>, (u32, PyEpochSegments)) {
+        let interner = interner();
+        (
+            py.get_type::<Epoch>(),
+            (
+                self.root,
+                self.path
+                    .iter()
+                    .map(|seg| (interner.resolve(seg.node).node_id().to_owned(), seg.epoch))
+                    .collect(),
+            ),
+        )
+    }
+
+    fn to_wire(&self) -> WireEpoch {
+        if self.is_root() {
+            return WireEpoch::Root(self.root);
+        }
+        let interner = interner();
+        WireEpoch::Path(
+            once(WireItem::Root(self.root))
+                .chain(self.path.iter().map(|seg| {
+                    WireItem::Segment(interner.resolve(seg.node).node_id().to_owned(), seg.epoch)
+                }))
+                .collect(),
+        )
+    }
+
+    #[staticmethod]
+    fn from_wire(wire: WireEpoch) -> PyResult<Epoch> {
+        match wire {
+            WireEpoch::Root(root) => Ok(Epoch::from(root)),
+            WireEpoch::Path(items) => {
+                let mut items = items.into_iter();
+                let Some(WireItem::Root(root)) = items.next() else {
+                    return Err(PyValueError::new_err(
+                        "wire epoch must start with an int root",
+                    ));
+                };
+                let path = items
+                    .map(|item| match item {
+                        WireItem::Segment(name, epoch) => Ok(EpochSegment {
+                            node: resolve_or_intern_node(&name),
+                            epoch,
+                        }),
+                        WireItem::Root(n) => Err(PyValueError::new_err(format!(
+                            "unexpected bare int {n} in path"
+                        ))),
+                    })
+                    .collect::<PyResult<Vec<_>>>()?;
+                Ok(Epoch { root, path })
+            }
+        }
+    }
+
+    #[classmethod]
+    fn __get_pydantic_core_schema__<'py>(
+        cls: &Bound<'py, PyType>,
+        _source_type: &Bound<'py, PyAny>,
+        _handler: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = cls.py();
+        let core_schema = py.import("pydantic_core")?.getattr("core_schema")?;
+
+        // handles to core_schema creators
+        let union = core_schema.getattr("union_schema")?;
+        let str = core_schema.getattr("str_schema")?;
+        let int = core_schema.getattr("int_schema")?;
+        let list = core_schema.getattr("list_schema")?;
+        let tuple = core_schema.getattr("tuple_schema")?;
+
+        let isinstance = core_schema.getattr("is_instance_schema")?.call1((cls,))?;
+
+        // Coerce ints and lists of lists into ints or lists of tuples,
+        // then call `from_wire`
+        let validator = core_schema
+            .getattr("no_info_after_validator_function")?
+            .call1((
+                cls.getattr("from_wire")?,
+                union.call1((vec![
+                    int.call0()?,
+                    list.call1((union.call1((vec![
+                        int.call0()?,
+                        tuple.call1((vec![str.call0()?, int.call0()?],))?,
+                    ],))?,))?,
+                ],))?,
+            ))?;
+        let serialization = core_schema
+            .getattr("plain_serializer_function_ser_schema")?
+            .call(
+                (cls.getattr("to_wire")?,),
+                Some(&[("when_used", "json")].into_py_dict(py)?),
+            )?;
+        let kwargs = [("serialization", serialization)].into_py_dict(py)?;
+
+        core_schema
+            .getattr("union_schema")?
+            .call((vec![isinstance, validator],), Some(&kwargs))
+    }
+}
+
+type PyEpochSegments = Vec<(String, u32)>;
+
+#[derive(FromPyObject, IntoPyObject)]
+enum WireEpoch {
+    Root(u32),
+    Path(Vec<WireItem>),
+}
+
+#[derive(FromPyObject, IntoPyObject)]
+enum WireItem {
+    Root(u32),
+    Segment(String, u32),
 }
 
 impl From<u32> for Epoch {
@@ -130,6 +334,20 @@ impl Add<u32> for &Epoch {
     }
 }
 
+impl Sub<u32> for Epoch {
+    type Output = Epoch;
+    fn sub(self, rhs: u32) -> Epoch {
+        self.checked_sub(rhs).expect("Negative epochs are invalid")
+    }
+}
+
+impl Sub<u32> for &Epoch {
+    type Output = Epoch;
+    fn sub(self, rhs: u32) -> Epoch {
+        self.clone() - rhs
+    }
+}
+
 impl fmt::Display for Epoch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_root() {
@@ -137,7 +355,7 @@ impl fmt::Display for Epoch {
         } else {
             write!(f, "(")?;
             write!(f, "{}", self.root)?;
-            for (i, seg) in self.path.iter().enumerate() {
+            for seg in self.path.iter() {
                 write!(f, ", {seg}")?;
             }
             write!(f, ")")

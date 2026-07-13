@@ -20,6 +20,27 @@ pub(crate) fn interner_mut() -> RwLockWriteGuard<'static, Arc<Interner>> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// For use with Epoch - fast way to handle interned node_id -> int mappings
+/// We assume that most of the time we are constructing Epochs in the context of a scheduler,
+/// where all the node_ids will already be interned,
+/// so all we need to do is get a read-only view into the interner.
+/// To support random, python-like creation of Epochs, though,
+/// we automatically intern node ids that haven't been:
+/// if there are no other references to the interner,
+/// as cheap as mutating the IndexMap. Otherwise, requires a copy.
+pub(crate) fn resolve_or_intern_node(node_id: &str) -> ItemID {
+    let item = Item::Node(node_id.to_string());
+    if let Some(id) = interner().get(&item) {
+        return id;
+    }
+    // take the lock and try to get again in case interned in the tiny race window
+    let mut interner_slot = interner_mut();
+    if let Some(id) = interner_slot.get(&item) {
+        return id;
+    }
+    Arc::make_mut(&mut interner_slot).intern(item)
+}
+
 /// A graph item: either a node id, or a (node id, signal name) pair.
 ///
 /// The native representation of `noob.types.NodeID | noob.types.NodeSignal`:

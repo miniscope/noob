@@ -1,3 +1,3 @@
-from noob_core._core import Scheduler
+from noob_core._core import Epoch, Scheduler
 
-__all__ = ["Scheduler"]
+__all__ = ["Epoch", "Scheduler"]

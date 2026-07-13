@@ -2,8 +2,13 @@ use super::*;
 
 #[test]
 fn test_display() {
+    let interner = interner();
+    let node_id = interner.resolve(1).node_id();
     assert_eq!(Epoch::from(0).to_string(), "0");
-    assert_eq!((Epoch::from(1) / (1, 2)).to_string(), "(1, (1, 2))");
+    assert_eq!(
+        (Epoch::from(1) / (1, 2)).to_string(),
+        format!("(1, ('{node_id}', 2))")
+    );
 }
 
 /// Epochs can be created by an int
@@ -111,6 +116,31 @@ fn test_add_subepoch() {
     let expected = Epoch::from(0) / (1, 0) / (2, 1);
 
     assert_eq!(subep + 1, expected);
+}
+
+#[test]
+fn test_sub() {
+    let root = Epoch::from(10);
+    assert_eq!(root - 1, Epoch::from(9));
+
+    let root = Epoch::from(10);
+    let borrowed = &root - 1;
+    assert_eq!(root, Epoch::from(10));
+    assert_eq!(borrowed, Epoch::from(9));
+}
+
+#[test]
+#[should_panic(expected = "Negative epochs")]
+fn test_sub_subzero() {
+    let _x = Epoch::from(0) - 1;
+}
+
+#[test]
+fn test_sub_subepoch() {
+    let subep = Epoch::from(0) / (1, 5) / (2, 5);
+    let expected = Epoch::from(0) / (1, 5) / (2, 4);
+
+    assert_eq!(subep - 1, expected);
 }
 
 #[test]
