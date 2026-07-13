@@ -68,7 +68,9 @@ jobs:
           path: core-dist
 
       - name: Install repo-built noob-core
-        run: pdm run python -m pip install --no-index --find-links core-dist noob-core
+        run: |
+          pdm run python -m ensurepip
+          pdm run python -m pip install --no-index --find-links core-dist noob-core
 
       - name: Assert core came from the repo wheel
         run: pdm run python -c "import noob_core; print(noob_core.__file__)"
