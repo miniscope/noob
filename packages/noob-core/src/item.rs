@@ -18,7 +18,6 @@ pub(crate) fn interner_mut() -> RwLockWriteGuard<'static, Arc<Interner>> {
     INTERNER
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-    // INTERNER.write().unwrap()
 }
 
 /// A graph item: either a node id, or a (node id, signal name) pair.

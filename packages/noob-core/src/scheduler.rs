@@ -45,11 +45,9 @@ impl Scheduler {
         edges: Vec<EdgeRec>,
     ) -> CoreResult<Scheduler> {
         let mut slot = interner_mut();
-        let mut interner = (**slot).clone();
-        // let mut interner = interner_mut();
-        let template = Sorter::from_graph(&mut interner, &nodes, &edges)?;
+        let interner = Arc::make_mut(&mut slot);
+        let template = Sorter::from_graph(interner, &nodes, &edges)?;
         let source_nodes = template.source_nodes();
-        *slot = Arc::new(interner);
         Ok(Scheduler {
             nodes,
             edges,
@@ -246,9 +244,8 @@ impl Scheduler {
                 (nodes, edges)
             };
             let mut slot = interner_mut();
-            let mut interner = (**slot).clone();
-            let subgraph = Sorter::from_graph(&mut interner, &nodes, &edges)?;
-            *slot = Arc::new(interner);
+            let interner = Arc::make_mut(&mut slot);
+            let subgraph = Sorter::from_graph(interner, &nodes, &edges)?;
             self.subgraph_templates.insert(node_id, subgraph.clone());
             Ok(subgraph)
         }
