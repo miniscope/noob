@@ -1,11 +1,9 @@
 import contextlib
-from copy import deepcopy
 
 import pytest
 from pytest_codspeed.plugin import BenchmarkFixture
 
 from noob import Tube
-from noob.edge import Edge
 from noob.exceptions import AlreadyDoneError
 from noob.runner.base import TubeRunner
 
@@ -50,4 +48,4 @@ def _run_sorter(tube: Tube) -> None:
         if not ready:
             raise RuntimeError("Should not get stuck in an infinite ready loop")
         for r in ready:
-            tube.scheduler.done(epoch=epoch, node_id=r['value'], with_signals=True)
+            tube.scheduler.done(epoch=epoch, node_id=r["value"], with_signals=True)
