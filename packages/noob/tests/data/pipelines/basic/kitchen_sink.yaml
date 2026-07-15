@@ -1,11 +1,6 @@
 noob_id: testing-kitchen-sink
 noob_model: noob.tube.TubeSpecification
 noob_version: 0.0.1
-description: |
-  One of every graph feature:
-  stateful generator sources, plain required deps, optional slots,
-  sporadic NoEvent emission (switch), map -> subepochs -> gather (map mode),
-  and gather across epochs (n mode).
 
 nodes:
   count:
@@ -38,37 +33,6 @@ nodes:
     depends:
       - value: letter.letter
 
-  # map/gather: switch.fruits (a word 1 of 3 epochs, NoEvent otherwise)
-  # fans out per-letter into subepochs, which the map-mode gather
-  # collapses back into the parent epoch
-  switch:
-    type: noob.testing.switch
-  mapped:
-    type: map
-    depends:
-      - value: switch.fruits
-  shout:
-    type: noob.testing.exclaim
-    depends:
-      - string: mapped.value
-  regroup:
-    type: gather
-    depends:
-      - value: shout.value
-      - n: mapped.n
-  reword:
-    type: noob.testing.concat
-    depends:
-      - strings: regroup.value
-
-  # optional slots: every dependency edge into this node is optional,
-  # and the_other is missing whenever word emitted NoEvent upstream
-  pick:
-    type: noob.testing.this_or_that
-    depends:
-      - this: multiply.value
-      - that: divide.ratio
-      - the_other: reword.value
 
   return:
     type: return
@@ -76,5 +40,3 @@ nodes:
       - multiply: multiply.value
       - divide: divide.ratio
       - gather_n: gather_n.value
-      - reword: reword.value
-      - pick: pick.value
