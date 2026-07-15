@@ -127,7 +127,7 @@ jobs:
         run: pdm run render_schema
       - name: check schemas
         run: |
-          if [[ -n $(git status --porcelain) ]]; then
+          if [[ -n $(git status ./schema --porcelain) ]]; then
               git diff
               echo "Regenerate the schema with pdm run render_schema" >> "$GITHUB_STEP_SUMMARY"
               exit 1

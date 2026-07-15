@@ -14,11 +14,14 @@ build:
   tools:
     python: "3.13"
     nodejs: "24"
+    rust: "1.96"
   jobs:
     pre_install:
       - python -m pip install pdm
     install:
       - npm --prefix js/ ci
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm install --with docs
+      - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run python -m ensurepip
+      - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run python -m pip install ./packages/noob-core
     pre_build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-js
