@@ -717,7 +717,9 @@ impl Scheduler {
             let ready = sorter.get_ready(&interner);
             groups.push(ready);
             let out: Vec<u32> = sorter.out.iter().copied().collect();
-            sorter.done(&interner, &out).expect("Out nodes by definition can't fail to be marked done");
+            sorter
+                .done(&interner, &out)
+                .expect("Out nodes by definition can't fail to be marked done");
         }
         groups
     }

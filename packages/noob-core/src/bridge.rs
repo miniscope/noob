@@ -45,13 +45,10 @@ impl PyScheduler {
         for (epoch, node_id, signal, no_event) in events {
             // filter the events to only those that we want to process further with the relevant sorters
             // do this here, as soon as we can, to avoid any unnecessary work/iteration later.
-            let Some(node) = interner.get(&Item::Node(node_id.clone())).and_then(|node| {
-                if self.0.graph_items.contains(&node) {
-                    Some(node)
-                } else {
-                    None
-                }
-            }) else {
+            let Some(node) = interner
+                .get(&Item::Node(node_id.clone()))
+                .filter(|&node| self.0.graph_items.contains(&node))
+            else {
                 continue; // not in the graph
             };
             // some nodes are present in our graph without any dependencies
@@ -61,13 +58,7 @@ impl PyScheduler {
             // we want to pass just the node with a `None` signal to mark it done
             let signal = interner
                 .get(&Item::Signal(node_id, signal))
-                .and_then(|sig| {
-                    if self.0.graph_items.contains(&sig) {
-                        Some(sig)
-                    } else {
-                        None
-                    }
-                });
+                .filter(|&sig| self.0.graph_items.contains(&sig));
             let epoch = epoch_from_python(epoch)?;
             core_events.push(UpdateEvent {
                 epoch,

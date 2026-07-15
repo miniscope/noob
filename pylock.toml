@@ -4314,7 +4314,7 @@ marker = "\"dev\" in dependency_groups"
 dependencies = []
 
 [tool.pdm]
-hashes = {sha256 = "99196bc3d5c9b1e7f77b62cb7da9c26e29cf7692cf6e5e513d9aa089ea2b9e94"}
+hashes = {sha256 = "6716a19ba488b2c178a4872e9c88344bd4c9c5f100dff49aef6f6f4d4c729790"}
 strategy = ["inherit_metadata", "static_urls"]
 
 [[tool.pdm.targets]]
