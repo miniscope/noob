@@ -1,7 +1,7 @@
+use crate::FxIndexSet;
+use pyo3::IntoPyObject;
 use std::fmt;
 use std::sync::{Arc, LazyLock, RwLock, RwLockWriteGuard};
-
-use crate::FxIndexSet;
 
 pub type ItemID = u32;
 
@@ -45,7 +45,7 @@ pub(crate) fn resolve_or_intern_node(node_id: &str) -> ItemID {
 ///
 /// The native representation of `noob.types.NodeID | noob.types.NodeSignal`:
 /// a `str` or a 2-tuple of `str` on the python side.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, IntoPyObject)]
 pub enum Item {
     Node(String),
     Signal(String, String),

@@ -101,7 +101,7 @@ class Asset(BaseModel):
     """The signal that this asset gets updated by. See :attr:`.AssetSpecification.depends`"""
     obj: Any | None = None
     """Instantiated asset instance"""
-    stored_at: Epoch = Epoch(-1)
+    stored_at: Epoch | None = None
     """The latest epoch the asset was stored at. Only used when depends is not `None`"""
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)

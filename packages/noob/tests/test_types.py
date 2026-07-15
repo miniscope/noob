@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from noob.event import Event
 from noob.network.message import EventMsg
 from noob.testing import counter
-from noob.types import Epoch, EpochSegment, Picklable
+from noob.types import Epoch, Picklable
 
 
 def test_epoch_from_int():
@@ -17,8 +17,8 @@ def test_epoch_from_int():
     """
     epoch = Epoch(0)
     assert len(epoch) == 1
-    assert epoch[0].epoch == 0
-    assert epoch[0].node_id == "tube"
+    assert epoch[0][1] == 0
+    assert epoch[0][0] == "tube"
 
 
 def test_epoch_contains():
@@ -62,20 +62,13 @@ def test_pydantic_coerces_epoch_tuples():
     class MyModel(BaseModel):
         epoch: Epoch
 
-    model = MyModel(epoch=(("tube", 0),))
-    assert isinstance(model.epoch, Epoch)
-
-
-@pytest.mark.parametrize("segment", [EpochSegment(node_id="sub", epoch=0), ("sub", 0)])
-def test_epoch_truediv(segment):
-    """
-    Subepochs can be created by truediv
-    """
-    epoch = Epoch(0)
-    subepoch = epoch / segment
-    assert subepoch == Epoch(
-        (EpochSegment(node_id="tube", epoch=0), EpochSegment(node_id="sub", epoch=0))
+    model = MyModel(
+        epoch=(
+            0,
+            ("sup", 0),
+        )
     )
+    assert isinstance(model.epoch, Epoch)
 
 
 @pytest.mark.timeout(1)

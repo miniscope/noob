@@ -1,5 +1,5 @@
 import pytest
-from noob_core import Scheduler
+from noob_core import Epoch, Scheduler
 
 
 @pytest.fixture()
@@ -20,4 +20,4 @@ def diamond() -> Scheduler:
 
 def test_add_epoch(diamond):
     ep = diamond.add_epoch()
-    assert ep == [("tube", 0)]
+    assert ep == Epoch(0)

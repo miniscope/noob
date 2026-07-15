@@ -1,13 +1,15 @@
-use crate::epoch::{Epoch, EpochSegment};
+use crate::FxIndexMap;
+use crate::epoch::Epoch;
 use crate::event::UpdateEvent;
 use crate::exceptions::CoreError;
-use crate::item::{interner, Interner, Item, ItemID};
+use crate::item::{Interner, Item, ItemID, interner};
 use crate::scheduler::Scheduler;
 use crate::toposort::{EdgeRec, NodeFlags};
-use crate::FxIndexMap;
 use pyo3::exceptions::PyValueError;
 use pyo3::import_exception;
 use pyo3::prelude::*;
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::collections::{BTreeSet, HashSet};
 
 #[pyclass(name = "Scheduler", module = "noob_core._core")]
 pub struct PyScheduler(Scheduler);
@@ -37,15 +39,36 @@ impl PyScheduler {
         Ok(PyScheduler(Scheduler::from_graph(nodes, edges)?))
     }
 
-    fn update(&mut self, events: Vec<(EpochArg, String, String, bool)>) -> PyResult<Vec<PyEpoch>> {
+    fn update(&mut self, events: Vec<(EpochArg, String, String, bool)>) -> PyResult<Vec<Epoch>> {
         let interner = interner();
         let mut core_events = Vec::with_capacity(events.len());
         for (epoch, node_id, signal, no_event) in events {
-            let epoch = epoch_from_python(&interner, epoch)?;
-            let Some(node) = interner.get(&Item::Node(node_id.clone())) else {
-                continue; // not in the graph — logged divergence vs python's epoch-creating no-op
+            // filter the events to only those that we want to process further with the relevant sorters
+            // do this here, as soon as we can, to avoid any unnecessary work/iteration later.
+            let Some(node) = interner.get(&Item::Node(node_id.clone())).and_then(|node| {
+                if self.0.graph_items.contains(&node) {
+                    Some(node)
+                } else {
+                    None
+                }
+            }) else {
+                continue; // not in the graph
             };
-            let signal = interner.get(&Item::Signal(node_id, signal));
+            // some nodes are present in our graph without any dependencies
+            // to keep them cheap, we include just them in the graph,
+            // without modeling all the signals they could possibly have.
+            // in those cases, even if we are aware of some signal,
+            // we want to pass just the node with a `None` signal to mark it done
+            let signal = interner
+                .get(&Item::Signal(node_id, signal))
+                .and_then(|sig| {
+                    if self.0.graph_items.contains(&sig) {
+                        Some(sig)
+                    } else {
+                        None
+                    }
+                });
+            let epoch = epoch_from_python(epoch)?;
             core_events.push(UpdateEvent {
                 epoch,
                 node,
@@ -53,24 +76,16 @@ impl PyScheduler {
                 no_event,
             });
         }
-        let ended = self.0.update(core_events)?;
-        Ok(ended
-            .iter()
-            .map(|ep| epoch_to_python(&interner, ep))
-            .collect())
+        Ok(self.0.update(core_events)?)
     }
 
-    fn add_epoch(&mut self) -> PyEpoch {
-        let interner = interner();
-        let ep = self.0.add_epoch();
-        epoch_to_python(&interner, &ep)
+    fn add_epoch(&mut self) -> Epoch {
+        self.0.add_epoch()
     }
 
-    fn add_epoch_at(&mut self, epoch: EpochArg) -> PyResult<PyEpoch> {
-        let interner = interner();
-        let ep = epoch_from_python(&interner, epoch)?;
-        let ep = self.0.add_epoch_at(ep)?;
-        Ok(epoch_to_python(&interner, &ep))
+    fn add_epoch_at(&mut self, epoch: EpochArg) -> PyResult<Epoch> {
+        let ep = epoch_from_python(epoch)?;
+        Ok(self.0.add_epoch_at(ep)?)
     }
 
     fn is_active(&self) -> bool {
@@ -78,41 +93,59 @@ impl PyScheduler {
     }
 
     fn is_active_at(&self, epoch: EpochArg) -> PyResult<bool> {
-        let interner = interner();
-        let ep = epoch_from_python(&interner, epoch)?;
+        let ep = epoch_from_python(epoch)?;
         Ok(self.0.is_active_at(&ep))
     }
 
     fn epoch_completed(&self, epoch: EpochArg) -> PyResult<bool> {
-        let interner = interner();
-        let ep = epoch_from_python(&interner, epoch)?;
+        let ep = epoch_from_python(epoch)?;
         Ok(self.0.epoch_completed(&ep))
     }
 
-    fn first_active_epoch(&self) -> Option<PyEpoch> {
-        let interner = interner();
-        self.0
-            .first_active_epoch()
-            .map(|ep| epoch_to_python(&interner, &ep))
+    fn first_active_epoch(&self) -> Option<Epoch> {
+        self.0.first_active_epoch()
     }
 
     fn sources_finished(&self, epoch: EpochArg) -> PyResult<bool> {
-        let interner = interner();
-        let ep = epoch_from_python(&interner, epoch)?;
+        let ep = epoch_from_python(epoch)?;
         Ok(self.0.sources_finished(&ep))
     }
 
-    fn get_ready(&mut self) -> Vec<(PyEpoch, String)> {
+    fn get_ready(&mut self) -> Vec<(Epoch, String)> {
         let interner = interner();
         let ready = self.0.get_ready();
         ready_to_python(&interner, ready)
     }
 
-    fn get_ready_at(&mut self, epoch: EpochArg) -> PyResult<Vec<(PyEpoch, String)>> {
+    fn get_ready_at(&mut self, epoch: EpochArg) -> PyResult<Vec<(Epoch, String)>> {
         let interner = interner();
-        let epoch = epoch_from_python(&interner, epoch)?;
+        let epoch = epoch_from_python(epoch)?;
         let ready = self.0.get_ready_at(&epoch);
         Ok(ready_to_python(&interner, ready))
+    }
+
+    fn node_is_ready(&self, node: String, epoch: Epoch, subepochs: bool) -> PyResult<bool> {
+        let interner = interner();
+        let item = Item::Node(node);
+        let Some(node_id) = interner.get(&item) else {
+            return Err(CoreError::NotAdded(format!(
+                "Node {item} was not added when creating the scheduler"
+            ))
+            .into());
+        };
+        Ok(self.0.node_is_ready(&node_id, &epoch, subepochs))
+    }
+
+    fn node_is_done(&self, node: String, epoch: Epoch) -> PyResult<bool> {
+        let interner = interner();
+        let item = Item::Node(node);
+        let Some(node_id) = interner.get(&item) else {
+            return Err(CoreError::NotAdded(format!(
+                "Node {item} was not added when creating the scheduler"
+            ))
+            .into());
+        };
+        Ok(self.0.node_is_done(&node_id, &epoch))
     }
 
     #[pyo3(signature = (epoch, node_id, signal=None, with_signals=true))]
@@ -122,16 +155,11 @@ impl PyScheduler {
         node_id: String,
         signal: Option<String>,
         with_signals: bool,
-    ) -> PyResult<Vec<PyEpoch>> {
+    ) -> PyResult<Vec<Epoch>> {
         let interner = interner();
         let item = item_from_python(&interner, node_id, signal);
-        let epoch = epoch_from_python(&interner, epoch)?;
-        let res = self.0.done(&epoch, item, with_signals)?;
-        let ended = res
-            .iter()
-            .map(|ep| epoch_to_python(&interner, ep))
-            .collect();
-        Ok(ended)
+        let epoch = epoch_from_python(epoch)?;
+        Ok(self.0.done(&epoch, item, with_signals)?)
     }
 
     #[pyo3(signature = (epoch, node_id, signal=None, with_signals=true, unlock_optionals=true))]
@@ -142,64 +170,147 @@ impl PyScheduler {
         signal: Option<String>,
         with_signals: bool,
         unlock_optionals: bool,
-    ) -> PyResult<Vec<PyEpoch>> {
+    ) -> PyResult<Vec<Epoch>> {
         let interner = interner();
         let item = item_from_python(&interner, node_id, signal);
-        let epoch = epoch_from_python(&interner, epoch)?;
-        let res = self
+        let epoch = epoch_from_python(epoch)?;
+        Ok(self
             .0
-            .expire(&epoch, item, with_signals, unlock_optionals)?;
-        let ended = res
-            .iter()
-            .map(|ep| epoch_to_python(&interner, ep))
-            .collect();
-        Ok(ended)
+            .expire(&epoch, item, with_signals, unlock_optionals)?)
     }
 
-    fn end_epoch(&mut self, epoch: EpochArg) -> PyResult<Vec<PyEpoch>> {
+    fn end_epoch(&mut self, epoch: EpochArg) -> PyResult<Vec<Epoch>> {
+        let epoch = epoch_from_python(epoch)?;
+        Ok(self.0.end_epoch(epoch)?)
+    }
+
+    fn has_cycle(&self) -> bool {
+        self.0.has_cycle()
+    }
+
+    fn generations(&self) -> Vec<Vec<String>> {
         let interner = interner();
-        let epoch = epoch_from_python(&interner, epoch)?;
-        let res = self.0.end_epoch(epoch)?;
-        Ok(res
+        self.0
+            .generations()
             .iter()
-            .map(|ep| epoch_to_python(&interner, ep))
+            .map(|group| {
+                group
+                    .iter()
+                    .map(|id| interner.resolve(*id).node_id().to_owned())
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn source_nodes(&self) -> Vec<String> {
+        let interner = interner();
+        self.0
+            .source_nodes()
+            .iter()
+            .map(|id| interner.resolve(*id).node_id().to_owned())
+            .collect()
+    }
+
+    fn upstream_nodes(&self, node: String) -> PyResult<FxHashSet<String>> {
+        let interner = interner();
+        let item = Item::Node(node);
+        let Some(node_id) = interner.get(&item) else {
+            return Err(CoreError::NotAdded(format!(
+                "Node {item} was not added when the scheduler was created"
+            ))
+            .into());
+        };
+        Ok(self
+            .0
+            .upstream_nodes(node_id)?
+            .iter()
+            .map(|id| interner.resolve(*id).node_id().to_owned())
             .collect())
     }
+
+    fn get_epoch_state(&self, epoch: Epoch) -> PyResult<PySorterState> {
+        let state = self.0.get_epoch_state(&epoch)?;
+        let interner = interner();
+        Ok(PySorterState {
+            ready: state
+                .ready
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .cloned()
+                .collect(),
+            out: state
+                .out
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .cloned()
+                .collect(),
+            done: state
+                .done
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .cloned()
+                .collect(),
+            disabled: state
+                .disabled
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .cloned()
+                .collect(),
+            ran: state
+                .ran
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .cloned()
+                .collect(),
+            pending: state
+                .pending
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .cloned()
+                .collect(),
+            npassedout: state.npassedout,
+            nfinished: state.nfinished,
+        })
+    }
+
+    #[getter(epoch_log)]
+    fn epoch_log(&self) -> BTreeSet<u32> {
+        self.0.epoch_log()
+    }
+
+    #[getter(subepochs)]
+    fn subepochs(&self) -> FxHashMap<Epoch, HashSet<Epoch>> {
+        self.0
+            .subepochs()
+            .iter()
+            .map(|(epoch, subeps)| (epoch.clone(), HashSet::from_iter(subeps.iter().cloned())))
+            .collect()
+    }
+}
+
+#[derive(IntoPyObject)]
+pub struct PySorterState {
+    pub ready: FxHashSet<Item>,
+    pub out: FxHashSet<Item>,
+    pub done: FxHashSet<Item>,
+    pub disabled: FxHashSet<Item>,
+    pub ran: FxHashSet<Item>,
+    pub pending: FxHashSet<Item>,
+    pub npassedout: i64,
+    pub nfinished: i64,
 }
 
 #[derive(FromPyObject)]
 enum EpochArg {
+    Handle(Py<Epoch>),
     Root(u32),
-    Path(Vec<(String, u32)>),
 }
 
-type PyEpoch = Vec<(String, u32)>;
-
-fn epoch_from_python(interner: &Interner, arg: EpochArg) -> PyResult<Epoch> {
+fn epoch_from_python(arg: EpochArg) -> PyResult<Epoch> {
     match arg {
         EpochArg::Root(root) => Ok(Epoch::from(root)),
-        EpochArg::Path(segments) => {
-            let segments: Vec<EpochSegment> = segments
-                .into_iter()
-                .map(|(node, ep)| EpochSegment {
-                    node: interner.get(&Item::Node(node)).unwrap(),
-                    epoch: ep,
-                })
-                .collect();
-            // TODO: Won't need this conversion when epoch is pure-rust.
-            let ep = Epoch::new(segments[0].epoch, segments[1..].to_vec());
-            // let ep = Epoch::try_from(segments)
-            //     .expect("Nodes and signals must be added when the scheduler is created");
-            Ok(ep)
-        }
+        EpochArg::Handle(epoch) => Ok(epoch.get().clone()),
     }
-}
-
-fn epoch_to_python(interner: &Interner, epoch: &Epoch) -> PyEpoch {
-    epoch
-        .segments()
-        .map(|seg| (interner.resolve(seg.node).node_id().to_owned(), seg.epoch))
-        .collect()
 }
 
 fn item_from_python(interner: &Interner, node_id: String, signal: Option<String>) -> ItemID {
@@ -212,15 +323,10 @@ fn item_from_python(interner: &Interner, node_id: String, signal: Option<String>
         .expect("Nodes and signals must be added when the scheduler is created")
 }
 
-fn ready_to_python(interner: &Interner, ready: Vec<(Epoch, ItemID)>) -> Vec<(PyEpoch, String)> {
+fn ready_to_python(interner: &Interner, ready: Vec<(Epoch, ItemID)>) -> Vec<(Epoch, String)> {
     ready
         .iter()
-        .map(|(epoch, node)| {
-            (
-                epoch_to_python(interner, epoch),
-                interner.resolve(*node).node_id().to_owned(),
-            )
-        })
+        .map(|(epoch, node)| (epoch.clone(), interner.resolve(*node).node_id().to_owned()))
         .collect()
 }
 

@@ -1,5 +1,6 @@
 import concurrent.futures
 import contextlib
+import functools
 import math
 import multiprocessing as mp
 import threading
@@ -11,7 +12,7 @@ from time import time
 from typing import Any, cast, overload
 
 from noob.event import Event, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import InputMissingError
+from noob.exceptions import AlreadyDoneError, InputMissingError
 from noob.input import InputScope
 from noob.network.message import ErrorMsg, ErrorValue, EventMsg, Message, MessageType
 from noob.node import Return
@@ -183,10 +184,12 @@ class ZMQRunner(TubeRunner):
             # we want to mark 'input' as done if it's in the topo graph,
             # but input can be present and only used as a param,
             # so we can't check presence of inputs in the input collection
-            if "input" in self.tube.scheduler._epochs[self._current_epoch].ready_nodes:
-                self.tube.scheduler.done(self._current_epoch, "input")
-            if "assets" in self.tube.scheduler._epochs[self._current_epoch].ready_nodes:
-                self.tube.scheduler.done(self._current_epoch, "assets")
+            if self._has_input:
+                with contextlib.suppress(AlreadyDoneError):
+                    self.tube.scheduler.done(self._current_epoch, "input")
+            if self._has_assets:
+                with contextlib.suppress(AlreadyDoneError):
+                    self.tube.scheduler.done(self._current_epoch, "assets")
 
             future = self._get_epoch_future(self._current_epoch)
             self.command = cast(CommandNode, self.command)
@@ -237,7 +240,7 @@ class ZMQRunner(TubeRunner):
             raise RuntimeError("Already Running!")
         self.command = cast(CommandNode, self.command)
 
-        epoch = self.tube.scheduler.epoch[0].epoch
+        epoch = self.tube.scheduler.epoch[0][1]
         start_epoch = epoch
         stop_epoch = epoch + n if n is not None else epoch
         # start running without a limit - we'll check as we go.
@@ -325,7 +328,7 @@ class ZMQRunner(TubeRunner):
             self.command.start(n)
             self._running.set()
             self._current_epoch = self._get_epoch_future(
-                Epoch(self._current_epoch[0].epoch + n)
+                Epoch(self._current_epoch[0][1] + n)
             ).result()
             return None
 
@@ -364,7 +367,9 @@ class ZMQRunner(TubeRunner):
             for epoch in epochs:
                 if not self.tube.scheduler.epoch_completed(
                     epoch
-                ) and self.tube.scheduler.node_is_ready(self._return_node.id, epoch):
+                ) and self.tube.scheduler.node_is_ready(
+                    self._return_node.id, epoch, subepochs=True
+                ):
                     self._logger.debug("Marking return node ready in epoch %s", epoch)
                     with self._epoch_condition:
                         events.extend(self.tube.scheduler.expire(epoch, self._return_node.id))
@@ -394,8 +399,9 @@ class ZMQRunner(TubeRunner):
         if self._return_node is None:
             return None
         else:
-            if self.tube.scheduler.subepochs[epoch]:
-                epochs = sorted(self.tube.scheduler.subepochs[epoch]) + [epoch]
+            # the scheduler has cleared its subepochs by now, but the store hasn't!
+            if self.store._subepochs.get(epoch):
+                epochs = sorted(self.store._subepochs[epoch]) + [epoch]
             else:
                 epochs = [epoch]
             for ep in epochs:
@@ -477,3 +483,11 @@ class ZMQRunner(TubeRunner):
             self._epoch_futures[epoch].set_result(epoch)
 
         return self._epoch_futures[epoch]
+
+    @functools.cached_property
+    def _has_input(self) -> bool:
+        return any(e.source_node == "input" for e in self.tube.edges)
+
+    @functools.cached_property
+    def _has_assets(self) -> bool:
+        return any(e.source_node == "assets" for e in self.tube.edges)

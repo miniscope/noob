@@ -1,11 +1,11 @@
 //! Sorter benchmarks, mirroring the TopoSorter benchmarks in
 //! packages/noob/tests/bench.py - the PRNG and graph generation must stay
 //! exactly in sync with `_random_graph_edges` there.
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use indexmap::IndexMap;
+use noob_core::FxIndexMap;
 use noob_core::item::{Interner, ItemID};
 use noob_core::toposort::{EdgeRec, Sorter};
-use noob_core::FxIndexMap;
 
 /// Tiny deterministic PRNG, implemented identically in python
 struct Lcg(u64);

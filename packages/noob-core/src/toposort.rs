@@ -1,7 +1,7 @@
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{Interner, Item, ItemID, ASSETS_NODE, INPUT_NODE, PREVIOUS_EPOCH};
+use crate::item::{ASSETS_NODE, INPUT_NODE, Interner, Item, ItemID, PREVIOUS_EPOCH};
 use crate::{FxIndexMap, FxIndexSet};
 
 /// The fields of `noob.edge.Edge` the sorter cares about.
@@ -59,6 +59,18 @@ pub struct Sorter {
     pub done: FxIndexSet<ItemID>,
     pub disabled: FxIndexSet<ItemID>,
     pub ran: FxIndexSet<ItemID>,
+    pub npassedout: i64,
+    pub nfinished: i64,
+}
+
+/// Independent, cloned state of the sorter to be used when debugging
+pub struct SorterState {
+    pub ready: FxHashSet<ItemID>,
+    pub out: FxHashSet<ItemID>,
+    pub done: FxHashSet<ItemID>,
+    pub disabled: FxHashSet<ItemID>,
+    pub ran: FxHashSet<ItemID>,
+    pub pending: FxHashSet<ItemID>,
     pub npassedout: i64,
     pub nfinished: i64,
 }
@@ -408,7 +420,9 @@ impl Sorter {
             .map(|n| interner.resolve(n))
             .collect();
         if !already_ran.is_empty() {
-            return Err(CoreError::AlreadyDone(format!("node(s) {already_ran:?} were marked done, not expired! can only resurrect expired nodes.")));
+            return Err(CoreError::AlreadyDone(format!(
+                "node(s) {already_ran:?} were marked done, not expired! can only resurrect expired nodes."
+            )));
         }
         for node in nodes {
             if self.disabled.contains(node) {
@@ -417,10 +431,10 @@ impl Sorter {
             if self.done.swap_remove(node) {
                 self.nfinished -= 1;
                 self.npassedout -= 1;
-                if let Some(info) = self.info.get(node) {
-                    if info.nqueue == 0 {
-                        self.mark_ready(&[*node]);
-                    }
+                if let Some(info) = self.info.get(node)
+                    && info.nqueue == 0
+                {
+                    self.mark_ready(&[*node]);
                 }
             }
         }
@@ -501,6 +515,39 @@ impl Sorter {
         path.pop();
         colors.insert(node, Color::Black);
         None
+    }
+
+    /// Get a cloned version of the internal sorter state
+    /// This is an expensive method, since it clones... everything
+    /// To be used when debugging
+    pub fn clone_state(&self) -> SorterState {
+        let ready = FxHashSet::from_iter(self.ready.iter().copied());
+        let out = FxHashSet::from_iter(self.out.iter().copied());
+        let done = FxHashSet::from_iter(self.done.iter().copied());
+        let ran = FxHashSet::from_iter(self.ran.iter().copied());
+        let disabled = FxHashSet::from_iter(self.disabled.iter().copied());
+        let pending: FxHashSet<ItemID> = self
+            .info
+            .keys()
+            .filter(|id| {
+                !ready.contains(id)
+                    && !out.contains(id)
+                    && !done.contains(id)
+                    && !ran.contains(id)
+                    && !disabled.contains(id)
+            })
+            .copied()
+            .collect();
+        SorterState {
+            ready,
+            out,
+            done,
+            ran,
+            disabled,
+            pending,
+            npassedout: self.npassedout,
+            nfinished: self.nfinished,
+        }
     }
 }
 

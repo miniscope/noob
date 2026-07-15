@@ -1,4 +1,4 @@
-use crate::item::{interner, resolve_or_intern_node, ItemID, TUBE_NODE};
+use crate::item::{ItemID, TUBE_NODE, interner, resolve_or_intern_node};
 use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyType};
@@ -30,7 +30,7 @@ impl fmt::Display for EpochSegment {
     }
 }
 
-#[pyclass(module = "noob_core._core", frozen, eq, ord, hash, str)]
+#[pyclass(module = "noob_core._core", frozen, eq, ord, hash, str, from_py_object)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Epoch {
     root: u32,
@@ -129,6 +129,31 @@ impl Epoch {
     #[getter(parents)]
     fn py_parents(&self) -> Vec<Epoch> {
         self.parents().collect()
+    }
+
+    #[getter(parent)]
+    fn py_parent(&self) -> Option<Epoch> {
+        self.parent()
+    }
+
+    #[getter(root_epoch)]
+    fn root_epoch(&self) -> Epoch {
+        Epoch {
+            root: self.root,
+            path: Vec::new(),
+        }
+    }
+
+    #[getter(is_root)]
+    fn py_is_root(&self) -> bool {
+        self.is_root()
+    }
+
+    #[getter(leaf)]
+    fn py_leaf(&self) -> Option<(String, u32)> {
+        let leaf = self.leaf()?;
+        let interner = interner();
+        Some((interner.resolve(leaf.node).node_id().to_owned(), leaf.epoch))
     }
 
     #[pyo3(name = "make_subepochs")]

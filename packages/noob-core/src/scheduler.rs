@@ -1,13 +1,14 @@
 use crate::epoch::Epoch;
 use crate::event::UpdateEvent;
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{interner, interner_mut, Interner, Item, ItemID, PREVIOUS_EPOCH};
-use crate::toposort::{EdgeRec, NodeFlags, Sorter};
+use crate::item::{Interner, Item, ItemID, META_NODE, PREVIOUS_EPOCH, interner, interner_mut};
+use crate::toposort::{EdgeRec, NodeFlags, Sorter, SorterState};
 use crate::tube::downstream_nodes;
 use crate::{FxIndexMap, FxIndexSet};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
+use std::iter::once;
 use std::sync::Arc;
 
 const DEFAULT_EPOCH_LOG_LEN: u32 = 1000;
@@ -20,6 +21,9 @@ pub struct Scheduler {
     template: Sorter,
     subgraph_templates: FxHashMap<ItemID, Sorter>,
     source_nodes: FxIndexSet<ItemID>,
+    /// All the nodes and signals that we care about for updates -
+    /// i.e. all those that are present in our template sorter
+    pub(crate) graph_items: FxHashSet<ItemID>,
 
     epochs: BTreeMap<Epoch, Sorter>,
     epoch_log: BTreeSet<u32>,
@@ -47,6 +51,7 @@ impl Scheduler {
         let mut slot = interner_mut();
         let interner = Arc::make_mut(&mut slot);
         let template = Sorter::from_graph(interner, &nodes, &edges)?;
+        let graph_items = FxHashSet::from_iter(template.info.keys().cloned());
         let source_nodes = template.source_nodes();
         Ok(Scheduler {
             nodes,
@@ -54,6 +59,7 @@ impl Scheduler {
             template,
             subgraph_templates: FxHashMap::default(),
             source_nodes,
+            graph_items,
             epochs: BTreeMap::new(),
             epoch_log: BTreeSet::new(),
             epoch_log_len: DEFAULT_EPOCH_LOG_LEN,
@@ -224,7 +230,7 @@ impl Scheduler {
                     Item::Signal(_, _) => {
                         return Err(CoreError::Value(
                             "Subgraphs can only be created by nodes".to_string(),
-                        ))
+                        ));
                     }
                 };
 
@@ -377,11 +383,12 @@ impl Scheduler {
         let graph = self.epochs.get_mut(epoch).expect("Epoch was just added");
         {
             let interner = interner();
-            if !interner.is_signal(item) && with_signals {
-                if let Some(signals) = graph.signals.get(&item) {
-                    let signals: Vec<ItemID> = signals.difference(&graph.done).copied().collect();
-                    graph.done(&interner, &signals)?;
-                }
+            if !interner.is_signal(item)
+                && with_signals
+                && let Some(signals) = graph.signals.get(&item)
+            {
+                let signals: Vec<ItemID> = signals.difference(&graph.done).copied().collect();
+                graph.done(&interner, &signals)?;
             }
         }
 
@@ -513,6 +520,25 @@ impl Scheduler {
             .collect()
     }
 
+    pub fn upstream_nodes(&self, node: ItemID) -> CoreResult<FxHashSet<ItemID>> {
+        if let Some(info) = self.template.info.get(&node) {
+            let interner = interner();
+            Ok(self
+                .template
+                .info
+                .iter()
+                .filter(|(_, node_info)| node_info.optional_successors.contains(&node))
+                .map(|(id, _)| id)
+                .chain(info.predecessors.iter())
+                .copied()
+                .map(|id| interner.node_part(id))
+                .filter(|id| *id != META_NODE)
+                .collect())
+        } else {
+            Err(CoreError::NotAdded(format!("Node {node} was not added")))
+        }
+    }
+
     pub fn expire(
         &mut self,
         epoch: &Epoch,
@@ -534,17 +560,13 @@ impl Scheduler {
         let graph = self.epochs.get_mut(epoch).expect("Epoch was just added");
         graph.mark_expired(&[item], unlock_optionals);
 
-        if !interner.is_signal(item) && with_signals {
-            if let Some(signals) = graph.signals.get(&item) {
-                let signals = signals.clone();
-                for signal in signals {
-                    events.append(&mut self.expire(
-                        epoch,
-                        signal,
-                        with_signals,
-                        unlock_optionals,
-                    )?);
-                }
+        if !interner.is_signal(item)
+            && with_signals
+            && let Some(signals) = graph.signals.get(&item)
+        {
+            let signals = signals.clone();
+            for signal in signals {
+                events.append(&mut self.expire(epoch, signal, with_signals, unlock_optionals)?);
             }
         }
 
@@ -643,6 +665,84 @@ impl Scheduler {
             }
         }
     }
+
+    /// Check if a node is ready without marking it as out
+    pub fn node_is_ready(&self, node: &ItemID, epoch: &Epoch, subepochs: bool) -> bool {
+        if subepochs && let Some(subeps) = self.subepochs.get(epoch) {
+            subeps.iter().chain(once(epoch)).any(|epoch| {
+                self.epochs
+                    .get(epoch)
+                    .is_some_and(|sorter| sorter.ready.contains(node))
+            })
+        } else {
+            self.epochs
+                .get(epoch)
+                .is_some_and(|sorter| sorter.ready.contains(node))
+        }
+    }
+
+    /// Whether the node is done (expired or ran) in an epoch and all of its subepochs
+    pub fn node_is_done(&self, node: &ItemID, epoch: &Epoch) -> bool {
+        if self.epoch_completed(epoch) {
+            return true;
+        }
+
+        if let Some(subepochs) = self.subepochs.get(epoch) {
+            subepochs.iter().chain(once(epoch)).all(|epoch| {
+                self.epochs
+                    .get(epoch)
+                    .is_some_and(|sorter| sorter.done.contains(node))
+            })
+        } else {
+            self.epochs
+                .get(epoch)
+                .is_some_and(|sorter| sorter.done.contains(node))
+        }
+    }
+
+    pub fn has_cycle(&self) -> bool {
+        self.template.find_cycle().is_some()
+    }
+
+    pub fn generations(&self) -> Vec<Vec<ItemID>> {
+        let mut sorter = self.template.clone();
+        let mut groups = Vec::new();
+        let interner = interner();
+        if sorter.ready.contains(&PREVIOUS_EPOCH) {
+            sorter
+                .done(&interner, &[PREVIOUS_EPOCH])
+                .expect("Just checked");
+        }
+        while sorter.is_active() {
+            let ready = sorter.get_ready(&interner);
+            groups.push(ready);
+            let out: Vec<u32> = sorter.out.iter().copied().collect();
+            sorter.done(&interner, &out).expect("Out nodes by definition can't fail to be marked done");
+        }
+        groups
+    }
+
+    pub fn source_nodes(&self) -> FxIndexSet<ItemID> {
+        self.source_nodes.clone()
+    }
+
+    pub fn epoch_log(&self) -> BTreeSet<u32> {
+        self.epoch_log.clone()
+    }
+
+    pub fn subepochs(&self) -> FxHashMap<Epoch, FxIndexSet<Epoch>> {
+        self.subepochs.clone()
+    }
+
+    /// Get the state of a sorter for a given epoch
+    /// Extremely expensive, clones everything
+    /// only to be used when debugging
+    pub fn get_epoch_state(&self, epoch: &Epoch) -> CoreResult<SorterState> {
+        let Some(sorter) = self.epochs.get(epoch) else {
+            return Err(CoreError::NotAdded(format!("Epoch {epoch} does not exist")));
+        };
+        Ok(sorter.clone_state())
+    }
 }
 
 pub struct EpochIter<'a> {
@@ -707,11 +807,7 @@ impl Iterator for ReadyIter<'_> {
     type Item = Vec<(Epoch, ItemID)>;
     fn next(&mut self) -> Option<Self::Item> {
         let ready = self.scheduler.get_ready();
-        if ready.is_empty() {
-            None
-        } else {
-            Some(ready)
-        }
+        if ready.is_empty() { None } else { Some(ready) }
     }
 }
 

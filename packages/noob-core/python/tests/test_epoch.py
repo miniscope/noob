@@ -24,3 +24,11 @@ def test_epoch_json_roundtrip():
     assert data == [0, ["hey", 0], ["sup", 0]]
 
     assert adapter.validate_json(as_json) == epoch
+
+
+def test_epoch_truediv():
+    """
+    Epochs can be created from truediv
+    """
+    expected = Epoch(root=5, path=[("hey", 0), ("sup", 50)])
+    assert expected == Epoch(5) / ("hey", 0) / ("sup", 50)

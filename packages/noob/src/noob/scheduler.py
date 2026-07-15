@@ -1,21 +1,25 @@
+from __future__ import annotations
+
 import contextlib
 import logging
 from collections import defaultdict
 from collections.abc import Iterator, MutableSequence
-from copy import deepcopy
 from dataclasses import dataclass, field
-from functools import cached_property
-from typing import Self
+from typing import TYPE_CHECKING, Self
+
+from noob_core import Scheduler as _RustScheduler
 
 from noob.edge import Edge
 from noob.event import Event, EventMaker, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import AlreadyDoneError, EpochCompletedError, EpochExistsError, NotAddedError
+from noob.exceptions import EpochCompletedError, EpochExistsError
 from noob.logging import init_logger
 from noob.node import NodeSpecification
-from noob.toposort import PREVIOUS_EPOCH, GraphItem, NodeSignal, TopoSorter
-from noob.types import Epoch, NodeID, SignalName
+from noob.types import Epoch, NodeID, NodeSignal, SignalName
 
-_VIRTUAL_NODES = ("input", "assets")
+if TYPE_CHECKING:
+    from noob_core import SorterState
+
+_VIRTUAL_NODES = ("input", "assets", "meta")
 """
 Virtual nodes that don't actually exist as nodes,
 but can be depended on 
@@ -31,19 +35,12 @@ class Scheduler:
     event_maker: EventMaker = field(default_factory=EventMaker)
     _logger: logging.Logger = field(default_factory=lambda: init_logger("noob.scheduler"))
 
-    _last_epoch: int = -1
-    _epochs: dict[Epoch, TopoSorter] = field(default_factory=dict)
-    _subepochs: dict[Epoch, set[Epoch]] = field(default_factory=lambda: defaultdict(set))
-    _epoch_log: set[int] = field(default_factory=set)
-    _epoch_log_trim_interval: int = field(default=200)
-    _epoch_log_keep: int = field(default=100)
-    _subgraphs: dict[NodeID, tuple[dict[str, NodeSpecification], list[Edge]]] = field(
-        default_factory=dict
-    )
-    _frozen_sorters: dict[tuple[NodeID, ...], TopoSorter] = field(default_factory=dict)
-
     def __post_init__(self):
-        self._get_sources()
+        self._rebuild_core()
+
+    @property
+    def epoch_log(self) -> set[int]:
+        return self._core.epoch_log
 
     @classmethod
     def from_specification(cls, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> Self:
@@ -53,49 +50,15 @@ class Scheduler:
         """
         return cls(nodes=nodes, edges=edges)
 
-    def _get_sources(self) -> Self:
-        """
-        Get the IDs of the nodes that do not depend on other nodes.
-
-        * `input` nodes are special implicit source nodes. Other nodes
-        * CAN depend on it and still be a source node.
-
-        """
-        if not self.source_nodes:
-            graph = self._init_graph()
-            if PREVIOUS_EPOCH in graph.ready_nodes:
-                graph.mark_out(PREVIOUS_EPOCH)
-                graph.done(PREVIOUS_EPOCH)
-            self.source_nodes = [
-                id_
-                for id_ in graph.ready_nodes
-                if id_ not in _VIRTUAL_NODES and not isinstance(id_, NodeSignal)
-            ]
-        return self
-
     @property
     def subepochs(self) -> dict[Epoch, set[Epoch]]:
-        return self._subepochs
-
-    @cached_property
-    def graph_signals(self) -> set[tuple[NodeID, SignalName]]:
-        """
-        The set of (node id, signal) tuples that are depended on in the graph.
-
-        Nodes can have many more signals than we actually care about for structuring the graph,
-        this set is only the ones that we care about.
-        """
-        return {(e.source_node, e.source_signal) for e in self.edges}
+        return self._core.subepochs
 
     @property
     def epoch(self) -> Epoch:
         """The current epoch that would run next/is running"""
-        if self._epochs:
-            for ep in sorted(self._epochs.keys()):
-                if self._epochs[ep].is_active():
-                    return ep
-
-        return self.add_epoch()
+        first = self._core.first_active_epoch()
+        return first if first is not None else self.add_epoch()
 
     def iter_epoch(self, epoch: Epoch | None = None) -> Iterator[list[MetaEvent]]:
         """
@@ -109,24 +72,14 @@ class Scheduler:
              EpochCompletedError if the requested epoch has already been completed
         """
         if epoch is None:
-            if len(self._epochs) > 0:
-                # minimum active epoch
-                active_ep = None
-                for ep in sorted(self._epochs):
-                    if self.is_active(ep.root):
-                        active_ep = ep.root
-                        break
-
-                epoch = active_ep if active_ep else self.add_epoch()
-            else:
-                epoch = self.add_epoch()
-        elif epoch not in self._epochs:
-            self.add_epoch(epoch)
-
-        if self.epoch_completed(epoch):
+            first = self._core.first_active_epoch()
+            epoch = first if first is not None else self.add_epoch()
+        else:
+            with contextlib.suppress(EpochExistsError):
+                self._core.add_epoch_at(epoch)
+        if self._core.epoch_completed(epoch):
             raise EpochCompletedError(f"Epoch {epoch} has already been completed")
-
-        while self.is_active(epoch):
+        while self._core.is_active_at(epoch):
             yield self.get_ready(epoch)
 
     def iter_ready(self) -> Iterator[list[MetaEvent]]:
@@ -136,53 +89,22 @@ class Scheduler:
 
         TODO: document stateful/stateless behavior, need for callers to handle breaks in iteration
         """
-        if not self.is_active():
-            self.add_epoch()
+        if not self._core.is_active():
+            self._core.add_epoch()
 
-        while self.is_active():
+        while self._core.is_active():
             ready = self.get_ready()
             if not ready:
                 break
             yield ready
 
-    def add_epoch(self, epoch: int | Epoch | None = None) -> Epoch:
+    def add_epoch(self, epoch: Epoch | None = None) -> Epoch:
         """
         Add another epoch with a prepared graph to the scheduler.
         """
-        if epoch is not None:
-            if isinstance(epoch, int):
-                this_epoch = Epoch(epoch)
-            elif isinstance(epoch, Epoch):
-                this_epoch = epoch
-            else:
-                raise TypeError("Can only create an epoch from an epoch or integer")
-
-            # only need to check if already run when explicitly setting epoch
-            # otherwise, internal counter keeps us fresh
-            if this_epoch in self._epochs:
-                raise EpochExistsError(f"Epoch {this_epoch} is already scheduled")
-            elif this_epoch[0].epoch in self._epoch_log:
-                raise EpochCompletedError(f"Epoch {this_epoch} has already been completed!")
-
-            # ensure that the next iteration of the clock will return the next number
-            # if we create epochs out of order
-            self._last_epoch = max(self._last_epoch, this_epoch[0].epoch)
-        else:
-            self._last_epoch += 1
-            this_epoch = Epoch(self._last_epoch)
-
-        graph = self._init_graph(epoch=this_epoch)
-        self._epochs[this_epoch] = graph
-
-        # if we have no other active epochs
-        # (e.g. this is the first one, or all others have been completed),
-        # mark the meta "previous_epoch" signal as completed
-        # otherwise, this gets marked as epochs are completed
-        if this_epoch.root[0].epoch == 0 or this_epoch.root[0].epoch - 1 in self._epoch_log:
-            with contextlib.suppress(NotAddedError):
-                self._epochs[this_epoch].done(PREVIOUS_EPOCH)
-
-        return this_epoch
+        if epoch is None:
+            return self._core.add_epoch()
+        return self._core.add_epoch_at(epoch)
 
     def add_subepoch(self, epoch: Epoch) -> Epoch:
         """
@@ -190,158 +112,53 @@ class Scheduler:
 
         Creates a topo sorter with all the nodes downstream of the node that created the epoch.
         """
-
-        if epoch.parent is None:
-            raise ValueError(f"Cannot create a subepoch for root epoch {epoch}")
-
-        parent_epoch = self[epoch.parent]
-        sorter = self._init_graph(epoch)
-
-        # mark any nodes that are completed in the parent as completed in the subepoch
-        # EXCEPT don't expire the node that induced the subepoch or its signals -
-        # we expect that the subepoch is typically created during an `update` call
-        # where we'll be handling done or expiredness of the signals separately.
-        parent_deps = set(sorter.node_info)
-        exclude_current = sorter.signals[epoch[-1].node_id] | {epoch[-1].node_id}
-        for parent_dep in parent_deps:
-            if parent_dep in parent_epoch.ran_nodes:
-                sorter.done(parent_dep)
-            elif parent_dep in parent_epoch.done_nodes and parent_dep not in exclude_current:
-                sorter.mark_expired(parent_dep, unlock_optionals=False)
-            elif parent_dep in parent_epoch.out_nodes:
-                sorter.mark_out(parent_dep)
-
-        self._epochs[epoch] = sorter
-        for parent in epoch.parents:
-            self._subepochs[parent].add(epoch)
-
-        # a node inducing subepochs expires the node in the (immediate) parent epoch
-        if epoch[-1].node_id not in parent_epoch.done_nodes:
-            self.expire(epoch.parent, epoch[-1].node_id, with_signals=False, unlock_optionals=False)
-
-        return epoch
+        return self._core.add_epoch_at(epoch)
 
     def is_active(self, epoch: Epoch | None = None) -> bool:
         """
         Graph remains active while it holds at least one epoch that is active.
         """
-        if epoch is not None:
-            if epoch not in self._epochs:
-                # if an epoch has been completed and had its graph cleared, it's no longer active
-                # if an epoch has not been started, it is also not active.
-                return False
-            # perf: only construct the set if there are actually subepochs
-            subeps = self._subepochs.get(epoch)
-            if not subeps:
-                return self._epochs[epoch].is_active()
-            return any(self._epochs[e].is_active() for e in {*subeps, epoch})
-        else:
-            return any(graph.is_active() for graph in self._epochs.values())
+        if epoch is None:
+            return self._core.is_active()
+        return self._core.is_active_at(epoch)
 
-    def get_ready(
-        self, epoch: Epoch | None = None, node_id: NodeID | None = None
-    ) -> list[MetaEvent]:
+    def get_ready(self, epoch: Epoch | None = None) -> list[MetaEvent]:
         """
         Output the set of nodes that are ready across different epochs.
 
         Args:
             epoch (Epoch | None): if an Epoch, get ready events for that epoch,
                 if ``None`` , get ready events for all epochs.
-            node_id (str | None): If present, only get ready events for a single node
         """
-        if epoch is not None:
-            graphs = [
-                (ep, self._epochs[ep])
-                for ep in {*self._subepochs.get(epoch, set()), epoch}
-                if ep in self._epochs
-            ]
-        else:
-            graphs = list(self._epochs.items())
-        graphs = sorted(
-            graphs, key=lambda g: (tuple(e.node_id for e in g[0]), tuple(e.epoch for e in g[0]))
-        )
+        ready = self._core.get_ready() if epoch is None else self._core.get_ready_at(epoch)
+        return [
+            self.event_maker.new_meta_event(signal=MetaEventType.NodeReady, epoch=epoch, value=node)
+            for epoch, node in ready
+        ]
 
-        ready_nodes = []
-        for epoch, graph in graphs:
-            for node in graph.get_ready(node_id):
-                if node in _VIRTUAL_NODES or (
-                    node != "meta" and (node not in self.nodes or self.nodes[node].enabled)
-                ):
-                    ready_nodes.append(
-                        self.event_maker.new_meta_event(
-                            signal=MetaEventType.NodeReady, epoch=epoch, value=node
-                        )
-                    )
-        return ready_nodes
-
-    def node_is_ready(self, node: NodeID, epoch: Epoch | None = None) -> bool:
+    def node_is_ready(self, node: NodeID, epoch: Epoch, subepochs: bool = False) -> bool:
         """
         Check if a single node is ready in a single or any epoch
 
         Args:
             node (NodeID): the node to check
-            epoch (int | None): the epoch to check, if ``None`` , any epoch
+            epoch (int | None): the epoch to check
+            subepochs (bool): If ``True``, return ``True`` if ready in any subepoch too
+
         """
-        # slight duplication of the above because we don't want to *get* the ready nodes,
-        # which marks them as "out" in the TopoSorter
-
-        # if we've already run this, the node is ready - don't create another epoch
-        if epoch and epoch[0].epoch in self._epoch_log:
-            return True
-
-        graphs = (
-            self._epochs.items()
-            if epoch is None
-            else [(ep, self[ep]) for ep in [epoch, *self._subepochs.get(epoch, set())]]
-        )
-        is_ready = any(node in graph.ready_nodes for epoch, graph in graphs)
-        return is_ready
+        return self._core.node_is_ready(node, epoch, subepochs)
 
     def node_is_done(self, node: NodeID, epoch: Epoch) -> bool:
         """Node is expired or done in specified epoch"""
-        if epoch[0].epoch in self._epoch_log:
-            return True
+        return self._core.node_is_done(node, epoch)
 
-        if subepochs := self._subepochs.get(epoch):
-            return all(node in self._epochs[e].done_nodes for e in subepochs | {epoch})
-        else:
-            return node in self._epochs[epoch].done_nodes
-
-    def __getitem__(self, epoch: Epoch | int) -> TopoSorter:
-        # O(1) fast exit - we are given an epoch and we already have it
-        if epoch in self._epochs:
-            return self._epochs[epoch]
-
-        # otherwise, find or create the epoch
-        if epoch == -1:
-            if len(self._epochs) == 1:
-                return next(iter(self._epochs.values()))
-            else:
-                max_epoch = max(*[e[0].epoch for e in self._epochs])
-                return self._epochs[Epoch(max_epoch)]
-        elif isinstance(epoch, int):
-            epoch = Epoch(epoch)
-
-        if epoch not in self._epochs:
-            if len(epoch) == 1:
-                self.add_epoch(epoch)
-            else:
-                self.add_subepoch(epoch)
-
-        return self._epochs[epoch]
-
-    def sources_finished(self, epoch: Epoch | None = None) -> bool:
+    def sources_finished(self, epoch: Epoch) -> bool:
         """
         Check the source nodes of the given epoch have been processed.
         If epoch is None, check the source nodes of the latest epoch.
 
         """
-        if epoch is None and len(self._epochs) == 0:
-            return True
-
-        graph = self[-1] if epoch is None else self._epochs[epoch]
-        done_nodes = graph.done_nodes
-        return all(src in done_nodes for src in self.source_nodes)
+        return self._core.sources_finished(epoch)
 
     def update(
         self, events: MutableSequence[Event | MetaEvent] | MutableSequence[Event]
@@ -354,39 +171,13 @@ class Scheduler:
         if not events:
             return events
 
-        end_events: MutableSequence[MetaEvent] = []
-        nodes_done = set()
-        # process subepochs first so they're created when we handle parent epochs
-        events = sorted(events, key=lambda ee: len(ee["epoch"]), reverse=True)
-        for e in events:
-            if e["node_id"] == "meta" and e["signal"] != "previous_epoch":
-                continue
-            elif (node_done := (e["epoch"], e["node_id"])) not in nodes_done:
-                nodes_done.add(node_done)
-                # FIXME: This exception suppression is a *bit* broad - fix underlying issue
-                # The zmq runner has an incomplete graph, and so sometimes we don't have
-                # all the nodes in the graph when we go to mark the node done.
-                with contextlib.suppress(AlreadyDoneError, NotAddedError):
-                    epoch_ended = self.done(e["epoch"], e["node_id"], with_signals=False)
-                    if epoch_ended:
-                        end_events.extend(epoch_ended)
-                        continue
-
-            if (e["node_id"], e["signal"]) not in self.graph_signals:
-                continue
-
-            if e["value"] is MetaSignal.NoEvent:
-                end_events.extend(
-                    self.expire(epoch=e["epoch"], node_id=e["node_id"], signal=e["signal"])
-                )
-            else:
-                end_events.extend(
-                    self.done(epoch=e["epoch"], node_id=e["node_id"], signal=e["signal"])
-                )
-
-        ret_events = [*events, *end_events]
-
-        return ret_events
+        ended = self._core.update(
+            [
+                (e["epoch"], e["node_id"], e["signal"], e["value"] is MetaSignal.NoEvent)
+                for e in events
+            ]
+        )
+        return [*events, *self._end_events(ended)]
 
     def done(
         self,
@@ -401,42 +192,7 @@ class Scheduler:
         Args:
             with_signals (bool): When marking this node as done, also mark all its signals as done.
         """
-        if epoch[0].epoch in self._epoch_log:
-            self._logger.debug(
-                "Marking node %s as done in epoch %s, " "but epoch was already completed. ignoring",
-                node_id,
-                epoch,
-            )
-            return []
-
-        to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
-        graph = self[epoch]
-        try:
-            graph.done(to_mark)
-        except AlreadyDoneError as e:
-            if not self._subepochs.get(epoch, False):
-                raise AlreadyDoneError(f"Node {node_id} already done in {epoch}") from e
-
-        self._done_subepochs(epoch, node_id, signal)
-        for parent in epoch.parents:
-            self[parent].mark_expired(to_mark, unlock_optionals=False)
-
-        if signal is None and with_signals:
-            graph.done(*graph.signals[node_id].difference(graph.done_nodes))
-
-        # eagerly add the next epoch if this is a source node
-        if (
-            node_id in self.source_nodes
-            and len(epoch) == 1
-            and (next_ep := epoch + 1) not in self._epochs
-            and next_ep[0].epoch not in self._epoch_log
-            and self.sources_finished(epoch)
-        ):
-            self.add_epoch(next_ep)
-
-        if not self.is_active(epoch):
-            return self.end_epoch(epoch)
-        return []
+        return self._end_events(self._core.done(epoch, node_id, signal, with_signals))
 
     def expire(
         self,
@@ -450,49 +206,9 @@ class Scheduler:
         Mark a node as having been completed without making its dependent nodes ready.
         i.e. when the node emitted ``NoEvent``
         """
-        events = []
-        to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
-        self[epoch].mark_expired(to_mark, unlock_optionals=unlock_optionals)
-        # if any immediate successors are already marked as "ready," we also want to cancel them.
-        if info := self[epoch].node_info.get(to_mark):
-            for successor in info.successors:
-                self[epoch].ready_nodes.discard(successor)
-        if signal is None and with_signals:
-            for graph_node in self[epoch].signals[node_id]:
-                events.extend(
-                    self.expire(
-                        epoch,
-                        node_id=node_id,
-                        signal=graph_node[1],
-                        unlock_optionals=unlock_optionals,
-                    )
-                )
-
-        # if a node that *did not induce* the subepochs is expired,
-        # it expires itself in subepochs.
-        if subeps := self._subepochs.get(epoch):
-            for subep in subeps:
-                if subep[-1].node_id == node_id:
-                    continue
-                if subep in self._epochs:
-                    self._logger.debug(
-                        "expiring %s - %s in subepoch %s from %s", node_id, signal, subep, epoch
-                    )
-                    events.extend(
-                        self.expire(
-                            subep,
-                            node_id=node_id,
-                            signal=signal,
-                            with_signals=with_signals,
-                            unlock_optionals=unlock_optionals,
-                        )
-                    )
-
-        # end the epoch if it's over, don't double-tap in case expiring subepochs ended this epoch
-        if not self.is_active(epoch) and not self.epoch_completed(epoch):
-            events.extend(self.end_epoch(epoch))
-
-        return events
+        return self._end_events(
+            self._core.expire(epoch, node_id, signal, with_signals, unlock_optionals)
+        )
 
     def epoch_completed(self, epoch: Epoch) -> bool:
         """
@@ -500,76 +216,10 @@ class Scheduler:
         as in it is fully completed and should no longer be acted upon.
         Distinct from `is_active`, which is used to check if an epoch *should be* marked as complete
         """
-        epoch_int = epoch[0].epoch
-        previously_completed = (
-            len(self._epoch_log) > 0
-            and epoch not in self._epochs
-            and (epoch_int in self._epoch_log or epoch_int < min(self._epoch_log))
-        )
-        return previously_completed
+        return self._core.epoch_completed(epoch)
 
-    def end_epoch(self, epoch: Epoch | int | None = None) -> list[MetaEvent]:
-        if isinstance(epoch, Epoch):
-            ep = epoch
-        elif isinstance(epoch, int):
-            ep = Epoch(epoch)
-        elif epoch is None or epoch == -1:
-            if len(self._epochs) == 0:
-                return []
-            ep = list(self._epochs)[-1]
-        else:
-            raise TypeError("Can only end an epoch with an integer or Epoch")
-        self._logger.debug("Ending epoch %s", ep)
-        events = []
-
-        # signal this epoch has been completed to any successive epochs
-        # we create root epoch graphs here -
-        # the most common place to do so for tubes with stateful nodes.
-        # epochs are created elsewhere when explicitly iterating epochs with `iter_epoch`
-        # or when we receive out of order events e.g. in `update`
-        next = ep + 1
-        if (
-            len(next) == 1
-            and next not in self._epochs
-            and next.root[0].epoch not in self._epoch_log
-        ):
-            self.add_epoch(next)
-
-        if len(ep) == 1 or next in self._epochs:
-            # fine to error if there is no stateful node, or another node has already marked it done
-            # EpochCompletedError can also be emitted in both the above cases.
-            with contextlib.suppress(AlreadyDoneError, NotAddedError, EpochCompletedError):
-                events.extend(
-                    self.done(next, PREVIOUS_EPOCH[0], PREVIOUS_EPOCH[1], with_signals=False)
-                )
-                self._logger.debug("Marked next epoch %s done from %s", next, ep)
-
-        if len(ep) == 1:
-            # Add and potentially trim the epoch log
-            self._epoch_log.add(ep[0].epoch)
-            if len(self._epoch_log) >= self._epoch_log_trim_interval:
-                self._epoch_log = {k for k in sorted(self._epoch_log)[-self._epoch_log_keep :]}
-
-            # garbage collect completed topo sorters
-            # split into two legs to avoid creating unnecessary empty subepoch sets
-            # by just getattr'ing and spreading the empty set unconditionally
-            if subeps := self._subepochs.get(ep):
-                for subep in {ep, *subeps}:
-                    with contextlib.suppress(KeyError):
-                        del self._epochs[subep]
-            else:
-                with contextlib.suppress(KeyError):
-                    del self._epochs[ep]
-
-        else:
-            if not self.is_active(ep.parent):
-                self._logger.debug("Ending parent epoch %s from %s", ep.parent, ep)
-                events.extend(self.end_epoch(ep.parent))
-
-        events.append(
-            self.event_maker.new_meta_event(signal=MetaEventType.EpochEnded, epoch=ep, value=ep)
-        )
-        return events
+    def end_epoch(self, epoch: Epoch) -> list[MetaEvent]:
+        return self._end_events(self._core.end_epoch(epoch))
 
     def enable_node(self, node_id: str) -> None:
         """
@@ -579,12 +229,7 @@ class Scheduler:
         between process calls.
         """
         self.nodes[node_id].enabled = True
-        # recreate any existing epochs
-        existing = list(self._epochs.keys())
-        self._epochs = {}
-        self._frozen_sorters = {}
-        for e in existing:
-            self.add_epoch(e)
+        self._rebuild_core()
 
     def disable_node(self, node_id: str) -> None:
         """
@@ -593,60 +238,28 @@ class Scheduler:
 
         """
         self.nodes[node_id].enabled = False
-        self._frozen_sorters = {}
-        for graph in self._epochs.values():
-            graph.mark_expired(node_id)
+        self._rebuild_core()
 
     def clear(self) -> None:
         """
         Remove epoch records, restarting the scheduler
         """
-        self._epochs = {}
-        self._epoch_log = set()
-
-    def _init_graph(self, epoch: Epoch | None = None) -> TopoSorter:
-        """
-        Produce a :class:`.TopoSorter` based on the graph induced by
-        a set of :class:`.Node` and a set of :class:`.Edge` that yields node ids.
-        """
-        frozen_key = ("tube",) if epoch is None else tuple(e.node_id for e in epoch)
-
-        if frozen_key not in self._frozen_sorters:
-            if epoch and epoch.parent:
-                nodes, edges = self._subgraph(epoch[-1].node_id)
-                sorter = TopoSorter(nodes, edges)
-            else:
-                sorter = TopoSorter(self.nodes, self.edges)
-            self._frozen_sorters[frozen_key] = sorter
-
-        return deepcopy(self._frozen_sorters[frozen_key])
+        self._rebuild_core()
 
     def has_cycle(self) -> bool:
         """
         Checks that the graph is acyclic.
         """
-        graph = self._init_graph()
-        cycle = graph.find_cycle()
-        return bool(cycle)
+        return self._core.has_cycle()
 
-    def generations(self) -> list[tuple[GraphItem, ...]]:
+    def generations(self) -> list[list[NodeID]]:
         """
         Get the topological generations of the graph:
         tuples for each set of nodes that can be run at the same time.
 
         Order within a generation is not guaranteed to be stable.
         """
-        sorter = self._init_graph()
-        generations = []
-        if PREVIOUS_EPOCH in sorter.ready_nodes:
-            sorter.done(PREVIOUS_EPOCH)
-        while sorter.is_active():
-            ready = sorter.get_ready()
-            if ready:
-                generations.append(ready)
-            # mark all the out nodes as done, because we don't return node signals as "ready"
-            sorter.done(*sorter.out_nodes)
-        return generations
+        return self._core.generations()
 
     def asset_generations(self) -> dict[NodeID, list[tuple[str, ...]]]:
         """
@@ -685,71 +298,28 @@ class Scheduler:
         * Dependencies
         * If the node has optional dependencies, nodes whose NoEvents it should listen to
         """
-        upstream = {e.source_node for e in self.edges if e.target_node == node}
-        sorter = self._init_graph()
-        for item, info in sorter.node_info.items():
-            if node in info.optional_successors:
-                upstream.add(item[0] if isinstance(item, NodeSignal) else item)
-        return upstream
+        return self._core.upstream_nodes(node)
 
-    def _subgraph(self, node_id: str) -> tuple[dict[str, NodeSpecification], list[Edge]]:
-        """
-        Subgraph that is downstream of a given node (including the node itself).
-        """
-        from noob.tube import downstream_nodes
+    def get_epoch_state(self, epoch: Epoch) -> SorterState:
+        return self._core.get_epoch_state(epoch)
 
-        if node_id not in self._subgraphs:
-            downstream = downstream_nodes(self.edges, node_id)
-            self._subgraphs[node_id] = (
-                {node_id: self.nodes[node_id] for node_id in downstream if node_id in self.nodes},
-                [e for e in self.edges if e.target_node in downstream],
-            )
-        return self._subgraphs[node_id]
+    # ---------------------
+    # noob-core helpers
+    # ---------------------
 
-    def _done_subepochs(
-        self, epoch: Epoch, node_id: NodeID, signal: SignalName | None = None
-    ) -> None:
-        """
-        Called when a node in a parent epoch is marked done -
-        mark the node done in all subepochs,
-        but ensure that nodes that are exclusively downstream of this node
-        (i.e. no dependencies on nodes within the mapped subepoch)
-        are removed from the graph.
+    def _rebuild_core(self) -> None:
+        self._core = _RustScheduler(
+            [(id_, bool(spec.enabled), spec.stateful) for id_, spec in self.nodes.items()],
+            [(e.source_node, e.source_signal, e.target_node, e.required) for e in self.edges],
+        )
+        self.source_nodes = self._core.source_nodes()
 
-        This is to support gather-like operations from non-gather nodes in 3rd party tubes:
-        nodes downstream of both this node and other nodes in the subepoch run in subepochs,
-        but nodes that are exclusively downstream of this node only run in the parent epoch
-        """
-        from noob.tube import downstream_nodes
-
-        if not self._subepochs.get(epoch):
-            return
-
-        our_subgraph = set(self._subgraph(node_id)[0])
-        _exclusive_subgraphs = {}
-
-        to_mark = NodeSignal(node_id, signal) if signal is not None else node_id
-
-        for subepoch in self._subepochs[epoch]:
-            if (
-                to_mark in self._epochs[subepoch].ran_nodes
-                or to_mark not in self._epochs[subepoch].node_info
-            ):
-                # fine
-                continue
-            elif to_mark in self._epochs[subepoch].done_nodes:
-                # needs to be resurrected
-                self._epochs[subepoch].resurrect(to_mark)
-
-            self._epochs[subepoch].done(to_mark)
-
-            # mark all nodes that are exclusively downstream of this node expired
-            subep_node = subepoch[-1].node_id
-            if subep_node not in _exclusive_subgraphs:
-                _exclusive_subgraphs[subep_node] = downstream_nodes(
-                    self.edges, subep_node, exclude={node_id}
+    def _end_events(self, epochs: list[Epoch]) -> list[MetaEvent]:
+        events = []
+        for epoch in epochs:
+            events.append(
+                self.event_maker.new_meta_event(
+                    signal=MetaEventType.EpochEnded, epoch=epoch, value=epoch
                 )
-            exclusive_subgraph = our_subgraph - _exclusive_subgraphs[subep_node] - {node_id}
-
-            for exclusive in exclusive_subgraph:
-                self._epochs[subepoch].mark_expired(exclusive)
+            )
+        return events

@@ -135,13 +135,14 @@ known-first-party = ["noob", "nobes"]
 
 [tool.mypy]
 mypy_path = "$MYPY_CONFIG_FILE_DIR/packages"
-packages = ["noob", "nobes"]
+packages = ["noob", "nobes", "noob_core"]
 warn_redundant_casts = true
 warn_unused_ignores = true
 check_untyped_defs = true
 show_error_context = true
 show_column_numbers = true
 show_error_code_links = true
+strict_equality = true
 pretty = true
 color_output = true
 plugins = ['pydantic.mypy']

@@ -100,9 +100,11 @@ fn test_previous_epoch_completed() {
     scheduler.add_epoch();
 
     // Previous epoch marked done on zeroth epoch
-    assert!(scheduler.epochs[&Epoch::from(0)]
-        .done
-        .contains(&PREVIOUS_EPOCH));
+    assert!(
+        scheduler.epochs[&Epoch::from(0)]
+            .done
+            .contains(&PREVIOUS_EPOCH)
+    );
 
     // But not on a successive epoch whose previous epoch hasn't been completed
     let ep = scheduler.add_epoch();
@@ -124,13 +126,17 @@ fn test_previous_epoch_completed() {
     scheduler.add_epoch_at(root.clone()).unwrap();
     scheduler.add_epoch_at(&root / (a, 0)).unwrap();
     scheduler.add_epoch_at(&root / (a, 1)).unwrap();
-    assert!(!scheduler.epochs[&(&root / (a, 1))]
-        .done
-        .contains(&PREVIOUS_EPOCH));
+    assert!(
+        !scheduler.epochs[&(&root / (a, 1))]
+            .done
+            .contains(&PREVIOUS_EPOCH)
+    );
     scheduler.end_epoch(&root / (a, 0)).unwrap();
-    assert!(scheduler.epochs[&(&root / (a, 1))]
-        .done
-        .contains(&PREVIOUS_EPOCH));
+    assert!(
+        scheduler.epochs[&(&root / (a, 1))]
+            .done
+            .contains(&PREVIOUS_EPOCH)
+    );
 }
 
 #[test]
@@ -373,12 +379,14 @@ fn test_end_epoch_stateful() {
 
     scheduler.end_epoch(ep.clone()).unwrap();
     let next = Epoch::from(1);
-    assert!(scheduler
-        .epochs
-        .get(&next)
-        .unwrap()
-        .done
-        .contains(&PREVIOUS_EPOCH));
+    assert!(
+        scheduler
+            .epochs
+            .get(&next)
+            .unwrap()
+            .done
+            .contains(&PREVIOUS_EPOCH)
+    );
 }
 
 #[test]

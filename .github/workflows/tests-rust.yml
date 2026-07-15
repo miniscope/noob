@@ -23,3 +23,13 @@ jobs:
       - name: Run cargo tests
         run: cargo test --manifest-path packages/noob-core/Cargo.toml
         timeout-minutes: 10
+      - name: Set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install python deps
+        run: pip install -e . --group test
+        working-directory: "packages/noob-core"
+      - name: Run python tests
+        run: python -m pytest
+        working-directory: "packages/noob-core"
