@@ -42,6 +42,8 @@
 - [`#237`](https://github.com/miniscope/noob/pull/237) - 
   {class}`~noob.node.Node`s now have an {attr}`~noob.node.Node.logger` property 
   that lazily instantiates a logger, if accessed.
+- [`#244`](https://github.com/miniscope/noob/issues/239) - 
+  Tube nodes propagate the signals of the enclosed tube by reading the deps of its "return" node.
 
 **Changed**
 
@@ -131,6 +133,10 @@
   [`#244`](https://github.com/miniscope/noob/pull/244) - 
   Allow multiple assets to be updated from the same node,
   either multiple signals to different assets or the same signal to multiple assets.
+- [`#162`](https://github.com/miniscope/noob/issues/162)
+  [`#239`](https://github.com/miniscope/noob/issues/239)
+  [`#245`](https://github.com/miniscope/noob/issues/245) - 
+  Correctly propagate NoEvents from nested tubes
 
 **Removed**
 - [`#231`](https://github.com/miniscope/noob/pull/231) - 
