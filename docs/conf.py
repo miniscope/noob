@@ -32,6 +32,7 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx_design",
     "sphinxcontrib.mermaid",
+    "sphinxcontrib_rust",
     "myst_nb",
     "sphinx.ext.todo",
     "plot",
@@ -58,6 +59,7 @@ html_css_files = [
     # make myst-nb code blocks not look like shit
     "css/notebooks.css",
     "css/noob-js.css",
+    "css/rust.css",
 ]
 html_js_files = ["js/noob-js.js"]
 
@@ -101,14 +103,30 @@ nb_execution_show_tb = True
 
 # myst
 myst_heading_anchors = 3
+myst_enable_extensions = {
+    "attrs_block",
+    "colon_fence",
+    "html_admonition",
+    "replacements",
+    "smartquotes",
+    "strikethrough",
+    "tasklist",
+}
 
 # inheritance-diagram
 inheritance_graph_attrs = {"rankdir": "LR", "splines": "ortho"}
-
 inheritance_edge_attrs = {
     "color": "blue",
     "style": "bold",
 }
+
+# rust
+rust_crates = {
+    "noob-core": "packages/noob-core",
+}
+rust_doc_dir = "docs/api"
+rust_rustdoc_fmt = "md"
+rust_visibility = "crate"
 
 # mermaid
 # mermaid dynamic light/dark switching

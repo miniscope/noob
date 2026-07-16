@@ -1,10 +1,9 @@
 use crate::FxIndexMap;
 use crate::epoch::Epoch;
-use crate::event::UpdateEvent;
 use crate::exceptions::CoreError;
 use crate::item::{Interner, Item, ItemID, interner};
 use crate::scheduler::Scheduler;
-use crate::toposort::{EdgeRec, NodeFlags};
+use crate::sorter::{EdgeRec, NodeFlags};
 use pyo3::exceptions::PyValueError;
 use pyo3::import_exception;
 use pyo3::prelude::*;
@@ -336,4 +335,11 @@ impl From<CoreError> for PyErr {
             other => PyValueError::new_err(other.to_string()),
         }
     }
+}
+
+pub struct UpdateEvent {
+    pub epoch: Epoch,
+    pub node: ItemID,
+    pub signal: Option<ItemID>,
+    pub no_event: bool,
 }

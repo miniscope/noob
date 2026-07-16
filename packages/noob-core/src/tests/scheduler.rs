@@ -1056,3 +1056,29 @@ fn test_done_subepochs_exclusive_expiry() {
     // skip-if-ran: a second completion event is inert, not an error
     scheduler.done(&ep, a, false).unwrap();
 }
+
+#[test]
+fn test_downstream_nodes() {
+    let edges = diamond();
+
+    let downstream = downstream_nodes(&edges, "a", &FxIndexSet::default());
+    assert_eq!(downstream, FxIndexSet::from_iter(["a", "b", "c", "d"]));
+
+    let downstream = downstream_nodes(&edges, "b", &FxIndexSet::default());
+    assert_eq!(downstream, FxIndexSet::from_iter(["b", "d"]));
+
+    // a leaf is its own downstream set
+    let downstream = downstream_nodes(&edges, "d", &FxIndexSet::default());
+    assert_eq!(downstream, FxIndexSet::from_iter(["d"]));
+}
+
+/// exclude prunes paths *through* the excluded node, not everything below it:
+/// d is still reachable via c
+#[test]
+fn test_downstream_nodes_exclude() {
+    let edges = diamond();
+    let exclude = FxIndexSet::from_iter(["b"]);
+
+    let downstream = downstream_nodes(&edges, "a", &exclude);
+    assert_eq!(downstream, FxIndexSet::from_iter(["a", "c", "d"]));
+}

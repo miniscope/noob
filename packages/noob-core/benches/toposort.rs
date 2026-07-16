@@ -5,7 +5,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use indexmap::IndexMap;
 use noob_core::FxIndexMap;
 use noob_core::item::{Interner, ItemID};
-use noob_core::toposort::{EdgeRec, Sorter};
+use noob_core::sorter::{EdgeRec, Sorter};
 
 /// Tiny deterministic PRNG, implemented identically in python
 struct Lcg(u64);

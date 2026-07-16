@@ -562,5 +562,5 @@ enum Color {
 }
 
 #[cfg(test)]
-#[path = "tests/toposort.rs"]
+#[path = "tests/sorter.rs"]
 mod tests;

@@ -5,11 +5,10 @@ pub type FxIndexMap<K, V> = indexmap::IndexMap<K, V, rustc_hash::FxBuildHasher>;
 
 pub mod bridge;
 pub mod epoch;
-pub mod event;
 pub mod exceptions;
 pub mod item;
 pub mod scheduler;
-pub mod toposort;
+pub mod sorter;
 pub mod tube;
 
 #[pymodule]

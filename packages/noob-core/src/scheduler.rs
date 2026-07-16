@@ -1,9 +1,8 @@
+use crate::bridge::UpdateEvent;
 use crate::epoch::Epoch;
-use crate::event::UpdateEvent;
 use crate::exceptions::{CoreError, CoreResult};
 use crate::item::{Interner, Item, ItemID, META_NODE, PREVIOUS_EPOCH, interner, interner_mut};
-use crate::toposort::{EdgeRec, NodeFlags, Sorter, SorterState};
-use crate::tube::downstream_nodes;
+use crate::sorter::{EdgeRec, NodeFlags, Sorter, SorterState};
 use crate::{FxIndexMap, FxIndexSet};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cmp::Reverse;
@@ -811,6 +810,35 @@ impl Iterator for ReadyIter<'_> {
         let ready = self.scheduler.get_ready();
         if ready.is_empty() { None } else { Some(ready) }
     }
+}
+
+/// Compute all the nodes downsream (that depend on) a given node.
+pub fn downstream_nodes<'a>(
+    edges: &'a [EdgeRec],
+    node: &'a str,
+    exclude: &FxIndexSet<&str>,
+) -> FxIndexSet<&'a str> {
+    let adjacency: FxIndexMap<&str, Vec<&str>> =
+        edges.iter().fold(FxIndexMap::default(), |mut adj, edge| {
+            adj.entry(edge.source_node.as_str())
+                .or_default()
+                .push(edge.target_node.as_str());
+            adj
+        });
+
+    let mut downstream: FxIndexSet<&'a str> = FxIndexSet::from_iter(vec![node]);
+    let mut queue = vec![node];
+    while let Some(current) = queue.pop() {
+        if let Some(successors) = adjacency.get(current) {
+            for successor in successors {
+                if !downstream.contains(successor) && !exclude.contains(*successor) {
+                    downstream.insert(successor);
+                    queue.push(successor);
+                }
+            }
+        }
+    }
+    downstream
 }
 
 #[cfg(test)]

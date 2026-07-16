@@ -23,8 +23,14 @@ TubeClassicEdition()
 
 usage/index
 examples/index
-api/index
+```
 
+```{toctree}
+:maxdepth: 3
+:caption: API:
+
+api/index
+api/noob-core/index
 ```
 
 ```{toctree}
