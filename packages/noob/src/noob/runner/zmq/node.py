@@ -289,6 +289,7 @@ class NodeRunner(EventloopMixin):
 
     async def _process_loop(self) -> None:
         self._node = cast(Node, self._node)
+        edges = self._node.edges
         is_async = iscoroutinefunction_partial(self._node.process)
         loop = asyncio.get_running_loop()
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -302,6 +303,9 @@ class NodeRunner(EventloopMixin):
                 else:
                     part = partial(self._node.process, *args, **kwargs)
                     value = await loop.run_in_executor(executor, part)
+
+                # deinit node-scoped assets here before sending in case deinit mutates
+                self.state.deinit(AssetScope.node, edges)
 
                 # update internal scheduler state and send events
                 events = self.store.add_value(self._node.signals, value, self._node.id, epoch)
@@ -339,7 +343,9 @@ class NodeRunner(EventloopMixin):
 
             args, kwargs = self.store.split_args_kwargs(inputs)
             yield args, kwargs, ready["epoch"]
-            self.state.deinit(AssetScope.node, edges)
+
+            # deinit process scoped assets here, after publishing events,
+            # mimicking sync behavior of whether nodes would "see" a deinit mutation.
             self.state.deinit(AssetScope.process, edges)
             self.store.clear(epoch)
 

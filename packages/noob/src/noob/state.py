@@ -92,11 +92,14 @@ class State(BaseModel):
 
         For :attr:`.AssetScope.node` ,
         should provide the nodes edges to determine which assets to initialize, if any.
-        If not passed, all node-scoped assets are initialized
         """
         to_init: set[str] | None = None
-        if scope == AssetScope.node and edges is not None:
+        if scope == AssetScope.node:
+            if not edges:
+                return
             to_init = set(edge.source_signal for edge in edges if edge.source_node == "assets")
+            if not to_init:
+                return
 
         for asset in self.scope_to_assets.get(scope, []):
             if to_init is None or asset.id in to_init:

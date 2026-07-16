@@ -1,4 +1,4 @@
-from noob.testing.assets import AnyAsset, Initializer, counter
+from noob.testing.assets import AnyAsset, Initializer, LifecycleCounter, counter, counter_cm
 from noob.testing.nodes import (
     CountSource,
     CountSourceDecor,
@@ -77,7 +77,9 @@ __all__ = [
     "StatefulMultiply",
     "UnannotatedGenerator",
     "counter",
+    "counter_cm",
     "CountSourceDecor",
+    "LifecycleCounter",
     "increment",
     "inject_epoch",
     "inject_eventmap",

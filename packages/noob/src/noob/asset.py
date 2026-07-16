@@ -1,10 +1,11 @@
+import contextlib
 import inspect
 from collections.abc import Callable
 from copy import deepcopy
 from enum import StrEnum
 from typing import Any, Generic, ParamSpec, Self, TypeVar, Union
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from noob.input import InputCollection
 from noob.types import AbsoluteIdentifier, DependencyIdentifier, Epoch, PythonIdentifier
@@ -206,15 +207,31 @@ class WrapFuncAsset(Asset):
     The function effectively takes the role of :meth:`.__init__`, with the outer wrapping class
     `params` being injected as function parameters. The output of the function becomes the
     asset object.
+
+    Functions that return a context manager,
+    e.g. those wrapped with :func:`contextlib.contextmanager`,
+    are also supported:
+    the context manager is entered during :meth:`.init`, the yielded value becomes the
+    asset object, and the context manager is exited during :meth:`.deinit`.
     """
 
     fn: Callable
 
+    _cm: Any = PrivateAttr(default=None)
+
     def init(self) -> None:
-        if isinstance(self.params, list):
-            self.obj = self.fn(*self.params)
+        obj = self.fn(*self.params) if isinstance(self.params, list) else self.fn(**self.params)
+
+        if isinstance(obj, contextlib.AbstractContextManager):
+            self._cm = obj
+            self.obj = self._cm.__enter__()
         else:
-            self.obj = self.fn(**self.params)
+            self.obj = obj
 
     def deinit(self) -> None:
+        if self._cm is not None:
+            try:
+                self._cm.__exit__(None, None, None)
+            finally:
+                self._cm = None
         self.obj = None

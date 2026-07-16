@@ -44,6 +44,8 @@
   that lazily instantiates a logger, if accessed.
 - [`#244`](https://github.com/miniscope/noob/issues/239) - 
   Tube nodes propagate the signals of the enclosed tube by reading the deps of its "return" node.
+- [`246`](https://github.com/miniscope/noob/pull/246) -
+  Support contextmanagers as assets.
 
 **Changed**
 
@@ -137,6 +139,11 @@
   [`#239`](https://github.com/miniscope/noob/issues/239)
   [`#245`](https://github.com/miniscope/noob/issues/245) - 
   Correctly propagate NoEvents from nested tubes
+- [`246`](https://github.com/miniscope/noob/pull/246) -
+  Only `init` node-scoped assets when required by edges,
+  rather than initializing all assets when edges are `None`
+- [`246`](https://github.com/miniscope/noob/pull/246) -
+  Don't double-init node-scoped assets in the async runner.
 
 **Removed**
 - [`#231`](https://github.com/miniscope/noob/pull/231) - 
