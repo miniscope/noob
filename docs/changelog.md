@@ -1,5 +1,67 @@
 # Changelog
 
+## Noob Core
+
+This version reimplements the TopoSorter and the Scheduler in a rust extension module `noob-core`,
+and with that makes some dramatic performance improvements. 
+
+You can see the {rust}{crate}`noob-core` documentation for more details on the implementation.
+
+This was a relatively faithful port, 
+but we resolved a number of bugs and made a few planned changes and improvements
+as they were encountered while porting the code.
+
+**Changed**
+
+- {class}`.Epoch`, {rust}{struct}`.Sorter` (formerly `TopoSorter`),
+  and {class}`noob.scheduler.Scheduler` ({rust}{struct}`noob_core.scheduler.Scheduler`) have been moved to {rust}{crate}`noob-core`.
+- {attr}`.Epoch.root` now returns an int, and {attr}`.Epoch.root_epoch` an actual epoch object.
+- `done`/`resurrect` now validate all nodes before mutating anything. 
+  Python used to raise mid-loop, leaving partial state behind.
+- {meth}`.Scheduler.done` is idempotent for a single graph item and epoch - 
+  sorter mutations are gated on expire_node's return value, making duplicate calls harmless.
+- {class}`.Epoch` ordering is now correctly lexicographic as
+  `(root: int, (node_id: str, subepoch: int), ...)` tuples.
+- Previously, {class}`.Scheduler` would create subgraphs by filtering only those nodes for which we had a specification.
+  This is usually true in noob, but an unnecessary assumption,
+  since we should just consider the whole graph topology everywhere.
+- {meth}`.Scheduler.expire` on a completed epoch silently no-ops like {meth}`.Scheduler.done` does (python used to `raise`).
+- Since {meth}`.Scheduler.epoch_completed` is so much cheaper now,
+  all checks for epoch completion use it rather than ad-hoc checks to the `epoch_log`
+
+**Removed**
+
+- **`TopoSorter` was removed from the python package and is now a rust-only struct.**
+  If there is any interest in exposing the topo sorter to python,
+  that can be done, but keeping it private in rust encourages the scheduler to be the 
+- `node_id` was removed from the signature of {meth}`.Scheduler.get_ready`.
+  In general we want to put development pressure on improving the graph model,
+  rather than carving hacks out of the scheduler.
+- A number of places where `epoch` could be `None` in scheduler methods:
+  Now that the scheduler manages epochs more tightly,
+  we want any callers to always follow the scheduler,
+  and that typically means knowing the epoch.
+
+**Fixed**
+
+- `TopoSorter.mark_expired` could double process nodes,
+  since it didn't deduplicate or filter by whether a node was actually out/already done
+  when unlocking optional successors.
+- Disabled but stateful nodes no longer added to topo sorter:
+  We don't model nodes that don't affect the graph.
+- Sorter creation no longer accidentally add disabled stateful nodes.
+- {meth}`.Scheduler.source_nodes` filters disabled nodes. 
+- Previously, optional dependency logic could become incorrect:
+  first the optional successors could be unlocked, but then canceled.
+  This defeats the purpose of what optional dependencies do,
+  so now we flip the order, and optional deps are unlocked after handling normal expiration. 
+  This also moves the readying successors logic to the sorter,
+  which is where it should be anyway.
+
+**Perf**
+
+- Well, the whole thing is like twice as fast.
+
 ## Upcoming
 
 **Added**

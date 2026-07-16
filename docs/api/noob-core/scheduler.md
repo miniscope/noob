@@ -14,12 +14,12 @@
 :used_name: crate
 
 :::
-:::{rust:use} noob_core::epoch::Epoch
-:used_name: Epoch
-
-:::
 :::{rust:use} noob_core::bridge::UpdateEvent
 :used_name: UpdateEvent
+
+:::
+:::{rust:use} noob_core::epoch::Epoch
+:used_name: Epoch
 
 :::
 :::{rust:use} noob_core::exceptions::CoreError
