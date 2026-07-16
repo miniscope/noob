@@ -497,7 +497,7 @@ class NodeRunner(EventloopMixin):
         self.state.init(AssetScope.runner, self._node.edges)
         async with self._ready_condition:
             ep = self.scheduler.add_epoch()
-            if self.state.dependencies and len(self.state.dependencies) == len(
+            if self.state.dependencies and len(self.state.dependency_assets) == len(
                 self.receives_assets_from
             ):
                 self.scheduler.done(ep, "assets")
