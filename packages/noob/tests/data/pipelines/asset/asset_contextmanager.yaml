@@ -1,0 +1,60 @@
+noob_id: testing-contextmanager-asset
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1.dev86+gcf9e11b.d20250725
+
+assets:
+  runner_counter:
+    type: noob.testing.counter_cm
+    params:
+      start: 1
+    scope: runner
+    depends: runner_b.iterator
+  process_counter:
+    type: noob.testing.counter_cm
+    params:
+      start: 1
+    scope: process
+  node_counter:
+    type: noob.testing.counter_cm
+    params:
+      start: 1
+    scope: node
+
+nodes:
+  node_a:
+    type: noob.testing.increment
+    depends: [{iterator: assets.node_counter}]
+  node_b:
+    type: noob.testing.increment
+    depends: [{iterator: node_a.iterator}]
+
+  process_a:
+    type: noob.testing.increment
+    depends: [{iterator: assets.process_counter}]
+  process_b:
+    type: noob.testing.increment
+    depends: [{iterator: process_a.iterator}]
+
+  runner_a:
+    type: noob.testing.increment
+    depends: [{iterator: assets.runner_counter}]
+  runner_b:
+    type: noob.testing.increment
+    depends: [{iterator: runner_a.iterator}]
+
+
+  return:
+    type: return
+    depends:
+      - node_a: node_a.iterator
+      - node_b: node_b.iterator
+      - process_a: process_a.iterator
+      - process_b: process_b.iterator
+      - runner_a: runner_a.iterator
+      - runner_b: runner_b.iterator
+      - node_a_value: node_a.value
+      - node_b_value: node_b.value
+      - process_a_value: process_a.value
+      - process_b_value: process_b.value
+      - runner_a_value: runner_a.value
+      - runner_b_value: runner_b.value

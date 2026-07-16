@@ -1,0 +1,20 @@
+noob_id: testing-recursive-sporadic-parent
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  A nested tube whose child only returns sporadically
+
+nodes:
+  child:
+    type: tube
+    params:
+      tube: testing-recursive-sporadic-child
+  double:
+    type: noob.testing.multiply
+    depends:
+      - left: child.word
+  return:
+    type: return
+    depends:
+      - word: child.word
+      - doubleword: double.value

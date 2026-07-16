@@ -1,0 +1,44 @@
+noob_id: testing-depends-asset-multi
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.1.1
+description: |
+  Multiple assets can be updated from the same signal
+
+assets:
+  counter:
+    type: noob.testing.counter
+    params:
+      start: 1
+    scope: runner
+    depends: c.iterator
+  counter2:
+    type: noob.testing.counter
+    depends: c.iterator
+    scope: runner
+
+nodes:
+  a:
+    type: noob.testing.increment
+    depends:
+      - iterator: assets.counter
+  b:
+    type: noob.testing.increment
+    depends:
+       - iterator: assets.counter2
+  c:
+    type: noob.testing.increment
+    depends:
+      - iterator: a.iterator
+  post_depends:
+    type: noob.testing.increment
+    depends:
+      - iterator: c.iterator
+  return:
+    type: return
+    depends:
+      - a_value: a.value
+      - a_iterator: a.iterator
+      - b_value: b.value
+      - b_iterator: b.iterator
+      - post_value: post_depends.value
+      - post_iterator: post_depends.iterator

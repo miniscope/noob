@@ -1,7 +1,7 @@
-import sys
 from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
+from functools import cached_property
 from typing import Self, TypeAlias
 
 from pydantic import BaseModel, Field
@@ -10,20 +10,12 @@ from noob.asset import Asset, AssetScope, AssetSpecification
 from noob.edge import Edge
 from noob.event import Event, MetaEvent, MetaSignal
 from noob.input import InputCollection
-from noob.types import NodeID, PythonIdentifier
+from noob.types import NodeID, PythonIdentifier, SignalName
 
-if sys.version_info < (3, 12):
-    from typing_extensions import TypedDict
-else:
-    from typing import TypedDict
-
-
-class _AssetDependency(TypedDict):
-    asset_id: PythonIdentifier
-    signal: PythonIdentifier
-
-
-_DependencyMap: TypeAlias = dict[NodeID, _AssetDependency]
+_DependencyMap: TypeAlias = dict[NodeID, dict[SignalName, set[PythonIdentifier]]]
+"""
+Mapping from node[signal[set[asset]] - for quick lookups 
+"""
 
 
 class State(BaseModel):
@@ -39,13 +31,8 @@ class State(BaseModel):
     assets: dict[PythonIdentifier, Asset] = Field(default_factory=dict)
     dependencies: _DependencyMap = Field(default_factory=dict)
     """
-    Map from node signals that assets depend on to the asset and signal ids. 
-    See :attr:`.AssetSpecification.depends` . 
-    
-    Only those dependencies that require copying are included here
-    (assets which are not used after the node that is depended on emits them
-    don't need to be copied to protect against mutation within the same epoch
-    after they are stored).
+    Map from nodes and signals to the assets that depend on them.
+    See :attr:`.AssetSpecification.depends` .
     """
     scope_to_assets: dict[AssetScope, list[Asset]] = Field(
         default_factory=lambda: defaultdict(list)  # type: ignore[arg-type]
@@ -105,11 +92,14 @@ class State(BaseModel):
 
         For :attr:`.AssetScope.node` ,
         should provide the nodes edges to determine which assets to initialize, if any.
-        If not passed, all node-scoped assets are initialized
         """
         to_init: set[str] | None = None
-        if scope == AssetScope.node and edges is not None:
+        if scope == AssetScope.node:
+            if not edges:
+                return
             to_init = set(edge.source_signal for edge in edges if edge.source_node == "assets")
+            if not to_init:
+                return
 
         for asset in self.scope_to_assets.get(scope, []):
             if to_init is None or asset.id in to_init:
@@ -173,18 +163,30 @@ class State(BaseModel):
         return None if not args or all(val is None for val in args.values()) else args
 
     def update(self, events: list[Event] | list[Event | MetaEvent]) -> None:
-        """Update asset if asset depends on a node signal"""
+        """Update assets that depend on a node signal"""
+        # fast quit - don't iterate if we have no dependencies.
+        if not self.dependencies:
+            return
         for event in events:
-            if (
-                (dep := self.dependencies.get(event["node_id"]))
-                and dep["signal"] == event["signal"]
-                and event["value"] is not MetaSignal.NoEvent
+            if event["value"] is not MetaSignal.NoEvent and (
+                (signals := self.dependencies.get(event["node_id"]))
+                and (assets := signals.get(event["signal"]))
             ):
-                self.assets[dep["asset_id"]].update(
-                    value=event["value"],
-                    epoch=event["epoch"],
-                    copy=dep["asset_id"] not in self.nocopy_deps,
-                )
+                for asset_id in assets:
+                    self.assets[asset_id].update(
+                        value=event["value"],
+                        epoch=event["epoch"],
+                        copy=asset_id not in self.nocopy_deps,
+                    )
+
+    @cached_property
+    def dependency_assets(self) -> set[PythonIdentifier]:
+        """Ids of all assets that depend on a node signal"""
+        deps = set()
+        for signals in self.dependencies.values():
+            for assets in signals.values():
+                deps |= assets
+        return deps
 
     def clear(self) -> None:
         """
@@ -196,7 +198,9 @@ class State(BaseModel):
     def _get_dependencies(
         cls, specs: dict[str, AssetSpecification], edges: list[Edge] | None = None
     ) -> tuple[_DependencyMap, set[PythonIdentifier]]:
-        deps = {}
+        deps: dict[NodeID, dict[SignalName, set[PythonIdentifier]]] = defaultdict(
+            lambda: defaultdict(set)
+        )
         nocopy_deps = set()
         for asset in specs.values():
             if not asset.depends:
@@ -206,5 +210,5 @@ class State(BaseModel):
                 edge.source_node == node_id and edge.source_signal == signal for edge in edges
             ):
                 nocopy_deps.add(asset.id)
-            deps[node_id] = _AssetDependency(asset_id=asset.id, signal=signal)
+            deps[node_id][signal].add(asset.id)
         return deps, nocopy_deps

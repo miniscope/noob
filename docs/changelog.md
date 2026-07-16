@@ -1,13 +1,13 @@
 # Changelog
 
-## Noob Core
+## Upcoming
 
 This version reimplements the TopoSorter and the Scheduler in a rust extension module `noob-core`,
-and with that makes some dramatic performance improvements. 
+and with that makes some dramatic performance improvements.
 
 You can see the {rust}{crate}`noob-core` documentation for more details on the implementation.
 
-This was a relatively faithful port, 
+This was a relatively faithful port,
 but we resolved a number of bugs and made a few planned changes and improvements
 as they were encountered while porting the code.
 
@@ -16,9 +16,9 @@ as they were encountered while porting the code.
 - {class}`.Epoch`, {rust}{struct}`.Sorter` (formerly `TopoSorter`),
   and {class}`noob.scheduler.Scheduler` ({rust}{struct}`noob_core.scheduler.Scheduler`) have been moved to {rust}{crate}`noob-core`.
 - {attr}`.Epoch.root` now returns an int, and {attr}`.Epoch.root_epoch` an actual epoch object.
-- `done`/`resurrect` now validate all nodes before mutating anything. 
+- `done`/`resurrect` now validate all nodes before mutating anything.
   Python used to raise mid-loop, leaving partial state behind.
-- {meth}`.Scheduler.done` is idempotent for a single graph item and epoch - 
+- {meth}`.Scheduler.done` is idempotent for a single graph item and epoch -
   sorter mutations are gated on expire_node's return value, making duplicate calls harmless.
 - {class}`.Epoch` ordering is now correctly lexicographic as
   `(root: int, (node_id: str, subepoch: int), ...)` tuples.
@@ -33,7 +33,7 @@ as they were encountered while porting the code.
 
 - **`TopoSorter` was removed from the python package and is now a rust-only struct.**
   If there is any interest in exposing the topo sorter to python,
-  that can be done, but keeping it private in rust encourages the scheduler to be the 
+  that can be done, but keeping it private in rust encourages the scheduler to be the
 - `node_id` was removed from the signature of {meth}`.Scheduler.get_ready`.
   In general we want to put development pressure on improving the graph model,
   rather than carving hacks out of the scheduler.
@@ -50,11 +50,11 @@ as they were encountered while porting the code.
 - Disabled but stateful nodes no longer added to topo sorter:
   We don't model nodes that don't affect the graph.
 - Sorter creation no longer accidentally add disabled stateful nodes.
-- {meth}`.Scheduler.source_nodes` filters disabled nodes. 
+- {meth}`.Scheduler.source_nodes` filters disabled nodes.
 - Previously, optional dependency logic could become incorrect:
   first the optional successors could be unlocked, but then canceled.
   This defeats the purpose of what optional dependencies do,
-  so now we flip the order, and optional deps are unlocked after handling normal expiration. 
+  so now we flip the order, and optional deps are unlocked after handling normal expiration.
   This also moves the readying successors logic to the sorter,
   which is where it should be anyway.
 
@@ -62,7 +62,9 @@ as they were encountered while porting the code.
 
 - Well, the whole thing is like twice as fast.
 
-## Upcoming
+## v1001.*
+
+### v1001.0.0 - 26-07-16
 
 **Added**
 
@@ -104,6 +106,10 @@ as they were encountered while porting the code.
 - [`#237`](https://github.com/miniscope/noob/pull/237) - 
   {class}`~noob.node.Node`s now have an {attr}`~noob.node.Node.logger` property 
   that lazily instantiates a logger, if accessed.
+- [`#244`](https://github.com/miniscope/noob/issues/239) - 
+  Tube nodes propagate the signals of the enclosed tube by reading the deps of its "return" node.
+- [`246`](https://github.com/miniscope/noob/pull/246) -
+  Support contextmanagers as assets.
 
 **Changed**
 
@@ -189,6 +195,19 @@ as they were encountered while porting the code.
 - [`238`](https://github.com/miniscope/noob/pull/238) - 
   No more validation errors on type annotations on node process functions from the
   {class}`~noob.edge.Signal` class.
+- [`#200`](https://github.com/miniscope/noob/issues/200),
+  [`#244`](https://github.com/miniscope/noob/pull/244) - 
+  Allow multiple assets to be updated from the same node,
+  either multiple signals to different assets or the same signal to multiple assets.
+- [`#162`](https://github.com/miniscope/noob/issues/162)
+  [`#239`](https://github.com/miniscope/noob/issues/239)
+  [`#245`](https://github.com/miniscope/noob/issues/245) - 
+  Correctly propagate NoEvents from nested tubes
+- [`246`](https://github.com/miniscope/noob/pull/246) -
+  Only `init` node-scoped assets when required by edges,
+  rather than initializing all assets when edges are `None`
+- [`246`](https://github.com/miniscope/noob/pull/246) -
+  Don't double-init node-scoped assets in the async runner.
 
 **Removed**
 - [`#231`](https://github.com/miniscope/noob/pull/231) - 

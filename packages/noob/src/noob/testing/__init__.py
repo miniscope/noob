@@ -1,4 +1,4 @@
-from noob.testing.assets import AnyAsset, Initializer, counter
+from noob.testing.assets import AnyAsset, Initializer, LifecycleCounter, counter, counter_cm
 from noob.testing.nodes import (
     CountSource,
     CountSourceDecor,
@@ -36,6 +36,7 @@ from noob.testing.nodes import (
     repeat,
     rewind,
     sporadic_word,
+    sporadic_word_noevent,
     switch,
     this_or_that,
     word_counts,
@@ -61,6 +62,7 @@ __all__ = [
     "passthrough",
     "repeat",
     "sporadic_word",
+    "sporadic_word_noevent",
     "word_counts",
     "word_source",
     "multi_concat",
@@ -75,7 +77,9 @@ __all__ = [
     "StatefulMultiply",
     "UnannotatedGenerator",
     "counter",
+    "counter_cm",
     "CountSourceDecor",
+    "LifecycleCounter",
     "increment",
     "inject_epoch",
     "inject_eventmap",

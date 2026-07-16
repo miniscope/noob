@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, Any, Union
 
 from pydantic import ConfigDict
 
-from noob.edge import Slot
+from noob.edge import Signal, Slot
+from noob.event import MetaSignal
 from noob.exceptions import ExtraInputWarning
 from noob.node.base import Node
 from noob.node.spec import NodeSpecification
@@ -17,7 +18,28 @@ if TYPE_CHECKING:
 
 class TubeNode(Node):
     """
-    A node that contains another tube within it
+    A node that contains another tube within it.
+
+    .. note::
+
+        A nested tube may not return a scalar literal ``None`` from its return node,
+        that is interpreted as a ``NoEvent``, as the return value of ``process``
+        is ``None`` when no events are emitted.
+
+        Wrap ``None`` s in a dictionary return to disambiguate them.
+
+        i.e. rather than::
+
+            depends: node.value
+
+        use::
+
+            depends:
+              - something: node.value
+
+        If you have a need for returning scalar ``None`` s from a nested tube,
+        please raise an issue!
+
     """
 
     spec: NodeSpecification  # not optional for tube nodes
@@ -84,6 +106,14 @@ class TubeNode(Node):
                 )
                 for key, value in res.items()
             ]
+        elif res is None:
+            now = datetime.now(UTC)
+            return [
+                self._event_maker.new_event(
+                    signal=key, epoch=epoch, value=MetaSignal.NoEvent, timestamp=now
+                )
+                for key in self.signals
+            ]
         else:
             return res
 
@@ -104,3 +134,31 @@ class TubeNode(Node):
             if in_val.scope == InputScope.process:
                 slots[in_key] = Slot(name=in_key, annotation=Any)
         return slots
+
+    @classmethod
+    def get_signals(cls, spec: NodeSpecification | None = None) -> dict[str, Signal]:
+        """Forward signals from the return node"""
+        if spec is None:
+            raise ValueError("Must pass a spec to get signals for a tube node")
+
+        from noob.tube import TubeSpecification
+
+        if not spec.params or "tube" not in spec.params:
+            raise ValueError("Tube node specifications must have a `tube` in their params")
+        tube_spec = TubeSpecification.from_any(spec.params["tube"])
+
+        signals = {}
+        return_nodes = [n for n in tube_spec.nodes.values() if n.type_ == "return"]
+        if not return_nodes:
+            return {"value": Signal(name="value", annotation=Any)}
+        else:
+            return_node = return_nodes[0]
+            if not return_node.depends or isinstance(return_node.depends, str):
+                return {"value": Signal(name="value", annotation=Any)}
+
+            for dep in return_node.depends:
+                if isinstance(dep, str):
+                    continue
+                name = list(dep.keys())[0]
+                signals[name] = Signal(name=name, annotation=Any)
+            return signals
