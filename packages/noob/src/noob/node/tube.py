@@ -139,7 +139,7 @@ class TubeNode(Node):
     def get_signals(cls, spec: NodeSpecification | None = None) -> dict[str, Signal]:
         """Forward signals from the return node"""
         if spec is None:
-            raise ValueError("Must pass a spec to get slots for a tube node")
+            raise ValueError("Must pass a spec to get signals for a tube node")
 
         from noob.tube import TubeSpecification
 
