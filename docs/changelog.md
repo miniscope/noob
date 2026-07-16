@@ -1,6 +1,8 @@
 # Changelog
 
-## Upcoming
+## v1001.*
+
+### v1001.0.0 - 26-07-16
 
 **Added**
 
