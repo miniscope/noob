@@ -1,0 +1,162 @@
+name: Publish noob-core to PyPI
+
+on:
+  push:
+    tags:
+      - "core-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp into Cargo.toml (e.g. 0.2.0)"
+        required: true
+        type: string
+      publish:
+        description: "Actually publish to PyPI"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  test-rust:
+    uses: ./.github/workflows/tests-rust.yml
+
+  build:
+    name: wheel (${{ matrix.os }} ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    needs: [test-rust]
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - { name: "regular", version: "3.11", args: "" }
+          - { name: "ft", version: "3.13t\n3.14t", args: "-i 3.13t -i 3.14t" }
+        platform:
+          - { os: ubuntu-latest, target: x86_64 }
+          - { os: ubuntu-24.04-arm, target: aarch64 }
+          - { os: macos-13, target: x86_64 }
+          - { os: macos-latest, target: aarch64 }
+          - { os: windows-latest, target: x64 }
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#core-v}}"
+          [[ "$VERSION" =~ ^[0-9] ]] || { echo "no usable version from tag or input" >&2; exit 1; }
+          sed -i.bak -E "s/^version = \".*\"/version = \"${VERSION}\"/" packages/noob-core/Cargo.toml
+          rm packages/noob-core/Cargo.toml.bak
+          grep "^version" packages/noob-core/Cargo.toml
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version.version }}
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: packages/noob-core
+          target: ${{ matrix.platform.target }}
+          manylinux: auto
+          args: --release --out dist ${{ matrix.python-version.args }}
+      - uses: actions/upload-artifact@v5
+        with:
+          name: dist-${{ matrix.platform.os }}-${{ matrix.platform.target }}-${{ matrix.python-version.name }}
+          path: packages/noob-core/dist
+
+  # pyodide/emscripten wheel
+  # See:
+  # https://pyodide.org/en/stable/development/abi.html
+  # https://pyodide-build.readthedocs.io/en/latest/tutorials/rust.html
+  build-wasm:
+    name: wheel (pyodide wasm32)
+    runs-on: ubuntu-latest
+    needs: [test-rust]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#core-v}}"
+          [[ "$VERSION" =~ ^[0-9] ]] || { echo "no usable version from tag or input" >&2; exit 1; }
+          sed -i.bak -E "s/^version = \".*\"/version = \"${VERSION}\"/" packages/noob-core/Cargo.toml
+          rm packages/noob-core/Cargo.toml.bak
+          grep "^version" packages/noob-core/Cargo.toml
+      - uses: actions/setup-python@v6
+        with:
+          # must match the CPython minor of the pyodide xbuildenv:
+          # `pyodide config get python_version`
+          python-version: "3.13"
+      - name: Install pyodide-build
+        run: pip install pyodide-build
+      - name: Get emscripten version
+        id: emscripten
+        run: echo "version=$(pyodide config get emscripten_version)" >> "$GITHUB_OUTPUT"
+      - uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: ${{ steps.emscripten.outputs.version }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-emscripten
+      - name: Build pyodide wheel
+        run: pyodide build
+        working-directory: packages/noob-core
+      - uses: actions/upload-artifact@v5
+        with:
+          name: dist-wasm
+          path: packages/noob-core/dist
+
+  build-sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    needs: [test-rust]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#core-v}}"
+          [[ "$VERSION" =~ ^[0-9] ]] || { echo "no usable version from tag or input" >&2; exit 1; }
+          sed -i.bak -E "s/^version = \".*\"/version = \"${VERSION}\"/" packages/noob-core/Cargo.toml
+          rm packages/noob-core/Cargo.toml.bak
+          grep "^version" packages/noob-core/Cargo.toml
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: packages/noob-core
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v5
+        with:
+          name: dist-sdist
+          path: packages/noob-core/dist
+
+  publish:
+    name: Publish to PyPI
+    if: github.event_name == 'push' || inputs.publish
+    needs: [build, build-wasm, build-sdist]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/noob-core
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
