@@ -127,6 +127,10 @@
 - [`238`](https://github.com/miniscope/noob/pull/238) - 
   No more validation errors on type annotations on node process functions from the
   {class}`~noob.edge.Signal` class.
+- [`#200`](https://github.com/miniscope/noob/issues/200),
+  [`#244`](https://github.com/miniscope/noob/pull/244) - 
+  Allow multiple assets to be updated from the same node,
+  either multiple signals to different assets or the same signal to multiple assets.
 
 **Removed**
 - [`#231`](https://github.com/miniscope/noob/pull/231) - 
