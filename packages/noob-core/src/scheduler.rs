@@ -272,6 +272,9 @@ impl Scheduler {
 
     pub fn iter_epoch_at(&mut self, epoch: impl Into<Epoch>) -> CoreResult<EpochIter<'_>> {
         let epoch = epoch.into();
+        if self.epoch_completed(&epoch) {
+            return Err(CoreError::EpochCompleted(epoch));
+        }
         if !self.epochs.contains_key(&epoch) {
             self.add_epoch_at(epoch.clone())?;
         }

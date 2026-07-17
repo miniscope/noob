@@ -56,6 +56,7 @@ intersphinx_mapping = {
 html_theme = "furo"
 html_static_path = ["_static"]
 html_css_files = [
+    "css/base.css",
     # make myst-nb code blocks not look like shit
     "css/notebooks.css",
     "css/noob-js.css",

@@ -5,7 +5,7 @@
 This version reimplements the TopoSorter and the Scheduler in a rust extension module `noob-core`,
 and with that makes some dramatic performance improvements.
 
-You can see the {rust}{crate}`noob-core` documentation for more details on the implementation.
+You can see the {rust:crate}`noob_core` documentation for more details on the implementation.
 
 This was a relatively faithful port,
 but we resolved a number of bugs and made a few planned changes and improvements
@@ -13,8 +13,8 @@ as they were encountered while porting the code.
 
 **Changed**
 
-- {class}`.Epoch`, {rust}{struct}`.Sorter` (formerly `TopoSorter`),
-  and {class}`noob.scheduler.Scheduler` ({rust}{struct}`noob_core.scheduler.Scheduler`) have been moved to {rust}{crate}`noob-core`.
+- {rust:struct}`~noob_core::epoch::Epoch`, {rust:struct}`~noob_core::sorter::Sorter` (formerly `TopoSorter`),
+  and {class}`~noob.scheduler.Scheduler` ({rust:struct}`noob_core::scheduler::Scheduler`) have been moved to {rust:crate}`noob_core`.
 - {attr}`.Epoch.root` now returns an int, and {attr}`.Epoch.root_epoch` an actual epoch object.
 - `done`/`resurrect` now validate all nodes before mutating anything.
   Python used to raise mid-loop, leaving partial state behind.

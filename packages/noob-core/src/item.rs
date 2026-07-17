@@ -14,6 +14,7 @@ pub fn interner() -> Arc<Interner> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clone()
 }
+
 pub(crate) fn interner_mut() -> RwLockWriteGuard<'static, Arc<Interner>> {
     INTERNER
         .write()
