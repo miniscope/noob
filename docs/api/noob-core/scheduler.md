@@ -252,37 +252,31 @@
   
   # Examples
   
-  In a while loop...
   ```
-  while scheduler.is_active() {
-      let ready = scheduler.get_ready();
+  # use noob_core::exceptions::CoreError;
+  # use noob_core::scheduler::Scheduler;
+  # use noob_core::FxIndexMap;
+  # use noob_core::sorter::EdgeRec;
+  let mut scheduler = Scheduler::from_graph(
+      FxIndexMap::default(),
+      vec![
+          EdgeRec::from(("a", "a1", "b")),
+          EdgeRec::from(("b", "b1", "c")),
+      ]
+  )?;
+  
+  let ep = scheduler.add_epoch();
+  let mut batches = scheduler.iter_epoch_at(ep)?;
+  while let Some(ready) = batches.next() {
       for (epoch, node) in ready {
-          // call the node somehow
-          events = node_calling_thing()
-          scheduler.update(events)
+          // in reality, call the node somehow and have events
+          // events = node_calling_thing()
+          // scheduler.update(events)
+          // for docs, just trivially mark done
+          batches.done(node, true)?;
       }
   }
-  ```
-  
-  With an iterator...
-  ```
-  let epoch = scheduler.add_epoch()
-  for ready in scheduler.iter_epoch(epoch) {
-      for (epoch, node) in ready {
-          // call the node somehow
-          events = node_calling_thing()
-          scheduler.update(events)
-      }
-  }
-  ```
-  
-  As a functional iterator i guess, idk if this is correct, just use a loop...
-  
-  ```
-  scheduler
-    .iter_epoch()
-    .flatten()
-    .for_each(|ready| scheduler.update(nodes[ready[1]]()));
+  # Ok::<(), CoreError>(())
   ```
   :::
 :::::{rust:variable} noob_core::scheduler::Scheduler::graph_items

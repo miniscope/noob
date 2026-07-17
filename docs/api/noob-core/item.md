@@ -137,7 +137,7 @@
   
   Update the interner by getting a new mutable Arc from it:
   
-  ```
+  ```ignore
   let mut interner_slot = interner_mut();
   let interner = Arc::make_mut(&mut interner_slot);
   ```

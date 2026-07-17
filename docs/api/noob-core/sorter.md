@@ -112,6 +112,29 @@
   :::
   :::
 :::::
+
+:::{rubric} Traits implemented
+:::
+
+:::::{rust:impl} noob_core::sorter::EdgeRec::From
+:index: -1
+:vis: pub
+:layout: [{"type":"keyword","value":"impl"},{"type":"space"},{"type":"link","value":"From","target":"From"},{"type":"punctuation","value":"<"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"link","value":"str","target":"str"},{"type":"punctuation","value":", "},{"type":"punctuation","value":"&"},{"type":"link","value":"str","target":"str"},{"type":"punctuation","value":", "},{"type":"punctuation","value":"&"},{"type":"link","value":"str","target":"str"},{"type":"punctuation","value":", "},{"type":"link","value":"bool","target":"bool"},{"type":"punctuation","value":")"},{"type":"punctuation","value":">"},{"type":"space"},{"type":"keyword","value":"for"},{"type":"space"},{"type":"link","value":"EdgeRec","target":"EdgeRec"}]
+:toc: impl From for EdgeRec
+
+  :::
+  :::
+:::::
+:::::{rust:impl} noob_core::sorter::EdgeRec::From
+:index: -1
+:vis: pub
+:layout: [{"type":"keyword","value":"impl"},{"type":"space"},{"type":"link","value":"From","target":"From"},{"type":"punctuation","value":"<"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"link","value":"str","target":"str"},{"type":"punctuation","value":", "},{"type":"punctuation","value":"&"},{"type":"link","value":"str","target":"str"},{"type":"punctuation","value":", "},{"type":"punctuation","value":"&"},{"type":"link","value":"str","target":"str"},{"type":"punctuation","value":")"},{"type":"punctuation","value":">"},{"type":"space"},{"type":"keyword","value":"for"},{"type":"space"},{"type":"link","value":"EdgeRec","target":"EdgeRec"}]
+:toc: impl From for EdgeRec
+
+  :::
+  Default edge to required
+  :::
+:::::
 ::::::
 ::::::{rust:struct} noob_core::sorter::NodeFlags
 :index: 1

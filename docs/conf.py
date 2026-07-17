@@ -191,6 +191,10 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
             if "typing.Annotated" in record.location or "typing.Union" in record.location:
                 return False
 
+        # rustdoc tests that can't be run
+        if "lexer name" in record.msg and "ignore" in record.args:
+            return False
+
         # not worth installing graphviz for one diagram in gh actions testing
         if (
             "GITHUB_ACTION" in os.environ

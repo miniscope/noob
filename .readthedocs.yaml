@@ -18,7 +18,7 @@ build:
   jobs:
     pre_install:
       - python -m pip install pdm
-      - cargo install sphinx-rustdocgen
+      - cargo install sphinx-rustdocgen --root /home/docs/.asdf
     install:
       - npm --prefix js/ ci
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm install --with docs --with dev

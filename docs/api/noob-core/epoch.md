@@ -157,7 +157,9 @@
   # Example
   
   ```
-  Epoch::from(0).make_subepochs(6, 2)
+  # use noob_core::epoch::Epoch;
+  let subeps = Epoch::from(0).make_subepochs(6, 2);
+  println!("{subeps:?}");
   // vec![Epoch(0) / (6, 0), Epoch(0) / (6, 1)]
   ```
   :::
@@ -233,7 +235,8 @@
 
   :::
   ```
-  Epoch::from(0)
+  # use noob_core::epoch::Epoch;
+  Epoch::from(0);
   ```
   :::
 :::::
@@ -245,8 +248,11 @@
 
   :::
   ```
-  Epoch::from(0) / (1, 2)
-  Epoch::from(0) / EpochSegment{ node: 1, epoch: 2 }
+  # use noob_core::epoch::{Epoch, EpochSegment};
+  let ep = Epoch::from(0) / (1, 2);
+  println!("{}", ep);
+  let ep = Epoch::from(0) / EpochSegment{ node: 1, epoch: 2 };
+  println!("{}", ep);
   ```
   :::
 :::::
@@ -261,9 +267,14 @@
   
   # Examples:
   ```
-  Epoch::from(0) + 1
+  # use noob_core::epoch::Epoch;
+  let ep = Epoch::from(0) + 1;
+  println!("{}", ep);
   // Epoch(1)
-  (Epoch::from(0) / (2, 3)) + 1
+  
+  let child = Epoch::from(0) / (2, 3);
+  let child = child + 1;
+  println!("{}", child);
   // Epoch(1, (2, 4))
   ```
   :::
@@ -279,9 +290,12 @@
   
   # Examples:
   ```
-  Epoch::from(1) - 1
+  # use noob_core::epoch::Epoch;
+  let ep = Epoch::from(1) - 1;
+  println!("{}", ep);
   // Epoch(0)
-  (Epoch::from(0) / (2, 3)) - 1
+  let ep = (Epoch::from(0) / (2, 3)) - 1;
+  println!("{}", ep);
   // Epoch(1, (2, 2))
   ```
   
