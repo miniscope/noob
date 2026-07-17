@@ -8,17 +8,7 @@
 
 :::{rubric} Modules
 :::
-:::{toctree}
-:maxdepth: 1
 
-bridge
-epoch
-exceptions
-item
-scheduler
-sorter
-tube
-:::
 :::{rust:use} noob_core
 :used_name: self
 

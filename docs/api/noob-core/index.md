@@ -196,20 +196,6 @@ def update(self, events: list[Event]) -> list[Event | MetaEvent]:
     return [*events, *end_events]
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ```{toctree}
 :maxdepth: 1
 

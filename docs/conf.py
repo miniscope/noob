@@ -9,6 +9,7 @@
 import importlib.metadata as metadata
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -123,9 +124,9 @@ inheritance_edge_attrs = {
 
 # rust
 rust_crates = {
-    "noob-core": "packages/noob-core",
+    "noob-core": Path(__file__).parents[1] / "packages/noob-core",
 }
-rust_doc_dir = "docs/api"
+rust_doc_dir = str(Path(__file__).parent / "api")
 rust_rustdoc_fmt = "md"
 rust_visibility = "crate"
 
@@ -190,6 +191,8 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
             if "typing.Annotated" in record.location or "typing.Union" in record.location:
                 return False
 
+        breakpoint()
+
         # not worth installing graphviz for one diagram in gh actions testing
         if (
             "GITHUB_ACTION" in os.environ
@@ -209,3 +212,32 @@ def setup(app):
 
     logger = logging.getLogger("sphinx")
     logger.filters.insert(0, FuckTheSphinxFiltersFilter())
+    # breakpoint()
+    logging.root.filters.insert(0, FuckTheSphinxFiltersFilter())
+
+    # undo a monkeypatch in sphinxcontrib_rust that breaks footnotes
+    # see: https://gitlab.com/munir0b0t/sphinxcontrib-rust/-/work_items/16
+    # https://gitlab.com/munir0b0t/sphinxcontrib-rust/-/blob/main/sphinxcontrib_rust/__init__.py?ref_type=heads#L203
+    from sphinxcontrib_rust import rust_link
+    from markdown_it.parser_inline import rules_inline
+    import markdown_it.parser_inline
+
+    idx = -1
+    for i, t in enumerate(markdown_it.parser_inline._rules):
+        if t[1] is rust_link.link:
+            idx = i
+            break
+
+    markdown_it.parser_inline._rules[idx] = ("link", rules_inline.link)
+
+    # can't configure sphinxcontrib_rust to exclude files, and this has a redundant toctree
+    def rm_libmd_toctree(*args, **kwargs) -> None:
+        libmd = Path(__file__).parent / "api" / "noob-core" / "lib.md"
+        if not libmd.exists():
+            return
+
+        data = libmd.read_text()
+        data = re.sub(r":::{toctree}.*\n(.*\n)+?:::", "", data, flags=re.MULTILINE)
+        libmd.write_text(data)
+
+    app.connect("builder-inited", rm_libmd_toctree)
