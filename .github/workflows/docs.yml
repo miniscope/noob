@@ -60,7 +60,7 @@ jobs:
       - name: Install python dependencies
         run: |
           pip install pdm
-          pdm install --with docs
+          pdm install --with docs --with dev
           pdm run python -m ensurepip
           pdm run python -m pip install --no-index --find-links ./packages/noob-core/dist noob-core
 
