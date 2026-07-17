@@ -12,8 +12,51 @@ use std::sync::Arc;
 
 const DEFAULT_EPOCH_LOG_LEN: u32 = 1000;
 
+/// The thing that says what nodes run, when.
+/// Coordinates a set of [Sorter]s, keyed by [Epoch]s.
+///
+/// Typical use is to receive one from an instantiated (python) `Tube`,
+/// and then to use one of its two iteration modes in a loop with the `update` method.
+///
+/// # Examples
+///
+/// In a while loop...
+/// ```
+/// while scheduler.is_active() {
+///     let ready = scheduler.get_ready();
+///     for (epoch, node) in ready {
+///         // call the node somehow
+///         events = node_calling_thing()
+///         scheduler.update(events)
+///     }
+/// }
+/// ```
+///
+/// With an iterator...
+/// ```
+/// let epoch = scheduler.add_epoch()
+/// for ready in scheduler.iter_epoch(epoch) {
+///     for (epoch, node) in ready {
+///         // call the node somehow
+///         events = node_calling_thing()
+///         scheduler.update(events)
+///     }
+/// }
+/// ```
+///
+/// As a functional iterator i guess, idk if this is correct, just use a loop...
+///
+/// ```
+/// scheduler
+///   .iter_epoch()
+///   .flatten()
+///   .for_each(|ready| scheduler.update(nodes[ready[1]]()));
+/// ```
 pub struct Scheduler {
+    /// Nodes specified in the tube definition
     nodes: FxIndexMap<String, NodeFlags>,
+    /// Edges that define dependencies between nodes and slots.
+    /// Bipartite node<->signal graph.
     edges: Vec<EdgeRec>,
 
     /// A frozen initial-state topo sorter to copy from
@@ -24,11 +67,16 @@ pub struct Scheduler {
     /// i.e. all those that are present in our template sorter
     pub(crate) graph_items: FxHashSet<ItemID>,
 
+    /// Sorters for active epochs (dropped on completion)
     epochs: BTreeMap<Epoch, Sorter>,
+    /// Buffer knowledge of completed epochs to support epochs running out of order
+    /// while still being able to know whether an epoch has already ran
+    /// for some window into the past
     epoch_log: BTreeSet<u32>,
     epoch_log_len: u32,
 
     next_epoch: u32,
+    /// Mapping to all subepochs (at any depth) beneath they key epoch.
     subepochs: FxHashMap<Epoch, FxIndexSet<Epoch>>,
     /// cache - sets of graph items that are downstream from the key node
     subgraphs: FxHashMap<ItemID, FxIndexSet<ItemID>>,

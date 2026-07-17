@@ -6,9 +6,12 @@ use std::fmt;
 use std::iter::once;
 use std::ops::{Add, Div, Sub};
 
+/// A single layer of a subepoch
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct EpochSegment {
+    /// The node that created this layer of the subepoch
     pub node: ItemID,
+    /// The index of this subepoch within its layer
     pub epoch: u32,
 }
 
@@ -30,11 +33,19 @@ impl fmt::Display for EpochSegment {
     }
 }
 
+/// The basic unit of event alignment in Noob:
+/// Events emitted within the same epoch are passed to a node's slots together.
+///
+/// Epochs are hierarchical: by default, all events exist in an integer-valued root epoch.
+/// However if a node like `Map` expands cardinality by emitting multiple events per event taken in,
+/// Epochs grow "layers" of *subepochs* labeled with the ID of the node that emitted them.
 #[pyclass(module = "noob_core._core", frozen, eq, ord, hash, str, from_py_object)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Epoch {
-    root: u32,
-    path: Vec<EpochSegment>,
+    /// The common, tube-level epoch
+    pub root: u32,
+    /// Subepoch segments induced by cardinality expanding Maplike events.
+    pub path: Vec<EpochSegment>,
 }
 
 impl Epoch {
@@ -49,6 +60,7 @@ impl Epoch {
         self.path.is_empty()
     }
 
+    /// 1 for root epochs, 1 + subepoch segments otherwise.
     pub fn n_segments(&self) -> usize {
         self.path.len() + 1
     }
@@ -80,6 +92,14 @@ impl Epoch {
         self
     }
 
+    /// Create a collection of `n` sequential subepochs induced by events from the given node
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// Epoch::from(0).make_subepochs(6, 2)
+    /// // vec![Epoch(0) / (6, 0), Epoch(0) / (6, 1)]
+    /// ```
     pub fn make_subepochs(&self, node: ItemID, n: u32) -> Vec<Epoch> {
         (0..n)
             .map(|i| self.clone().child(EpochSegment { epoch: i, node }))
@@ -90,11 +110,13 @@ impl Epoch {
         self.root
     }
 
+    /// The last available subepoch segment, if any.
+    /// `None` for root epochs.
     pub fn leaf(&self) -> Option<&EpochSegment> {
         self.path.last()
     }
 
-    pub fn checked_sub(mut self, rhs: u32) -> Option<Epoch> {
+    fn checked_sub(mut self, rhs: u32) -> Option<Epoch> {
         let slot = match self.path.last_mut() {
             Some(seg) => &mut seg.epoch,
             None => &mut self.root,
@@ -317,6 +339,9 @@ enum WireItem {
     Segment(String, u32),
 }
 
+/// ```
+/// Epoch::from(0)
+/// ```
 impl From<u32> for Epoch {
     fn from(number: u32) -> Self {
         Epoch {
@@ -326,6 +351,10 @@ impl From<u32> for Epoch {
     }
 }
 
+/// ```
+/// Epoch::from(0) / (1, 2)
+/// Epoch::from(0) / EpochSegment{ node: 1, epoch: 2 }
+/// ```
 impl<T: Into<EpochSegment>> Div<T> for Epoch {
     type Output = Epoch;
     fn div(self, rhs: T) -> Epoch {
@@ -341,6 +370,15 @@ impl<T: Into<EpochSegment>> Div<T> for &Epoch {
     }
 }
 
+/// Increment the lowest layer of the epoch.
+///
+/// # Examples:
+/// ```
+/// Epoch::from(0) + 1
+/// // Epoch(1)
+/// (Epoch::from(0) / (2, 3)) + 1
+/// // Epoch(1, (2, 4))
+/// ```
 impl Add<u32> for Epoch {
     type Output = Epoch;
     fn add(mut self, rhs: u32) -> Epoch {
@@ -359,6 +397,16 @@ impl Add<u32> for &Epoch {
     }
 }
 
+/// Decrement the lowest layer of the epoch.
+///
+/// # Examples:
+/// ```
+/// Epoch::from(1) - 1
+/// // Epoch(0)
+/// (Epoch::from(0) / (2, 3)) - 1
+/// // Epoch(1, (2, 2))
+/// ```
+///
 impl Sub<u32> for Epoch {
     type Output = Epoch;
     fn sub(self, rhs: u32) -> Epoch {

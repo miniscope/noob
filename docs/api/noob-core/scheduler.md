@@ -244,6 +244,46 @@
 :layout: [{"type":"keyword","value":"struct"},{"type":"space"},{"type":"name","value":"Scheduler"}]
 
   :::
+  The thing that says what nodes run, when.
+  Coordinates a set of [Sorter]s, keyed by [Epoch]s.
+  
+  Typical use is to receive one from an instantiated (python) `Tube`,
+  and then to use one of its two iteration modes in a loop with the `update` method.
+  
+  # Examples
+  
+  In a while loop...
+  ```
+  while scheduler.is_active() {
+      let ready = scheduler.get_ready();
+      for (epoch, node) in ready {
+          // call the node somehow
+          events = node_calling_thing()
+          scheduler.update(events)
+      }
+  }
+  ```
+  
+  With an iterator...
+  ```
+  let epoch = scheduler.add_epoch()
+  for ready in scheduler.iter_epoch(epoch) {
+      for (epoch, node) in ready {
+          // call the node somehow
+          events = node_calling_thing()
+          scheduler.update(events)
+      }
+  }
+  ```
+  
+  As a functional iterator i guess, idk if this is correct, just use a loop...
+  
+  ```
+  scheduler
+    .iter_epoch()
+    .flatten()
+    .for_each(|ready| scheduler.update(nodes[ready[1]]()));
+  ```
   :::
 :::::{rust:variable} noob_core::scheduler::Scheduler::graph_items
 :index: 2

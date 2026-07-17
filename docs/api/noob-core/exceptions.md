@@ -63,7 +63,7 @@
 :layout: [{"type":"name","value":"AlreadyDone"},{"type":"punctuation","value":"("},{"type":"link","value":"String","target":"String"},{"type":"punctuation","value":")"}]
 
   :::
-  `noob.exceptions.AlreadyDoneError`
+  A node has already been marked done in the given epoch.
   :::
 :::::
 :::::{rust:struct} noob_core::exceptions::CoreError::NotAdded
@@ -73,7 +73,7 @@
 :layout: [{"type":"name","value":"NotAdded"},{"type":"punctuation","value":"("},{"type":"link","value":"String","target":"String"},{"type":"punctuation","value":")"}]
 
   :::
-  `noob.exceptions.NotAddedError`
+  A node was not added to the graph before attempting to refer to it
   :::
 :::::
 :::::{rust:struct} noob_core::exceptions::CoreError::EpochExists
@@ -83,6 +83,7 @@
 :layout: [{"type":"name","value":"EpochExists"},{"type":"punctuation","value":"("},{"type":"link","value":"Epoch","target":"Epoch"},{"type":"punctuation","value":")"}]
 
   :::
+  The epoch that is being created already exists
   :::
 :::::
 :::::{rust:struct} noob_core::exceptions::CoreError::EpochCompleted
@@ -92,6 +93,7 @@
 :layout: [{"type":"name","value":"EpochCompleted"},{"type":"punctuation","value":"("},{"type":"link","value":"Epoch","target":"Epoch"},{"type":"punctuation","value":")"}]
 
   :::
+  The epoch that is being referred to has already been completed and logged
   :::
 :::::
 :::::{rust:struct} noob_core::exceptions::CoreError::Value

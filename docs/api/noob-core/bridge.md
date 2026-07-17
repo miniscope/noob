@@ -79,6 +79,36 @@
 
 :::
 
+:::{rubric} Enums
+:::
+
+::::::{rust:enum} noob_core::bridge::EpochArg
+:index: 1
+:vis: crate
+:layout: [{"type":"keyword","value":"enum"},{"type":"space"},{"type":"name","value":"EpochArg"}]
+
+  :::
+  :::
+:::::{rust:struct} noob_core::bridge::EpochArg::Handle
+:index: 2
+:vis: crate
+:toc: Handle
+:layout: [{"type":"name","value":"Handle"},{"type":"punctuation","value":"("},{"type":"link","value":"Py","target":"Py"},{"type":"punctuation","value":"<"},{"type":"link","value":"Epoch","target":"Epoch"},{"type":"punctuation","value":">"},{"type":"punctuation","value":")"}]
+
+  :::
+  :::
+:::::
+:::::{rust:struct} noob_core::bridge::EpochArg::Root
+:index: 2
+:vis: crate
+:toc: Root
+:layout: [{"type":"name","value":"Root"},{"type":"punctuation","value":"("},{"type":"link","value":"u32","target":"u32"},{"type":"punctuation","value":")"}]
+
+  :::
+  :::
+:::::
+::::::
+
 :::{rubric} Structs and Unions
 :::
 
@@ -89,6 +119,11 @@
 :layout: [{"type":"keyword","value":"struct"},{"type":"space"},{"type":"name","value":"PyScheduler"},{"type":"punctuation","value":"("},{"type":"link","value":"Scheduler","target":"Scheduler"},{"type":"punctuation","value":")"}]
 
   :::
+  PyO3 class that bridges between the pure-rust Scheduler and its python counterpart
+  Only those methods that do something beyond forwarding calls with string interning
+  have public docstrings.
+  For the rest, see either the Python or Rust scheduler.
+  (Methods being marked public is purely a documentation detail because the PyO3 macro makes them so anyway)
   :::
 
 :::{rubric} Implementations
@@ -102,87 +137,47 @@
 
   :::
   :::
-:::::
-::::::
-::::::{rust:struct} noob_core::bridge::PySorterState
-:index: 1
-:vis: pub
-:toc: struct PySorterState
-:layout: [{"type":"keyword","value":"struct"},{"type":"space"},{"type":"name","value":"PySorterState"}]
+
+:::{rubric} Functions
+:::
+
+::::{rust:function} noob_core::bridge::PyScheduler::node_is_done
+:index: -1
+:vis: crate
+:layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"node_is_done"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"keyword","value":"self"},{"type":"punctuation","value":", "},{"type":"name","value":"node"},{"type":"punctuation","value":": "},{"type":"link","value":"String","target":"String"},{"type":"punctuation","value":", "},{"type":"name","value":"epoch"},{"type":"punctuation","value":": "},{"type":"link","value":"Epoch","target":"Epoch"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"PyResult","target":"PyResult"},{"type":"punctuation","value":"<"},{"type":"link","value":"bool","target":"bool"},{"type":"punctuation","value":">"}]
 
   :::
+  Check if a node has been either run or expired in the given epoch
+  
+  Similarly to node_is_ready, raises NotAddedError if node has not been previously added.
   :::
-:::::{rust:variable} noob_core::bridge::PySorterState::ready
-:index: 2
-:vis: pub
-:toc: ready
-:layout: [{"type":"name","value":"ready"},{"type":"punctuation","value":": "},{"type":"link","value":"FxHashSet","target":"FxHashSet"},{"type":"punctuation","value":"<"},{"type":"link","value":"Item","target":"Item"},{"type":"punctuation","value":">"}]
+::::
+::::{rust:function} noob_core::bridge::PyScheduler::node_is_ready
+:index: -1
+:vis: crate
+:layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"node_is_ready"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"keyword","value":"self"},{"type":"punctuation","value":", "},{"type":"name","value":"node"},{"type":"punctuation","value":": "},{"type":"link","value":"String","target":"String"},{"type":"punctuation","value":", "},{"type":"name","value":"epoch"},{"type":"punctuation","value":": "},{"type":"link","value":"Epoch","target":"Epoch"},{"type":"punctuation","value":", "},{"type":"name","value":"subepochs"},{"type":"punctuation","value":": "},{"type":"link","value":"bool","target":"bool"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"PyResult","target":"PyResult"},{"type":"punctuation","value":"<"},{"type":"link","value":"bool","target":"bool"},{"type":"punctuation","value":">"}]
 
   :::
+  Check if a node is ready in a given epoch without marking it as `out`
+  
+  Raises a NotAdded error if the node has not been previously added to the graph,
+  rather than automatically interning:
+  differentiates simply not being ready from not existing at all
   :::
-:::::
-:::::{rust:variable} noob_core::bridge::PySorterState::out
-:index: 2
-:vis: pub
-:toc: out
-:layout: [{"type":"name","value":"out"},{"type":"punctuation","value":": "},{"type":"link","value":"FxHashSet","target":"FxHashSet"},{"type":"punctuation","value":"<"},{"type":"link","value":"Item","target":"Item"},{"type":"punctuation","value":">"}]
+::::
+::::{rust:function} noob_core::bridge::PyScheduler::update
+:index: -1
+:vis: crate
+:layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"update"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"keyword","value":"mut"},{"type":"space"},{"type":"keyword","value":"self"},{"type":"punctuation","value":", "},{"type":"name","value":"events"},{"type":"punctuation","value":": "},{"type":"link","value":"Vec","target":"Vec"},{"type":"punctuation","value":"<"},{"type":"punctuation","value":"("},{"type":"link","value":"EpochArg","target":"EpochArg"},{"type":"punctuation","value":", "},{"type":"link","value":"String","target":"String"},{"type":"punctuation","value":", "},{"type":"link","value":"String","target":"String"},{"type":"punctuation","value":", "},{"type":"link","value":"bool","target":"bool"},{"type":"punctuation","value":")"},{"type":"punctuation","value":">"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"PyResult","target":"PyResult"},{"type":"punctuation","value":"<"},{"type":"link","value":"Vec","target":"Vec"},{"type":"punctuation","value":"<"},{"type":"link","value":"Epoch","target":"Epoch"},{"type":"punctuation","value":">"},{"type":"punctuation","value":">"}]
 
   :::
+  Accept recast events from the python scheduler,
+  intern the strings to ints,
+  filter the events to only those whose signals are in the graph,
+  (e.g., not disabled, etc.)
+  and pass to the internal update method.
   :::
-:::::
-:::::{rust:variable} noob_core::bridge::PySorterState::done
-:index: 2
-:vis: pub
-:toc: done
-:layout: [{"type":"name","value":"done"},{"type":"punctuation","value":": "},{"type":"link","value":"FxHashSet","target":"FxHashSet"},{"type":"punctuation","value":"<"},{"type":"link","value":"Item","target":"Item"},{"type":"punctuation","value":">"}]
-
-  :::
-  :::
-:::::
-:::::{rust:variable} noob_core::bridge::PySorterState::disabled
-:index: 2
-:vis: pub
-:toc: disabled
-:layout: [{"type":"name","value":"disabled"},{"type":"punctuation","value":": "},{"type":"link","value":"FxHashSet","target":"FxHashSet"},{"type":"punctuation","value":"<"},{"type":"link","value":"Item","target":"Item"},{"type":"punctuation","value":">"}]
-
-  :::
-  :::
-:::::
-:::::{rust:variable} noob_core::bridge::PySorterState::ran
-:index: 2
-:vis: pub
-:toc: ran
-:layout: [{"type":"name","value":"ran"},{"type":"punctuation","value":": "},{"type":"link","value":"FxHashSet","target":"FxHashSet"},{"type":"punctuation","value":"<"},{"type":"link","value":"Item","target":"Item"},{"type":"punctuation","value":">"}]
-
-  :::
-  :::
-:::::
-:::::{rust:variable} noob_core::bridge::PySorterState::pending
-:index: 2
-:vis: pub
-:toc: pending
-:layout: [{"type":"name","value":"pending"},{"type":"punctuation","value":": "},{"type":"link","value":"FxHashSet","target":"FxHashSet"},{"type":"punctuation","value":"<"},{"type":"link","value":"Item","target":"Item"},{"type":"punctuation","value":">"}]
-
-  :::
-  :::
-:::::
-:::::{rust:variable} noob_core::bridge::PySorterState::npassedout
-:index: 2
-:vis: pub
-:toc: npassedout
-:layout: [{"type":"name","value":"npassedout"},{"type":"punctuation","value":": "},{"type":"link","value":"i64","target":"i64"}]
-
-  :::
-  :::
-:::::
-:::::{rust:variable} noob_core::bridge::PySorterState::nfinished
-:index: 2
-:vis: pub
-:toc: nfinished
-:layout: [{"type":"name","value":"nfinished"},{"type":"punctuation","value":": "},{"type":"link","value":"i64","target":"i64"}]
-
-  :::
-  :::
+::::
 :::::
 ::::::
 ::::::{rust:struct} noob_core::bridge::UpdateEvent
@@ -192,6 +187,8 @@
 :layout: [{"type":"keyword","value":"struct"},{"type":"space"},{"type":"name","value":"UpdateEvent"}]
 
   :::
+  A single event to update the scheduler state from emitted by a node.
+  After interning python strings to ints and extracting other string values.
   :::
 :::::{rust:variable} noob_core::bridge::UpdateEvent::epoch
 :index: 2

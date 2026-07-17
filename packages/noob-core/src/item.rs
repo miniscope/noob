@@ -8,6 +8,9 @@ pub type ItemID = u32;
 static INTERNER: LazyLock<RwLock<Arc<Interner>>> =
     LazyLock::new(|| RwLock::new(Arc::new(Interner::default())));
 
+/// Get a read-only reference to the global python<->rust interner
+/// Acquired the RwLock only within the function call, releasing it immediately.
+/// See the top-level design docs for more details.
 pub fn interner() -> Arc<Interner> {
     INTERNER
         .read()
@@ -15,6 +18,15 @@ pub fn interner() -> Arc<Interner> {
         .clone()
 }
 
+/// Get a read/write reference to the global python<->rust interner,
+/// holding the lock.
+///
+/// Update the interner by getting a new mutable Arc from it:
+///
+/// ```
+/// let mut interner_slot = interner_mut();
+/// let interner = Arc::make_mut(&mut interner_slot);
+/// ```
 pub(crate) fn interner_mut() -> RwLockWriteGuard<'static, Arc<Interner>> {
     INTERNER
         .write()
@@ -84,9 +96,11 @@ impl fmt::Display for Item {
 /// Every [`Interner`] interns it at construction, so it is always id 0.
 pub const PREVIOUS_EPOCH: ItemID = 0;
 pub const META_NODE: ItemID = 1;
-/// The marker that indicates the root of an epoch, Epoch(("tube", 0))
+/// "tube" - The marker that indicates the root of an epoch, Epoch(("tube", 0))
 pub const TUBE_NODE: ItemID = 2;
+/// "input"
 pub const INPUT_NODE: ItemID = 3;
+/// "assets"
 pub const ASSETS_NODE: ItemID = 4;
 
 /// Interns [`Item`]s to dense `ItemID` ids shared by all sorters in a scheduler,
@@ -119,6 +133,7 @@ impl Interner {
         self.intern(Item::Node(id.to_owned()))
     }
 
+    /// Intern both the (node, signal) tuple and the node within it.
     pub fn intern_signal(&mut self, node: &str, signal: &str) -> ItemID {
         let id = self.intern(Item::Signal(node.to_owned(), signal.to_owned()));
         self.intern_node(node);
@@ -129,6 +144,8 @@ impl Interner {
         self.items.get_index_of(item).map(|i| i as ItemID)
     }
 
+    /// Return an integer ItemId to the python string form
+    /// Panics if no item is present in the interner
     pub fn resolve(&self, id: ItemID) -> &Item {
         self.items
             .get_index(id as usize)

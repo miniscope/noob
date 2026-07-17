@@ -5,7 +5,7 @@
 This version reimplements the TopoSorter and the Scheduler in a rust extension module `noob-core`,
 and with that makes some dramatic performance improvements.
 
-You can see the {rust:crate}`noob_core` documentation for more details on the implementation.
+You can see the [noob-core](./api/noob-core/index.md) documentation for more details on the implementation.
 
 This was a relatively faithful port,
 but we resolved a number of bugs and made a few planned changes and improvements

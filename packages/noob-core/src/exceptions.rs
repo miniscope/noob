@@ -10,11 +10,13 @@ use std::fmt;
 /// pure rust.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CoreError {
-    /// `noob.exceptions.AlreadyDoneError`
+    /// A node has already been marked done in the given epoch.
     AlreadyDone(String),
-    /// `noob.exceptions.NotAddedError`
+    /// A node was not added to the graph before attempting to refer to it
     NotAdded(String),
+    /// The epoch that is being created already exists
     EpochExists(Epoch),
+    /// The epoch that is being referred to has already been completed and logged
     EpochCompleted(Epoch),
     /// `ValueError`
     Value(String),

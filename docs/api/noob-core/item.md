@@ -65,6 +65,7 @@
 :layout: [{"type":"keyword","value":"const"},{"type":"space"},{"type":"name","value":"ASSETS_NODE"},{"type":"punctuation","value":": "},{"type":"link","value":"ItemID","target":"ItemID"}]
 
   :::
+  "assets"
   :::
 ::::::
 ::::::{rust:variable} noob_core::item::INPUT_NODE
@@ -74,6 +75,7 @@
 :layout: [{"type":"keyword","value":"const"},{"type":"space"},{"type":"name","value":"INPUT_NODE"},{"type":"punctuation","value":": "},{"type":"link","value":"ItemID","target":"ItemID"}]
 
   :::
+  "input"
   :::
 ::::::
 ::::::{rust:variable} noob_core::item::META_NODE
@@ -106,7 +108,7 @@
 :layout: [{"type":"keyword","value":"const"},{"type":"space"},{"type":"name","value":"TUBE_NODE"},{"type":"punctuation","value":": "},{"type":"link","value":"ItemID","target":"ItemID"}]
 
   :::
-  The marker that indicates the root of an epoch, Epoch(("tube", 0))
+  "tube" - The marker that indicates the root of an epoch, Epoch(("tube", 0))
   :::
 ::::::
 
@@ -119,6 +121,9 @@
 :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"interner"},{"type":"punctuation","value":"("},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"Arc","target":"Arc"},{"type":"punctuation","value":"<"},{"type":"link","value":"Interner","target":"Interner"},{"type":"punctuation","value":">"}]
 
   :::
+  Get a read-only reference to the global python<->rust interner
+  Acquired the RwLock only within the function call, releasing it immediately.
+  See the top-level design docs for more details.
   :::
 ::::::
 ::::::{rust:function} noob_core::item::interner_mut
@@ -127,6 +132,15 @@
 :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"interner_mut"},{"type":"punctuation","value":"("},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"RwLockWriteGuard","target":"RwLockWriteGuard"},{"type":"punctuation","value":"<"},{"type":"lifetime","value":"'static"},{"type":"punctuation","value":", "},{"type":"link","value":"Arc","target":"Arc"},{"type":"punctuation","value":"<"},{"type":"link","value":"Interner","target":"Interner"},{"type":"punctuation","value":">"},{"type":"punctuation","value":">"}]
 
   :::
+  Get a read/write reference to the global python<->rust interner,
+  holding the lock.
+  
+  Update the interner by getting a new mutable Arc from it:
+  
+  ```
+  let mut interner_slot = interner_mut();
+  let interner = Arc::make_mut(&mut interner_slot);
+  ```
   :::
 ::::::
 ::::::{rust:function} noob_core::item::resolve_or_intern_node
@@ -286,6 +300,7 @@
 :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"intern_signal"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"keyword","value":"mut"},{"type":"space"},{"type":"keyword","value":"self"},{"type":"punctuation","value":", "},{"type":"name","value":"node"},{"type":"punctuation","value":": "},{"type":"punctuation","value":"&"},{"type":"link","value":"str","target":"str"},{"type":"punctuation","value":", "},{"type":"name","value":"signal"},{"type":"punctuation","value":": "},{"type":"punctuation","value":"&"},{"type":"link","value":"str","target":"str"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"ItemID","target":"ItemID"}]
 
   :::
+  Intern both the (node, signal) tuple and the node within it.
   :::
 ::::
 ::::{rust:function} noob_core::item::Interner::is_signal
@@ -312,6 +327,8 @@
 :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"resolve"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"keyword","value":"self"},{"type":"punctuation","value":", "},{"type":"name","value":"id"},{"type":"punctuation","value":": "},{"type":"link","value":"ItemID","target":"ItemID"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"punctuation","value":"&"},{"type":"link","value":"Item","target":"Item"}]
 
   :::
+  Return an integer ItemId to the python string form
+  Panics if no item is present in the interner
   :::
 ::::
 :::::

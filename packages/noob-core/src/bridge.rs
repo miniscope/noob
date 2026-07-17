@@ -10,6 +10,11 @@ use pyo3::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{BTreeSet, HashSet};
 
+/// PyO3 class that bridges between the pure-rust Scheduler and its python counterpart
+/// Only those methods that do something beyond forwarding calls with string interning
+/// have public docstrings.
+/// For the rest, see either the Python or Rust scheduler.
+/// (Methods being marked public is purely a documentation detail because the PyO3 macro makes them so anyway)
 #[pyclass(name = "Scheduler", module = "noob_core._core")]
 pub struct PyScheduler(Scheduler);
 
@@ -38,7 +43,15 @@ impl PyScheduler {
         Ok(PyScheduler(Scheduler::from_graph(nodes, edges)?))
     }
 
-    fn update(&mut self, events: Vec<(EpochArg, String, String, bool)>) -> PyResult<Vec<Epoch>> {
+    /// Accept recast events from the python scheduler,
+    /// intern the strings to ints,
+    /// filter the events to only those whose signals are in the graph,
+    /// (e.g., not disabled, etc.)
+    /// and pass to the internal update method.
+    pub(crate) fn update(
+        &mut self,
+        events: Vec<(EpochArg, String, String, bool)>,
+    ) -> PyResult<Vec<Epoch>> {
         let interner = interner();
         let mut core_events = Vec::with_capacity(events.len());
         for (epoch, node_id, signal, no_event) in events {
@@ -114,7 +127,17 @@ impl PyScheduler {
         Ok(ready_to_python(&interner, ready))
     }
 
-    fn node_is_ready(&self, node: String, epoch: Epoch, subepochs: bool) -> PyResult<bool> {
+    /// Check if a node is ready in a given epoch without marking it as `out`
+    ///
+    /// Raises a NotAdded error if the node has not been previously added to the graph,
+    /// rather than automatically interning:
+    /// differentiates simply not being ready from not existing at all
+    pub(crate) fn node_is_ready(
+        &self,
+        node: String,
+        epoch: Epoch,
+        subepochs: bool,
+    ) -> PyResult<bool> {
         let interner = interner();
         let item = Item::Node(node);
         let Some(node_id) = interner.get(&item) else {
@@ -126,7 +149,10 @@ impl PyScheduler {
         Ok(self.0.node_is_ready(&node_id, &epoch, subepochs))
     }
 
-    fn node_is_done(&self, node: String, epoch: Epoch) -> PyResult<bool> {
+    /// Check if a node has been either run or expired in the given epoch
+    ///
+    /// Similarly to node_is_ready, raises NotAddedError if node has not been previously added.
+    pub(crate) fn node_is_done(&self, node: String, epoch: Epoch) -> PyResult<bool> {
         let interner = interner();
         let item = Item::Node(node);
         let Some(node_id) = interner.get(&item) else {
@@ -278,8 +304,9 @@ impl PyScheduler {
     }
 }
 
+/// Python-compatible counterpart of SorterState
 #[derive(IntoPyObject)]
-pub struct PySorterState {
+struct PySorterState {
     pub ready: FxHashSet<Item>,
     pub out: FxHashSet<Item>,
     pub done: FxHashSet<Item>,
@@ -291,7 +318,7 @@ pub struct PySorterState {
 }
 
 #[derive(FromPyObject)]
-enum EpochArg {
+pub(crate) enum EpochArg {
     Handle(Py<Epoch>),
     Root(u32),
 }
@@ -337,6 +364,8 @@ impl From<CoreError> for PyErr {
     }
 }
 
+/// A single event to update the scheduler state from emitted by a node.
+/// After interning python strings to ints and extracting other string values.
 pub struct UpdateEvent {
     pub epoch: Epoch,
     pub node: ItemID,

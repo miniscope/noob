@@ -77,7 +77,33 @@
 :layout: [{"type":"keyword","value":"struct"},{"type":"space"},{"type":"name","value":"Epoch"}]
 
   :::
+  The basic unit of event alignment in Noob:
+  Events emitted within the same epoch are passed to a node's slots together.
+  
+  Epochs are hierarchical: by default, all events exist in an integer-valued root epoch.
+  However if a node like `Map` expands cardinality by emitting multiple events per event taken in,
+  Epochs grow "layers" of *subepochs* labeled with the ID of the node that emitted them.
   :::
+:::::{rust:variable} noob_core::epoch::Epoch::root
+:index: 2
+:vis: pub
+:toc: root
+:layout: [{"type":"name","value":"root"},{"type":"punctuation","value":": "},{"type":"link","value":"u32","target":"u32"}]
+
+  :::
+  The common, tube-level epoch
+  :::
+:::::
+:::::{rust:variable} noob_core::epoch::Epoch::path
+:index: 2
+:vis: pub
+:toc: path
+:layout: [{"type":"name","value":"path"},{"type":"punctuation","value":": "},{"type":"link","value":"Vec","target":"Vec"},{"type":"punctuation","value":"<"},{"type":"link","value":"EpochSegment","target":"EpochSegment"},{"type":"punctuation","value":">"}]
+
+  :::
+  Subepoch segments induced by cardinality expanding Maplike events.
+  :::
+:::::
 
 :::{rubric} Implementations
 :::
@@ -94,14 +120,6 @@
 :::{rubric} Functions
 :::
 
-::::{rust:function} noob_core::epoch::Epoch::checked_sub
-:index: -1
-:vis: pub
-:layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"checked_sub"},{"type":"punctuation","value":"("},{"type":"keyword","value":"mut"},{"type":"space"},{"type":"keyword","value":"self"},{"type":"punctuation","value":", "},{"type":"name","value":"rhs"},{"type":"punctuation","value":": "},{"type":"link","value":"u32","target":"u32"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"Option","target":"Option"},{"type":"punctuation","value":"<"},{"type":"link","value":"Epoch","target":"Epoch"},{"type":"punctuation","value":">"}]
-
-  :::
-  :::
-::::
 ::::{rust:function} noob_core::epoch::Epoch::child
 :index: -1
 :vis: pub
@@ -124,6 +142,8 @@
 :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"leaf"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"keyword","value":"self"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"Option","target":"Option"},{"type":"punctuation","value":"<"},{"type":"punctuation","value":"&"},{"type":"link","value":"EpochSegment","target":"EpochSegment"},{"type":"punctuation","value":">"}]
 
   :::
+  The last available subepoch segment, if any.
+  `None` for root epochs.
   :::
 ::::
 ::::{rust:function} noob_core::epoch::Epoch::make_subepochs
@@ -132,6 +152,14 @@
 :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"make_subepochs"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"keyword","value":"self"},{"type":"punctuation","value":", "},{"type":"name","value":"node"},{"type":"punctuation","value":": "},{"type":"link","value":"ItemID","target":"ItemID"},{"type":"punctuation","value":", "},{"type":"name","value":"n"},{"type":"punctuation","value":": "},{"type":"link","value":"u32","target":"u32"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"Vec","target":"Vec"},{"type":"punctuation","value":"<"},{"type":"link","value":"Epoch","target":"Epoch"},{"type":"punctuation","value":">"}]
 
   :::
+  Create a collection of `n` sequential subepochs induced by events from the given node
+  
+  # Example
+  
+  ```
+  Epoch::from(0).make_subepochs(6, 2)
+  // vec![Epoch(0) / (6, 0), Epoch(0) / (6, 1)]
+  ```
   :::
 ::::
 ::::{rust:function} noob_core::epoch::Epoch::n_segments
@@ -140,6 +168,7 @@
 :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"n_segments"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"keyword","value":"self"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"usize","target":"usize"}]
 
   :::
+  1 for root epochs, 1 + subepoch segments otherwise.
   :::
 ::::
 ::::{rust:function} noob_core::epoch::Epoch::new
@@ -203,6 +232,9 @@
 :toc: impl From for Epoch
 
   :::
+  ```
+  Epoch::from(0)
+  ```
   :::
 :::::
 :::::{rust:impl} noob_core::epoch::Epoch::Div
@@ -212,6 +244,10 @@
 :toc: impl Div for Epoch
 
   :::
+  ```
+  Epoch::from(0) / (1, 2)
+  Epoch::from(0) / EpochSegment{ node: 1, epoch: 2 }
+  ```
   :::
 :::::
 :::::{rust:impl} noob_core::epoch::Epoch::Add
@@ -221,6 +257,15 @@
 :toc: impl Add for Epoch
 
   :::
+  Increment the lowest layer of the epoch.
+  
+  # Examples:
+  ```
+  Epoch::from(0) + 1
+  // Epoch(1)
+  (Epoch::from(0) / (2, 3)) + 1
+  // Epoch(1, (2, 4))
+  ```
   :::
 :::::
 :::::{rust:impl} noob_core::epoch::Epoch::Sub
@@ -230,6 +275,16 @@
 :toc: impl Sub for Epoch
 
   :::
+  Decrement the lowest layer of the epoch.
+  
+  # Examples:
+  ```
+  Epoch::from(1) - 1
+  // Epoch(0)
+  (Epoch::from(0) / (2, 3)) - 1
+  // Epoch(1, (2, 2))
+  ```
+  
   :::
 :::::
 :::::{rust:impl} noob_core::epoch::Epoch::Display
@@ -249,6 +304,7 @@
 :layout: [{"type":"keyword","value":"struct"},{"type":"space"},{"type":"name","value":"EpochSegment"}]
 
   :::
+  A single layer of a subepoch
   :::
 :::::{rust:variable} noob_core::epoch::EpochSegment::node
 :index: 2
@@ -257,6 +313,7 @@
 :layout: [{"type":"name","value":"node"},{"type":"punctuation","value":": "},{"type":"link","value":"ItemID","target":"ItemID"}]
 
   :::
+  The node that created this layer of the subepoch
   :::
 :::::
 :::::{rust:variable} noob_core::epoch::EpochSegment::epoch
@@ -266,6 +323,7 @@
 :layout: [{"type":"name","value":"epoch"},{"type":"punctuation","value":": "},{"type":"link","value":"u32","target":"u32"}]
 
   :::
+  The index of this subepoch within its layer
   :::
 :::::
 

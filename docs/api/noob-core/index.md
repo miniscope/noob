@@ -1,3 +1,4 @@
+(noob-core)=
 # noob-core
 
 `noob-core` is a rust crate exposed to python with [PyO3](https://pyo3.rs)
@@ -200,6 +201,7 @@ def update(self, events: list[Event]) -> list[Event | MetaEvent]:
 :maxdepth: 1
 
 lib
+python
 bridge
 epoch
 exceptions

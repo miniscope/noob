@@ -191,8 +191,6 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
             if "typing.Annotated" in record.location or "typing.Union" in record.location:
                 return False
 
-        breakpoint()
-
         # not worth installing graphviz for one diagram in gh actions testing
         if (
             "GITHUB_ACTION" in os.environ

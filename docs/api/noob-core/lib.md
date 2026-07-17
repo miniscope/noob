@@ -4,6 +4,8 @@
 :index: 0
 
   :::
+  # noob-core
+  optimized scheduling routines for noob
   :::
 
 :::{rubric} Modules
@@ -35,5 +37,6 @@
 :layout: [{"type":"keyword","value":"type"},{"type":"space"},{"type":"name","value":"FxIndexSet"},{"type":"punctuation","value":"<"},{"type":"name","value":"T"},{"type":"punctuation","value":">"}]
 
   :::
+  Aliases for common hashing types with a cheaper hash algo
   :::
 ::::

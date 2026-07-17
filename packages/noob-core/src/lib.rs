@@ -1,5 +1,8 @@
+//! # noob-core
+//! optimized scheduling routines for noob
 use pyo3::prelude::*;
 
+/// Aliases for common hashing types with a cheaper hash algo
 pub type FxIndexSet<T> = indexmap::IndexSet<T, rustc_hash::FxBuildHasher>;
 pub type FxIndexMap<K, V> = indexmap::IndexMap<K, V, rustc_hash::FxBuildHasher>;
 
