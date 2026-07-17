@@ -20,7 +20,7 @@ build:
       - python -m pip install pdm
     install:
       - npm --prefix js/ ci
-      - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm install --with docs
+      - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm install --with docs --with dev
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run python -m ensurepip
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run python -m pip install ./packages/noob-core
     pre_build:
