@@ -97,7 +97,9 @@ impl Epoch {
     /// # Example
     ///
     /// ```
-    /// Epoch::from(0).make_subepochs(6, 2)
+    /// # use noob_core::epoch::Epoch;
+    /// let subeps = Epoch::from(0).make_subepochs(6, 2);
+    /// println!("{subeps:?}");
     /// // vec![Epoch(0) / (6, 0), Epoch(0) / (6, 1)]
     /// ```
     pub fn make_subepochs(&self, node: ItemID, n: u32) -> Vec<Epoch> {
@@ -340,7 +342,8 @@ enum WireItem {
 }
 
 /// ```
-/// Epoch::from(0)
+/// # use noob_core::epoch::Epoch;
+/// Epoch::from(0);
 /// ```
 impl From<u32> for Epoch {
     fn from(number: u32) -> Self {
@@ -352,8 +355,11 @@ impl From<u32> for Epoch {
 }
 
 /// ```
-/// Epoch::from(0) / (1, 2)
-/// Epoch::from(0) / EpochSegment{ node: 1, epoch: 2 }
+/// # use noob_core::epoch::{Epoch, EpochSegment};
+/// let ep = Epoch::from(0) / (1, 2);
+/// println!("{}", ep);
+/// let ep = Epoch::from(0) / EpochSegment{ node: 1, epoch: 2 };
+/// println!("{}", ep);
 /// ```
 impl<T: Into<EpochSegment>> Div<T> for Epoch {
     type Output = Epoch;
@@ -374,9 +380,14 @@ impl<T: Into<EpochSegment>> Div<T> for &Epoch {
 ///
 /// # Examples:
 /// ```
-/// Epoch::from(0) + 1
+/// # use noob_core::epoch::Epoch;
+/// let ep = Epoch::from(0) + 1;
+/// println!("{}", ep);
 /// // Epoch(1)
-/// (Epoch::from(0) / (2, 3)) + 1
+///
+/// let child = Epoch::from(0) / (2, 3);
+/// let child = child + 1;
+/// println!("{}", child);
 /// // Epoch(1, (2, 4))
 /// ```
 impl Add<u32> for Epoch {
@@ -401,9 +412,12 @@ impl Add<u32> for &Epoch {
 ///
 /// # Examples:
 /// ```
-/// Epoch::from(1) - 1
+/// # use noob_core::epoch::Epoch;
+/// let ep = Epoch::from(1) - 1;
+/// println!("{}", ep);
 /// // Epoch(0)
-/// (Epoch::from(0) / (2, 3)) - 1
+/// let ep = (Epoch::from(0) / (2, 3)) - 1;
+/// println!("{}", ep);
 /// // Epoch(1, (2, 2))
 /// ```
 ///

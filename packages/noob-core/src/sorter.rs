@@ -14,6 +14,28 @@ pub struct EdgeRec {
     pub required: bool,
 }
 
+impl From<(&str, &str, &str, bool)> for EdgeRec {
+    fn from(value: (&str, &str, &str, bool)) -> Self {
+        EdgeRec {
+            source_node: value.0.to_string(),
+            source_signal: value.1.to_string(),
+            target_node: value.2.to_string(),
+            required: value.3,
+        }
+    }
+}
+/// Default edge to required
+impl From<(&str, &str, &str)> for EdgeRec {
+    fn from(value: (&str, &str, &str)) -> Self {
+        EdgeRec {
+            source_node: value.0.to_string(),
+            source_signal: value.1.to_string(),
+            target_node: value.2.to_string(),
+            required: true,
+        }
+    }
+}
+
 /// The fields of `noob.node.NodeSpecification` the sorter cares about.
 /// `stateful` is `bool | None` in python - `None` (unresolved) is treated
 /// as stateless, see [`NodeFlags::is_stateful`].
