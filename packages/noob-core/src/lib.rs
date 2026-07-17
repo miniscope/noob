@@ -9,7 +9,6 @@ pub mod exceptions;
 pub mod item;
 pub mod scheduler;
 pub mod sorter;
-pub mod tube;
 
 #[pymodule]
 fn _core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
