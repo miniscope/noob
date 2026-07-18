@@ -18,6 +18,16 @@ const DEFAULT_EPOCH_LOG_LEN: u32 = 1000;
 /// Typical use is to receive one from an instantiated (python) `Tube`,
 /// and then to use one of its two iteration modes in a loop with the `update` method.
 ///
+/// In general, for actions that can either take place in a specific epoch or any epoch,
+/// the naming convention is something like
+///
+/// - {do_something} - in any epoch
+/// - {do_something}_at - in a specific, given epoch.
+///
+/// the `_at` form is usually fallible since it's possible that the epoch has already been completed
+/// or is otherwise invalid for the operation,
+/// and the "any epoch" form is infallible and adds new epochs if necessary.
+///
 /// # Examples
 ///
 /// ```rust
@@ -121,8 +131,6 @@ impl Scheduler {
     /// - run them
     /// - store their values -> creating events
     /// - update the scheduler with events.
-    ///
-    ///
     pub fn update(&mut self, mut events: Vec<UpdateEvent>) -> CoreResult<Vec<Epoch>> {
         events.sort_by_key(|e| Reverse(e.epoch.n_segments()));
         let mut done_nodes: FxHashSet<(Epoch, ItemID)> = FxHashSet::default();
@@ -150,6 +158,7 @@ impl Scheduler {
         Ok(done_epochs)
     }
 
+    /// Add the next epoch, after the last highest created root epoch
     pub fn add_epoch(&mut self) -> Epoch {
         let this_epoch = Epoch::from(self.next_epoch);
         self.next_epoch += 1;
@@ -158,6 +167,8 @@ impl Scheduler {
         this_epoch
     }
 
+    /// Add a specific epoch, can fail if the epoch has already been created or completed
+    /// If `epoch` is not a root epoch, dispatches to [Scheduler.add_subepoch]
     pub fn add_epoch_at(&mut self, epoch: impl Into<Epoch>) -> CoreResult<Epoch> {
         let epoch = epoch.into();
         if self.epochs.contains_key(&epoch) {
@@ -175,6 +186,13 @@ impl Scheduler {
         }
     }
 
+    /// Add a subepoch consisting of a subgraph of the nodes that are
+    /// downstream from the node that induced the epoch
+    /// (the node id in the [Epoch.leaf]).
+    ///
+    /// The state of the graph items in the parent epoch is transferred
+    /// to any nodes that also exist in the subepoch,
+    /// and the node that induced the subepoch is expired in the parent.
     pub fn add_subepoch(&mut self, epoch: impl Into<Epoch>) -> CoreResult<Epoch> {
         let epoch = epoch.into();
         if self.epochs.contains_key(&epoch) {
@@ -375,6 +393,12 @@ impl Scheduler {
                 .is_some_and(|subeps| subeps.iter().any(|subep| self.is_active_at(subep)))
     }
 
+    /// Get nodes that are ready in any epoch
+    /// This and get_ready_at are not preferred calling patterns,
+    /// as they require a continual check of epoch completion
+    /// rather than just iterating, which also naturally closes.
+    /// They are public only within the crate to expose them to python,
+    /// but prefer the iterators.
     pub(crate) fn get_ready(&mut self) -> Vec<(Epoch, ItemID)> {
         let interner = interner();
         self.epochs
@@ -388,6 +412,8 @@ impl Scheduler {
             .collect()
     }
 
+    /// Get nodes that are ready in a specific epoch.
+    /// See the note in [Scheduler.get_ready]
     pub(crate) fn get_ready_at(&mut self, epoch: &Epoch) -> Vec<(Epoch, ItemID)> {
         let interner = interner();
         let epochs: Vec<&Epoch> = match self.subepochs.get(epoch) {
@@ -591,6 +617,9 @@ impl Scheduler {
             .collect()
     }
 
+    /// The collection of nodes and signals that influence a node's readiness:
+    /// both direct predecessors,
+    /// and any predecessors that might reach us through a chain of optional dependencies.
     pub fn upstream_nodes(&self, node: ItemID) -> CoreResult<FxHashSet<ItemID>> {
         if let Some(info) = self.template.info.get(&node) {
             let interner = interner();
@@ -610,6 +639,9 @@ impl Scheduler {
         }
     }
 
+    /// Mark a node as having been completed without any result,
+    /// without making its successors ready,
+    /// effectively canceling the tree of obligate nodes beneath it.
     pub fn expire(
         &mut self,
         epoch: &Epoch,
@@ -666,6 +698,11 @@ impl Scheduler {
         Ok(events)
     }
 
+    /// Declare that an epoch has been completed,
+    /// performing bookkeeping, cleanup, and emitting the epoch completion meta event in python.
+    /// Only root epochs cause epoch sorters to be dropped -
+    /// a parent epoch is not completed until all of its subepochs are,
+    /// and the completion of a parent epoch means that all its subepochs are completed.
     pub fn end_epoch(&mut self, epoch: impl Into<Epoch>) -> CoreResult<Vec<Epoch>> {
         let epoch = epoch.into();
         // signal this epoch has been completed to any successive epochs
@@ -718,6 +755,11 @@ impl Scheduler {
         Ok(events)
     }
 
+    /// Whether all nodes that have no dependencies, or "source" nodes,
+    /// have been finished (either expired or done) in a given epoch.
+    /// When all the sources are completed in a (root) epoch,
+    /// then the successor epoch is created, as that would be the earliest
+    /// that any nodes within it could run, if stateless.
     pub(crate) fn sources_finished(&self, epoch: &Epoch) -> bool {
         if self.epoch_completed(epoch) {
             return true;
@@ -727,6 +769,7 @@ impl Scheduler {
             .is_some_and(|sorter| self.source_nodes.is_subset(&sorter.done))
     }
 
+    /// Whether the given epoch and all of its subepochs have been completed.
     pub fn epoch_completed(&self, epoch: &Epoch) -> bool {
         match self.epoch_log.first() {
             None => false,
@@ -775,6 +818,8 @@ impl Scheduler {
         self.template.find_cycle().is_some()
     }
 
+    /// Topological generations of the sorter:
+    /// sets of graph items that would be yielded if all of the items in the preceding generation were marked done.
     pub fn generations(&self) -> Vec<Vec<ItemID>> {
         let mut sorter = self.template.clone();
         let mut groups = Vec::new();
@@ -795,14 +840,18 @@ impl Scheduler {
         groups
     }
 
+    /// Any nodes that have no dependencies within the graph.
     pub fn source_nodes(&self) -> FxIndexSet<ItemID> {
         self.source_nodes.clone()
     }
 
+    /// Clone of the internal log of epochs used to track completed epochs,
+    /// since epochs can be completed out of order.
     pub fn epoch_log(&self) -> BTreeSet<u32> {
         self.epoch_log.clone()
     }
 
+    /// Clone of the internal mapping between an epoch and any subepochs it has (at any depth)
     pub fn subepochs(&self) -> FxHashMap<Epoch, FxIndexSet<Epoch>> {
         self.subepochs.clone()
     }
@@ -892,6 +941,10 @@ impl Iterator for EpochIter<'_> {
     }
 }
 
+/// Iterator over all nodes in any epoch that are ready.
+/// Ends iteration when no remaining nodes are available in any epoch,
+/// but since usually between calls to `next` the graph is advanced,
+/// callers have to implement breaking iteration themselves.
 pub struct ReadyIter<'a> {
     scheduler: &'a mut Scheduler,
 }
@@ -928,7 +981,7 @@ impl Iterator for ReadyIter<'_> {
     }
 }
 
-/// Compute all the nodes downsream (that depend on) a given node.
+/// Compute all the nodes downstream (that depend on) a given node.
 pub fn downstream_nodes<'a>(
     edges: &'a [EdgeRec],
     node: &'a str,

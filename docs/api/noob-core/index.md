@@ -208,7 +208,6 @@ exceptions
 item
 scheduler
 sorter
-tube
 ```
 
 [^item-allocation]: Well, they could be, but at the moment they are allocated when creating {rust:struct}`~noob_core::item::Item`s,

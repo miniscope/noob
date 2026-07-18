@@ -96,7 +96,7 @@ impl Epoch {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust
     /// # use noob_core::epoch::Epoch;
     /// let subeps = Epoch::from(0).make_subepochs(6, 2);
     /// println!("{subeps:?}");
@@ -341,7 +341,7 @@ enum WireItem {
     Segment(String, u32),
 }
 
-/// ```
+/// ```rust
 /// # use noob_core::epoch::Epoch;
 /// Epoch::from(0);
 /// ```
@@ -354,7 +354,7 @@ impl From<u32> for Epoch {
     }
 }
 
-/// ```
+/// ```rust
 /// # use noob_core::epoch::{Epoch, EpochSegment};
 /// let ep = Epoch::from(0) / (1, 2);
 /// println!("{}", ep);
@@ -379,7 +379,7 @@ impl<T: Into<EpochSegment>> Div<T> for &Epoch {
 /// Increment the lowest layer of the epoch.
 ///
 /// # Examples:
-/// ```
+/// ```rust
 /// # use noob_core::epoch::Epoch;
 /// let ep = Epoch::from(0) + 1;
 /// println!("{}", ep);
@@ -411,7 +411,7 @@ impl Add<u32> for &Epoch {
 /// Decrement the lowest layer of the epoch.
 ///
 /// # Examples:
-/// ```
+/// ```rust
 /// # use noob_core::epoch::Epoch;
 /// let ep = Epoch::from(1) - 1;
 /// println!("{}", ep);
