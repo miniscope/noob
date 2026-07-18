@@ -86,6 +86,7 @@ pub struct Sorter {
 }
 
 /// Independent, cloned state of the sorter to be used when debugging
+#[derive(Debug)]
 pub struct SorterState {
     pub ready: FxHashSet<ItemID>,
     pub out: FxHashSet<ItemID>,

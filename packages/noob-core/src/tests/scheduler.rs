@@ -555,15 +555,92 @@ fn test_iter_epoch_to_completion() {
     let mut batches: Vec<Vec<ItemID>> = Vec::new();
     let mut it = scheduler.iter_epoch();
     while let Some(batch) = it.next() {
-        let nodes: Vec<ItemID> = batch.iter().map(|(_, node)| *node).collect();
-        for &node in &nodes {
-            it.done(node, true).unwrap();
+        let mut nodes = Vec::new();
+        for (epoch, node) in batch {
+            it.done(&epoch, node, true).unwrap();
+            nodes.push(node)
         }
         batches.push(nodes);
     }
 
     assert_eq!(batches, vec![vec![a], vec![b, c], vec![d]]);
     assert!(scheduler.epoch_completed(&Epoch::from(0)));
+}
+
+#[test]
+fn test_iter_epoch_at_with_subepochs() {
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
+    let d = interner().get(&Item::Node("d".to_string())).unwrap();
+
+    let root = Epoch::from(0);
+    let mut it = scheduler.iter_epoch_at(root.clone()).unwrap();
+
+    // first batch is a, ez
+    let batch = it.next().unwrap();
+    assert!(batch.len() == 1);
+    it.done(&batch[0].0, batch[0].1, true).unwrap();
+
+    // then it's b and c
+    let batch = it.next().unwrap();
+    assert_eq!(vec![(root.clone(), b), (root.clone(), c)], batch);
+    // make B induce some subepochs
+    let eps = batch[0].0.make_subepochs(batch[0].1, 3);
+    it.done(&batch[1].0, batch[1].1, true).unwrap();
+    for ep in eps.clone() {
+        it.done(&ep, batch[0].1, true).unwrap();
+    }
+    // Have to expire b manually here, since `done` calls the sorter `done`,
+    // not recursively on the scheduler
+    it.expire(&batch[0].0, b, true, false).unwrap();
+
+    // now we should get subepochs in d
+    let batch = it.next().unwrap();
+    let interner = interner();
+    assert_eq!(
+        vec![
+            (eps[0].clone(), d),
+            (eps[1].clone(), d),
+            (eps[2].clone(), d)
+        ],
+        batch.clone(),
+        "{:?} - b: {}, c: {}, d: {}, interner: {:?}",
+        scheduler.epochs.get(&eps[0]).unwrap().clone_state(),
+        b,
+        c,
+        d,
+        interner.resolve(12)
+    );
+    assert_eq!(
+        eps,
+        batch
+            .iter()
+            .map(|(epoch, _)| epoch)
+            .cloned()
+            .collect::<Vec<Epoch>>()
+    );
+    assert_eq!(
+        vec![d, d, d],
+        batch
+            .iter()
+            .map(|(_, node)| node)
+            .cloned()
+            .collect::<Vec<ItemID>>()
+    );
+
+    for (ep, node) in batch {
+        it.done(&ep, node, true).unwrap();
+    }
+
+    assert!(
+        scheduler.epoch_completed(&root),
+        "root: {:?}, subeps: {:?}, 11: {}",
+        scheduler.epochs.get(&root).unwrap().clone_state(),
+        scheduler.epochs.get(&eps[0]).unwrap().clone_state(),
+        interner.resolve(11)
+    );
 }
 
 #[test]

@@ -20,7 +20,7 @@ const DEFAULT_EPOCH_LOG_LEN: u32 = 1000;
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust
 /// # use noob_core::exceptions::CoreError;
 /// # use noob_core::scheduler::Scheduler;
 /// # use noob_core::FxIndexMap;
@@ -41,7 +41,7 @@ const DEFAULT_EPOCH_LOG_LEN: u32 = 1000;
 ///         // events = node_calling_thing()
 ///         // scheduler.update(events)
 ///         // for docs, just trivially mark done
-///         batches.done(node, true)?;
+///         batches.done(&epoch, node, true)?;
 ///     }
 /// }
 /// # Ok::<(), CoreError>(())
@@ -111,6 +111,18 @@ impl Scheduler {
         })
     }
 
+    /// After a node(s) emit a set of events, update the state of the scheduler,
+    /// returning any epochs that were completed by the updates.
+    ///
+    /// This is the primary way that the scheduler should consume the results of processing:
+    /// in a loop:
+    /// - get available nodes
+    /// - get their inputs from previously stored events
+    /// - run them
+    /// - store their values -> creating events
+    /// - update the scheduler with events.
+    ///
+    ///
     pub fn update(&mut self, mut events: Vec<UpdateEvent>) -> CoreResult<Vec<Epoch>> {
         events.sort_by_key(|e| Reverse(e.epoch.n_segments()));
         let mut done_nodes: FxHashSet<(Epoch, ItemID)> = FxHashSet::default();
@@ -298,6 +310,7 @@ impl Scheduler {
         }
     }
 
+    /// Create an iterator for ready events in the active epoch and its subepochs
     pub fn iter_epoch(&mut self) -> EpochIter<'_> {
         let epoch = self
             .epochs
@@ -312,6 +325,8 @@ impl Scheduler {
         }
     }
 
+    /// Create an iterator for ready events in the given epoch and its subepochs,
+    /// creating it if it doesn't exist.
     pub fn iter_epoch_at(&mut self, epoch: impl Into<Epoch>) -> CoreResult<EpochIter<'_>> {
         let epoch = epoch.into();
         if self.epoch_completed(&epoch) {
@@ -326,6 +341,8 @@ impl Scheduler {
         })
     }
 
+    /// Create and iterator that iterates over all ready events until there are no more left,
+    /// in any epoch.
     pub fn iter_ready(&mut self) -> ReadyIter<'_> {
         if !self.is_active() {
             self.add_epoch();
@@ -398,6 +415,16 @@ impl Scheduler {
             .collect()
     }
 
+    /// Mark a node or signal as having been run to completion in a given epoch.
+    /// If `with_signals` is passed and `item` is a node,
+    /// and signals belonging to the node will also be marked done.
+    ///
+    /// Special care has to be taken when handling subepochs -
+    /// creating subepochs by marking a node as done in a subep
+    /// does not necessarily handle expiring the signals of the node in the parent epoch.
+    /// Handle the parent epoch state explicitly.
+    /// (The preferred interface for downstream use is to update the scheduler from events,
+    /// rather than directly marking nodes done)
     pub fn done(
         &mut self,
         epoch: &Epoch,
@@ -791,24 +818,66 @@ impl Scheduler {
     }
 }
 
+/// Iterator for ready events within an epoch and its subepochs.
+/// Since the scheduler itself can't be mutably borrowed across iterations,
+/// creates a proxy iterator object with methods for updating the scheduler.
+///
+/// Note that since iterating an epoch also iterates events from its subepochs,
+/// the epoch returned during iteration must be used when fetching the relevant inputs to run a node,
+/// and used when calling the `done` and `expire` methods -
+/// don't just recycle the epoch passed when starting iteration.
+///
+/// # Examples
+///
+/// ```rust
+/// # use noob_core::exceptions::CoreError;
+/// # use noob_core::scheduler::Scheduler;
+/// # use noob_core::FxIndexMap;
+/// # use noob_core::sorter::EdgeRec;
+/// let mut scheduler = Scheduler::from_graph(
+///     FxIndexMap::default(),
+///     vec![
+///         EdgeRec::from(("a", "a1", "b")),
+///         EdgeRec::from(("b", "b1", "c")),
+///     ]
+/// )?;
+///
+/// let ep = scheduler.add_epoch();
+/// let mut batches = scheduler.iter_epoch_at(ep)?;
+/// while let Some(ready) = batches.next() {
+///     for (epoch, node) in ready {
+///         // in reality, actually do something
+///         // events = call_the_node()
+///         batches.done(&epoch, node, true)?;
+///     }
+/// }
+/// # Ok::<(), CoreError>(())
 pub struct EpochIter<'a> {
     scheduler: &'a mut Scheduler,
     epoch: Epoch,
 }
 
 impl EpochIter<'_> {
-    pub fn done(&mut self, item: ItemID, with_signals: bool) -> CoreResult<Vec<Epoch>> {
-        self.scheduler.done(&self.epoch, item, with_signals)
+    /// Call [Scheduler.done]
+    pub fn done(
+        &mut self,
+        epoch: &Epoch,
+        item: ItemID,
+        with_signals: bool,
+    ) -> CoreResult<Vec<Epoch>> {
+        self.scheduler.done(epoch, item, with_signals)
     }
 
+    /// Call [Scheduler.expire]
     pub fn expire(
         &mut self,
+        epoch: &Epoch,
         item: ItemID,
         with_signals: bool,
         unlock_optionals: bool,
     ) -> CoreResult<Vec<Epoch>> {
         self.scheduler
-            .expire(&self.epoch, item, with_signals, unlock_optionals)
+            .expire(epoch, item, with_signals, unlock_optionals)
     }
 }
 
@@ -828,6 +897,7 @@ pub struct ReadyIter<'a> {
 }
 
 impl ReadyIter<'_> {
+    /// Call [Scheduler.done]
     pub fn done(
         &mut self,
         epoch: &Epoch,
@@ -837,6 +907,7 @@ impl ReadyIter<'_> {
         self.scheduler.done(epoch, item, with_signals)
     }
 
+    /// Call [Scheduler.expire]
     pub fn expire(
         &mut self,
         epoch: &Epoch,
