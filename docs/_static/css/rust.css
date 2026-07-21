@@ -39,23 +39,20 @@
     &>dl[class].struct,
     &>dl[class].enum {
       &:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple) {
+        margin-top: 2em;
 
+        /* Title */
+        &> .sig-object {
+          font-size: 1.2em;
+          border-bottom: 1px solid var(--color-node-border);
+          border-radius: 0;
+        }
 
-    margin-top: 2em;
-
-    /* Title */
-    &> .sig-object {
-      font-size: 1.2em;
-    /*background-color: var(--color-api-background-hover);*/
-      border-bottom: 1px solid var(--color-node-border);
-      border-radius: 0;
-    }
-
-    /* Contents */
-    dd {
-      margin-left: 1.5em;
-    }
-  }
+        /* Contents */
+        dd {
+          margin-left: 1.5em;
+        }
+      }
     }
   }
 }

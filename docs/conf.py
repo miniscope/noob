@@ -214,8 +214,6 @@ def setup(app):
 
     logger = logging.getLogger("sphinx")
     logger.filters.insert(0, FuckTheSphinxFiltersFilter())
-    # breakpoint()
-    logging.root.filters.insert(0, FuckTheSphinxFiltersFilter())
 
     # can't configure sphinxcontrib_rust to exclude files, and this has a redundant toctree
     def rm_libmd_toctree(*args, **kwargs) -> None:

@@ -2,6 +2,8 @@
 
 Optimized core routines for noob :)
 
-EXPERIMENTAL - not intended to be used as a standalone package,
-just for supporting performance-critical routines that can't be optimized further from within python
+See the main noob package for all information:
 
+- [Repository](https://github.com/miniscope/noob)
+- [Documentation](https://noob.readthedocs.io/en/latest/)
+- [PyPI - noob](https://pypi.org/project/noob/)

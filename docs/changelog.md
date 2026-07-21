@@ -1,6 +1,8 @@
 # Changelog
 
-## Upcoming
+## v1002.*
+
+### v1002.0.0 - 26-07-20
 
 This version reimplements the TopoSorter and the Scheduler in a rust extension module `noob-core`,
 and with that makes some dramatic performance improvements.
