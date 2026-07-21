@@ -23,19 +23,19 @@ jobs:
     uses: ./.github/workflows/tests-rust.yml
 
   build:
-    name: wheel (${{ matrix.os }} ${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
+    name: wheel (${{ matrix.platform.os }} ${{ matrix.platform.target }} ${{ matrix.python-version.name }})
+    runs-on: ${{ matrix.platform.os }}
     needs: [test-rust]
     strategy:
       fail-fast: false
       matrix:
         python-version:
           - { name: "regular", version: "3.11", args: "" }
-          - { name: "ft", version: "3.13t\n3.14t", args: "-i 3.13t -i 3.14t" }
+          - { name: "ft", version: "3.14t", args: "-i 3.14t" }
         platform:
           - { os: ubuntu-latest, target: x86_64 }
           - { os: ubuntu-24.04-arm, target: aarch64 }
-          - { os: macos-13, target: x86_64 }
+          - { os: macos-15-intel, target: x86_64 }
           - { os: macos-latest, target: aarch64 }
           - { os: windows-latest, target: x64 }
     steps:
@@ -93,20 +93,23 @@ jobs:
         with:
           # must match the CPython minor of the pyodide xbuildenv:
           # `pyodide config get python_version`
-          python-version: "3.13"
+          python-version: "3.14"
       - name: Install pyodide-build
         run: pip install pyodide-build
-      - name: Get emscripten version
-        id: emscripten
-        run: echo "version=$(pyodide config get emscripten_version)" >> "$GITHUB_OUTPUT"
+      - name: Get pyodide-declared toolchain versions
+        id: pyodide
+        run: |
+          echo "emscripten=$(pyodide config get emscripten_version)" >> "$GITHUB_OUTPUT"
+          echo "rust=$(pyodide config get rust_toolchain)" >> "$GITHUB_OUTPUT"
       - uses: emscripten-core/setup-emsdk@v16
         with:
-          version: ${{ steps.emscripten.outputs.version }}
-      - uses: dtolnay/rust-toolchain@stable
+          version: ${{ steps.pyodide.outputs.emscripten }}
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ steps.pyodide.outputs.rust }}
           targets: wasm32-unknown-emscripten
       - name: Build pyodide wheel
-        run: pyodide build
+        run: pyodide build .
         working-directory: packages/noob-core
       - uses: actions/upload-artifact@v5
         with:
