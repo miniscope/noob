@@ -10,6 +10,7 @@ on:
     paths:
       - packages/noob-core/**
       - .github/workflows/tests-rust.yml
+  workflow_dispatch:
 
 jobs:
   cargo-test:
