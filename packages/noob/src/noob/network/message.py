@@ -76,6 +76,12 @@ class IdentifyValue(TypedDict):
     status: NodeStatus
     signals: list[str] | None
     slots: list[str] | None
+    subscribed_to: list[str]
+    """Node ids whose events we subscribe to (our upstream dependencies)"""
+    subscribers: list[str]
+    """
+    Node ids that have subscribed to us, discovered by watching the receive side of our XPUB outbox
+    """
 
 
 class AnnounceValue(TypedDict):

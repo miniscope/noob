@@ -127,6 +127,35 @@ class EventloopMixin:
         else:
             await asyncio.gather(*[self._poll_receiver(name) for name in self._receivers])
 
+    async def _poll_subscriptions(
+        self, name: str, handler: Callable[[bool, str], Coroutine]
+    ) -> None:
+        """
+        Drain XPUB subscription events from an outbox socket.
+
+        XPUB delivers a single frame per (un)subscription: a leading ``\\x01`` (subscribe)
+        or ``\\x00`` (unsubscribe) byte followed by the subscribed topic. Subscribers
+        additionally subscribe to a ``__subscriber__:<node_id>`` topic so we can attribute
+        the event to a node id; the anonymous ``""`` data subscription is ignored here.
+
+        ``handler`` is called ``(subscribed: bool, node_id: str)`` for attributable events.
+        """
+        socket = self._sockets[name]
+        prefix = b"__subscriber__:"
+        while not self._quitting.is_set():
+            frame = await socket.recv()
+            if not frame:
+                continue
+            subscribed = frame[0] == 1
+            topic = frame[1:]
+            if not topic.startswith(prefix):
+                # the anonymous "" data subscription, or an unrelated topic
+                continue
+            node_id = topic[len(prefix) :].decode("utf-8")
+            await handler(subscribed, node_id)
+            await asyncio.sleep(0)
+        self.logger.debug("Exiting subscription polling loop")
+
     async def _poll_receiver(self, name: str) -> None:
         socket = self._receivers[name]
         while not self._quitting.is_set():
