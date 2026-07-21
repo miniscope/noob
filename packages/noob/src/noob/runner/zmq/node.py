@@ -830,7 +830,8 @@ class NodeRunner(EventloopMixin):
         if msg.node_id in self.state.dependencies:
             self.state.update(msg.value)
             if self._assets_done(epoch + 1):
-                self.scheduler.done(epoch + 1, "assets")
+                with contextlib.suppress(AlreadyDoneError):
+                    self.scheduler.done(epoch + 1, "assets")
 
     def _assets_done(self, epoch: Epoch) -> bool:
         """Whether we've received all the events we expect to have received for the given epoch"""

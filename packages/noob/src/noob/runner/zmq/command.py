@@ -208,7 +208,9 @@ class CommandNode(EventloopMixin):
         """
 
         def _ready_nodes() -> set[str]:
-            return {node_id for node_id, state in self._nodes.items() if state["status"] == "ready"}
+            # copy because _nodes is being actively mutated right now
+            nodes = self._nodes.copy()
+            return {node_id for node_id, state in nodes.items() if state["status"] == "ready"}
 
         def _is_ready() -> bool:
             ready_nodes = _ready_nodes()
