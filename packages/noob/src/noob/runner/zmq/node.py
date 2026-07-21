@@ -312,9 +312,9 @@ class NodeRunner(EventloopMixin):
                 async with self._ready_condition:
                     self.scheduler.update(events)
 
-                    if self.scheduler.node_is_done(self._node.id, epoch.root):
-                        self.scheduler.end_epoch(epoch.root)
-                        self._epochs_todo.discard(epoch.root)
+                    if self.scheduler.node_is_done(self._node.id, epoch.root_epoch):
+                        self.scheduler.end_epoch(epoch.root_epoch)
+                        self._epochs_todo.discard(epoch.root_epoch)
 
                     self._ready_condition.notify_all()
                 await self.publish_events(events, epoch)
@@ -357,6 +357,7 @@ class NodeRunner(EventloopMixin):
         * Otherwise, filter epochs from the scheduler until we're told to run
           (with a ``process`` message)
         """
+        # TODO: clear ready events when epochs are completed
         readies = []
         while not self._quitting.is_set():
             async with self._ready_condition:
@@ -377,8 +378,8 @@ class NodeRunner(EventloopMixin):
             # otherwise, we only run from epochs that have been requested
             elif len(self._epochs_todo) > 0:
                 async with self._ready_condition:
-                    valid_ready = [r for r in readies if r["epoch"].root in self._epochs_todo]
-                    readies = [r for r in readies if r["epoch"].root not in self._epochs_todo]
+                    valid_ready = [r for r in readies if r["epoch"].root_epoch in self._epochs_todo]
+                    readies = [r for r in readies if r["epoch"].root_epoch not in self._epochs_todo]
 
                     if not valid_ready:
                         # wait here, we continue from the top whenever we get another process cmd
@@ -652,9 +653,9 @@ class NodeRunner(EventloopMixin):
         else:
             async with self._ready_condition:
                 next_epoch = (
-                    max(self._epochs_todo) + 1 if self._epochs_todo else max(self.scheduler._epochs)
+                    max(self._epochs_todo) + 1 if self._epochs_todo else self.scheduler.epoch
                 )
-                for i in range(next_epoch[0].epoch, msg.value + next_epoch[0].epoch):
+                for i in range(next_epoch[0][1], msg.value + next_epoch[0][1]):
                     ep = Epoch(i)
                     with contextlib.suppress(EpochExistsError):
                         self.scheduler.add_epoch(ep)
@@ -797,6 +798,11 @@ class NodeRunner(EventloopMixin):
                 if self.asset_specs[asset].depends is not None:
                     # no idea why mypy can't tell `depends` is a string here
                     node_id, signal = self.asset_specs[asset].depends.split(".")  # type: ignore[union-attr]
+                    if epoch.is_root and epoch.root == 0:
+                        return True
+                    elif epoch.leaf and epoch.leaf[1] == 0:
+                        return False
+
                     try:
                         self.store.get(node_id, signal, epoch - 1)
                     except KeyError:

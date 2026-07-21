@@ -112,7 +112,7 @@ def test_synch_unready_end_epoch():
     for _ in runner.iter(n=n_iters):
         pass
 
-    assert len(runner.tube.scheduler._epoch_log) == n_iters * tube.nodes["b"].n
+    assert len(runner.tube.scheduler.epoch_log) == n_iters * tube.nodes["b"].n
 
 
 def test_max_iters_doesnt_apply_without_return():

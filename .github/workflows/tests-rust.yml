@@ -1,0 +1,35 @@
+name: Test Rust
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - packages/noob-core/**
+      - .github/workflows/tests-rust.yml
+  pull_request:
+    paths:
+      - packages/noob-core/**
+      - .github/workflows/tests-rust.yml
+
+jobs:
+  cargo-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/noob-core
+      - name: Run cargo tests
+        run: cargo test --manifest-path packages/noob-core/Cargo.toml
+        timeout-minutes: 10
+      - name: Set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install python deps
+        run: pip install -e . --group test
+        working-directory: "packages/noob-core"
+      - name: Run python tests
+        run: python -m pytest
+        working-directory: "packages/noob-core"

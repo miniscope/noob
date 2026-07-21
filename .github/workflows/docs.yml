@@ -39,10 +39,30 @@ jobs:
           cache: npm
           cache-dependency-path: "js/package-lock.json"
 
+      - uses: dtolnay/rust-toolchain@stable
+        id: toolchain
+
+      - name: Restore built wheel
+        id: wheel-cache
+        uses: actions/cache@v4
+        with:
+          path: packages/noob-core/dist
+          key: core-wheel-ubuntu-latest-${{ hashFiles('packages/noob-core/src/**', 'packages/noob-core/python/**', 'packages/noob-core/Cargo.toml', 'packages/noob-core/Cargo.lock', 'packages/noob-core/pyproject.toml') }}
+      - uses: Swatinem/rust-cache@v2
+        if: steps.wheel-cache.outputs.cache-hit != 'true'
+        with:
+          workspaces: packages/noob-core
+      - name: Build wheel
+        if: steps.wheel-cache.outputs.cache-hit != 'true'
+        run: pipx run maturin build --release --out dist
+        working-directory: packages/noob-core
+
       - name: Install python dependencies
         run: |
           pip install pdm
-          pdm install --with docs
+          pdm install --with docs --with dev
+          pdm run python -m ensurepip
+          pdm run python -m pip install --no-index --find-links ./packages/noob-core/dist noob-core
 
       - name: Install node dependencies
         run: npm --prefix js/ ci

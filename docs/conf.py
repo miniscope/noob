@@ -9,6 +9,7 @@
 import importlib.metadata as metadata
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -32,6 +33,7 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx_design",
     "sphinxcontrib.mermaid",
+    "sphinxcontrib_rust",
     "myst_nb",
     "sphinx.ext.todo",
     "plot",
@@ -55,9 +57,11 @@ intersphinx_mapping = {
 html_theme = "furo"
 html_static_path = ["_static"]
 html_css_files = [
+    "css/base.css",
     # make myst-nb code blocks not look like shit
     "css/notebooks.css",
     "css/noob-js.css",
+    "css/rust.css",
 ]
 html_js_files = ["js/noob-js.js"]
 
@@ -101,14 +105,30 @@ nb_execution_show_tb = True
 
 # myst
 myst_heading_anchors = 3
+myst_enable_extensions = {
+    "attrs_block",
+    "colon_fence",
+    "html_admonition",
+    "replacements",
+    "smartquotes",
+    "strikethrough",
+    "tasklist",
+}
 
 # inheritance-diagram
 inheritance_graph_attrs = {"rankdir": "LR", "splines": "ortho"}
-
 inheritance_edge_attrs = {
     "color": "blue",
     "style": "bold",
 }
+
+# rust
+rust_crates = {
+    "noob-core": Path(__file__).parents[1] / "packages/noob-core",
+}
+rust_doc_dir = str(Path(__file__).parent / "api")
+rust_rustdoc_fmt = "md"
+rust_visibility = "crate"
 
 # mermaid
 # mermaid dynamic light/dark switching
@@ -171,6 +191,10 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
             if "typing.Annotated" in record.location or "typing.Union" in record.location:
                 return False
 
+        # rustdoc tests that can't be run
+        if "lexer name" in record.msg and "ignore" in record.args:
+            return False
+
         # not worth installing graphviz for one diagram in gh actions testing
         if (
             "GITHUB_ACTION" in os.environ
@@ -190,3 +214,15 @@ def setup(app):
 
     logger = logging.getLogger("sphinx")
     logger.filters.insert(0, FuckTheSphinxFiltersFilter())
+
+    # can't configure sphinxcontrib_rust to exclude files, and this has a redundant toctree
+    def rm_libmd_toctree(*args, **kwargs) -> None:
+        libmd = Path(__file__).parent / "api" / "noob-core" / "lib.md"
+        if not libmd.exists():
+            return
+
+        data = libmd.read_text()
+        data = re.sub(r":::{toctree}.*\n(.*\n)+?:::", "", data, flags=re.MULTILINE)
+        libmd.write_text(data)
+
+    app.connect("builder-inited", rm_libmd_toctree)

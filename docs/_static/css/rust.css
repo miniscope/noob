@@ -1,0 +1,58 @@
+.rust {
+  .sig-name .k {
+    color: var(--color-api-keyword);
+  }
+
+  /* unnecessary titling*/
+  &.module {
+    &>dd{
+      margin-left: 0 !important;
+      &>p{
+        display: none;
+      }
+    }
+    /* restating the module title*/
+    &>dt:first-child { display: none };
+
+  }
+
+  /* within-object sectioning */
+  dd > p.rubric {
+    font-weight: bold;
+    color: var(--color-disabled);
+    margin-bottom: 0;
+    margin-top: 1.25em;
+  }
+
+  /* Signatures */
+  .sig .sig-name {
+    &>.n:not(:nth-child(3)) {
+      color: var(--color-api-keyword);
+    }
+  }
+
+  /*
+  Structs and Enums (top level)
+  (need this whacky ass selector to override specificity of furo
+  */
+  &.module>dd{
+    &>dl[class].struct,
+    &>dl[class].enum {
+      &:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple) {
+        margin-top: 2em;
+
+        /* Title */
+        &> .sig-object {
+          font-size: 1.2em;
+          border-bottom: 1px solid var(--color-node-border);
+          border-radius: 0;
+        }
+
+        /* Contents */
+        dd {
+          margin-left: 1.5em;
+        }
+      }
+    }
+  }
+}
