@@ -23,8 +23,8 @@ jobs:
     uses: ./.github/workflows/tests-rust.yml
 
   build:
-    name: wheel (${{ matrix.os }} ${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
+    name: wheel (${{ matrix.platform.os }} ${{ matrix.platform.target }})
+    runs-on: ${{ matrix.platform.os }}
     needs: [test-rust]
     strategy:
       fail-fast: false
@@ -107,7 +107,7 @@ jobs:
           toolchain: nightly
           targets: wasm32-unknown-emscripten
       - name: Build pyodide wheel
-        run: pyodide build
+        run: pyodide build .
         working-directory: packages/noob-core
       - uses: actions/upload-artifact@v5
         with:
