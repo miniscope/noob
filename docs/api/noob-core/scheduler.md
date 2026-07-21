@@ -168,6 +168,7 @@
       }
   }
   # Ok::<(), CoreError>(())
+  ```
   :::
 
 :::{rubric} Implementations
@@ -287,7 +288,7 @@
 
   :::
   The thing that says what nodes run, when.
-  Coordinates a set of [Sorter]s, keyed by [Epoch]s.
+  Coordinates a set of [Sorter]s, keyed by [noob_core::epoch::Epoch]s.
   
   Typical use is to receive one from an instantiated (python) `Tube`,
   and then to use one of its two iteration modes in a loop with the `update` method.

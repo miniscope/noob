@@ -217,21 +217,6 @@ def setup(app):
     # breakpoint()
     logging.root.filters.insert(0, FuckTheSphinxFiltersFilter())
 
-    # undo a monkeypatch in sphinxcontrib_rust that breaks footnotes
-    # see: https://gitlab.com/munir0b0t/sphinxcontrib-rust/-/work_items/16
-    # https://gitlab.com/munir0b0t/sphinxcontrib-rust/-/blob/main/sphinxcontrib_rust/__init__.py?ref_type=heads#L203
-    from sphinxcontrib_rust import rust_link
-    from markdown_it.parser_inline import rules_inline
-    import markdown_it.parser_inline
-
-    idx = -1
-    for i, t in enumerate(markdown_it.parser_inline._rules):
-        if t[1] is rust_link.link:
-            idx = i
-            break
-
-    markdown_it.parser_inline._rules[idx] = ("link", rules_inline.link)
-
     # can't configure sphinxcontrib_rust to exclude files, and this has a redundant toctree
     def rm_libmd_toctree(*args, **kwargs) -> None:
         libmd = Path(__file__).parent / "api" / "noob-core" / "lib.md"

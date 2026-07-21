@@ -10,7 +10,7 @@ dev = [
     "nobes[dev] @ file:///${PROJECT_ROOT}/packages/nobes",
 ]
 docs = [
-    "sphinxcontrib-rust>=1.2.0",
+    "sphinxcontrib-rust>=1.2.1",
 ]
 
 [tool.pdm.resolution.overrides]

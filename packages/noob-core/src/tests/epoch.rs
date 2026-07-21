@@ -20,7 +20,7 @@ fn test_from_int() {
             root: 10,
             path: Vec::new()
         }
-    )
+    );
 }
 
 #[test]

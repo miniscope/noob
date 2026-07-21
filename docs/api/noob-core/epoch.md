@@ -156,7 +156,7 @@
   
   # Example
   
-  ```
+  ```rust
   # use noob_core::epoch::Epoch;
   let subeps = Epoch::from(0).make_subepochs(6, 2);
   println!("{subeps:?}");
@@ -234,7 +234,7 @@
 :toc: impl From for Epoch
 
   :::
-  ```
+  ```rust
   # use noob_core::epoch::Epoch;
   Epoch::from(0);
   ```
@@ -247,7 +247,7 @@
 :toc: impl Div for Epoch
 
   :::
-  ```
+  ```rust
   # use noob_core::epoch::{Epoch, EpochSegment};
   let ep = Epoch::from(0) / (1, 2);
   println!("{}", ep);
@@ -266,7 +266,7 @@
   Increment the lowest layer of the epoch.
   
   # Examples:
-  ```
+  ```rust
   # use noob_core::epoch::Epoch;
   let ep = Epoch::from(0) + 1;
   println!("{}", ep);
@@ -289,7 +289,7 @@
   Decrement the lowest layer of the epoch.
   
   # Examples:
-  ```
+  ```rust
   # use noob_core::epoch::Epoch;
   let ep = Epoch::from(1) - 1;
   println!("{}", ep);
