@@ -40,7 +40,6 @@ jobs:
       - name: check lockfile
         run: pdm lock --check --with :all
 
-    # fixme - once noob-core is on pypi, install from there rather than building
   build-core:
     runs-on: "ubuntu-latest"
 
