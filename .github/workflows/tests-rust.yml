@@ -11,6 +11,7 @@ on:
       - packages/noob-core/**
       - .github/workflows/tests-rust.yml
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   cargo-test:
