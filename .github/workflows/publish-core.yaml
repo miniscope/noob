@@ -104,6 +104,7 @@ jobs:
           version: ${{ steps.emscripten.outputs.version }}
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: nightly
           targets: wasm32-unknown-emscripten
       - name: Build pyodide wheel
         run: pyodide build
