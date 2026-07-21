@@ -29,7 +29,7 @@ jobs:
       # TODO: add --all-targets once the test/bench targets are warning-clean
       # (as of 2026-07-02 they carry 6 warnings the lib-only run doesn't compile)
       - name: Clippy (warnings are errors)
-        run: cargo clippy --manifest-path packages/noob-core/Cargo.toml -- -D warnings
+        run: cargo clippy --manifest-path packages/noob-core/Cargo.toml --all-targets -- -D warnings
 
 
   format:

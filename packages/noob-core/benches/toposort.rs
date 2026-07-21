@@ -2,7 +2,6 @@
 //! packages/noob/tests/bench.py - the PRNG and graph generation must stay
 //! exactly in sync with `_random_graph_edges` there.
 use criterion::{Criterion, criterion_group, criterion_main};
-use indexmap::IndexMap;
 use noob_core::FxIndexMap;
 use noob_core::item::{Interner, ItemID};
 use noob_core::sorter::{EdgeRec, Sorter};
@@ -71,7 +70,7 @@ fn bench_sorter(c: &mut Criterion) {
             b.iter(|| {
                 let mut interner = Interner::default();
                 Sorter::from_graph(&mut interner, &FxIndexMap::default(), &edges).unwrap()
-            })
+            });
         });
 
         let mut interner = Interner::default();
@@ -79,7 +78,7 @@ fn bench_sorter(c: &mut Criterion) {
 
         // counterpart of python's deepcopy: per-epoch frozen-template copy
         c.bench_function(&format!("random_graph_clone/{name}"), |b| {
-            b.iter(|| template.clone())
+            b.iter(|| template.clone());
         });
 
         c.bench_function(&format!("random_graph_iteration/{name}"), |b| {
@@ -87,7 +86,7 @@ fn bench_sorter(c: &mut Criterion) {
                 let mut sorter = template.clone();
                 drive(&interner, &mut sorter);
                 sorter
-            })
+            });
         });
     }
 }

@@ -422,7 +422,7 @@ fn test_disabled_stateful_not_added() {
     );
     let mut interner = Interner::default();
     let sorter = Sorter::from_graph(&mut interner, &nodes, &Vec::new()).unwrap();
-    assert!(!sorter.info.contains_key(&interner.intern_node("a")))
+    assert!(!sorter.info.contains_key(&interner.intern_node("a")));
 }
 
 #[test]

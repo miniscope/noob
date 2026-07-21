@@ -25,7 +25,7 @@ fn test_from_graph() {
     let scheduler = Scheduler::from_graph(FxIndexMap::default(), edges.clone())
         .expect("couldnt even create the most basic graph");
     assert_eq!(scheduler.edges, edges);
-    assert!(scheduler.epochs.is_empty())
+    assert!(scheduler.epochs.is_empty());
 }
 
 #[test]
@@ -341,7 +341,7 @@ fn test_done_ends_epoch() {
     scheduler.done(&ep, c, true).unwrap();
 
     let done_ep = scheduler.done(&ep, d, true).unwrap();
-    assert_eq!(done_ep, vec![ep])
+    assert_eq!(done_ep, vec![ep]);
 }
 
 /// Basic behavior: end epoch...
@@ -411,7 +411,7 @@ fn test_sources_finished() {
     assert!(scheduler.epochs.contains_key(&Epoch::from(ep.root() + 1)));
 
     // false for epochs that haven't been added yet
-    assert!(!scheduler.sources_finished(&Epoch::from(99)))
+    assert!(!scheduler.sources_finished(&Epoch::from(99)));
 }
 
 #[test]
@@ -558,7 +558,7 @@ fn test_iter_epoch_to_completion() {
         let mut nodes = Vec::new();
         for (epoch, node) in batch {
             it.done(&epoch, node, true).unwrap();
-            nodes.push(node)
+            nodes.push(node);
         }
         batches.push(nodes);
     }
