@@ -6,13 +6,13 @@ environments = [
     "python_version >= \"3.11\"",
 ]
 extras = []
-dependency-groups = ["default", "dev", "docs"]
+dependency-groups = ["default", "core", "dev", "docs"]
 default-groups = ["default"]
 created-by = "pdm"
 
 [[packages]]
 name = "nobes"
-version = "0.0.1.dev370+gde2a916.d20260722"
+version = "0.0.1.dev371+gb863a39.d20260722"
 requires-python = ">=3.11"
 marker = "\"default\" in dependency_groups"
 
@@ -22,7 +22,7 @@ editable = true
 
 [[packages]]
 name = "nobes-core"
-version = "0.0.1.dev962+gde2a916.d20260722"
+version = "0.0.1.dev963+gb863a39.d20260722"
 requires-python = ">=3.11"
 marker = "\"default\" in dependency_groups"
 
@@ -32,7 +32,7 @@ editable = true
 
 [[packages]]
 name = "nobes-files"
-version = "0.0.1.dev962+gde2a916.d20260722"
+version = "0.0.1.dev963+gb863a39.d20260722"
 requires-python = ">=3.11"
 marker = "\"default\" in dependency_groups"
 
@@ -42,7 +42,7 @@ editable = true
 
 [[packages]]
 name = "nobes-image"
-version = "0.0.1.dev962+gde2a916.d20260722"
+version = "0.0.1.dev963+gb863a39.d20260722"
 requires-python = ">=3.11"
 marker = "\"default\" in dependency_groups"
 
@@ -52,7 +52,7 @@ editable = true
 
 [[packages]]
 name = "nobes-input"
-version = "0.0.1.dev370+gde2a916.d20260722"
+version = "0.0.1.dev371+gb863a39.d20260722"
 requires-python = ">=3.11"
 marker = "\"default\" in dependency_groups"
 
@@ -62,7 +62,7 @@ editable = true
 
 [[packages]]
 name = "nobes-os"
-version = "0.0.1.dev962+gde2a916.d20260722"
+version = "0.0.1.dev963+gb863a39.d20260722"
 requires-python = ">=3.11"
 marker = "\"default\" in dependency_groups"
 
@@ -72,7 +72,7 @@ editable = true
 
 [[packages]]
 name = "nobes-video"
-version = "0.0.1.dev370+gde2a916.d20260722"
+version = "0.0.1.dev371+gb863a39.d20260722"
 requires-python = ">=3.11"
 marker = "\"default\" in dependency_groups"
 
@@ -82,7 +82,7 @@ editable = true
 
 [[packages]]
 name = "nobes-web"
-version = "0.0.1.dev962+gde2a916.d20260722"
+version = "0.0.1.dev963+gb863a39.d20260722"
 requires-python = ">=3.11"
 marker = "\"default\" in dependency_groups"
 
@@ -92,7 +92,7 @@ editable = true
 
 [[packages]]
 name = "noob"
-version = "1002.0.1.dev10+gde2a916.d20260722"
+version = "1002.0.1.dev11+gb863a39.d20260722"
 requires-python = ">=3.11"
 marker = "\"default\" in dependency_groups"
 
@@ -4393,7 +4393,7 @@ marker = "\"default\" in dependency_groups or \"dev\" in dependency_groups"
 dependencies = []
 
 [tool.pdm]
-hashes = {sha256 = "197967dff346d81771ca5101e7815bae5ba9400b279a7497a25facabf348a76c"}
+hashes = {sha256 = "bf03b1afdcbdd4ddcb2a604a3887d4b1cd5af6624824b3762421bb57a9b5036e"}
 strategy = ["inherit_metadata", "static_urls"]
 
 [[tool.pdm.targets]]

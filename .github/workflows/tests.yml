@@ -65,12 +65,12 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .venv
-          key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pylock.toml', 'packages/noob/pyproject.toml') }}
+          key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pylock.toml', 'pyproject.toml', 'packages/noob/pyproject.toml') }}
 
       - name: Install dependencies
         run: |
           python -m pip install pdm coverage
-          pdm install
+          pdm install --without core
 
       - uses: actions/download-artifact@v6
         with:
