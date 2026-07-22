@@ -54,7 +54,6 @@ class CommandNode(EventloopMixin):
         self.protocol = protocol
         self.logger = init_logger(f"runner.node.{runner_id}.command")
         self._nodes: dict[str, IdentifyValue] = {}
-        self._subscribers: set[str] = set()
         self._ready_condition: threading.Condition = None  # type: ignore[assignment]
         self._init = threading.Event()
         super().__init__()
@@ -160,7 +159,8 @@ class CommandNode(EventloopMixin):
         sub.setsockopt_string(zmq.SUBSCRIBE, "")
         # identity-carrying subscription so each node's outbox XPUB can attribute our
         # subscription to us and we can confirm the node->command pipe is live
-        sub.setsockopt_string(zmq.SUBSCRIBE, "__subscriber__:command")
+        # valid to set multiple filters - https://zeromq.org/socket-api/
+        sub.setsockopt_string(zmq.SUBSCRIBE, f"{self.SUBSCRIBER_PREFIX}command")
         self.register_socket("inbox", sub, receiver=True)
 
     async def announce(self) -> None:
@@ -295,13 +295,6 @@ class CommandNode(EventloopMixin):
         :meth:`.await_ready` can confirm the command->node control pipe is live before
         we send process/start (otherwise those commands can be silently dropped).
         """
-        changed = node_id not in self._subscribers if subscribed else node_id in self._subscribers
-        if not changed:
-            return
-        if subscribed:
-            self._subscribers.add(node_id)
-        else:
-            self._subscribers.discard(node_id)
         self.logger.debug(
             "Node %s %s our outbox; subscribers now %s",
             node_id,

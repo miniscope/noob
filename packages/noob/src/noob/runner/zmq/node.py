@@ -133,7 +133,6 @@ class NodeRunner(EventloopMixin):
         self._depends: tuple[tuple[str, str], ...] | None = None
         self._has_input: bool | None = None
         self._nodes: dict[str, IdentifyValue] = {}
-        self._subscribers: set[str] = set()
         self._epochs_todo: set[Epoch] = set()
         self._freerun = asyncio.Event()
         self._status: NodeStatus = NodeStatus.stopped
@@ -487,13 +486,6 @@ class NodeRunner(EventloopMixin):
         Re-identify so the command re-announces our updated subscriber set, which is how
         our subscribers confirm their pipe to us is live before they report ready.
         """
-        changed = node_id not in self._subscribers if subscribed else node_id in self._subscribers
-        if not changed:
-            return
-        if subscribed:
-            self._subscribers.add(node_id)
-        else:
-            self._subscribers.discard(node_id)
         self.logger.debug(
             "Subscriber %s %s; subscribers now %s",
             node_id,
@@ -590,7 +582,7 @@ class NodeRunner(EventloopMixin):
         sub.setsockopt_string(zmq.SUBSCRIBE, "")
         # also subscribe to an identity-carrying topic so the publishers we connect to
         # can attribute the XPUB subscription event to us (and confirm our pipe is live)
-        sub.setsockopt_string(zmq.SUBSCRIBE, f"__subscriber__:{self.spec.id}")
+        sub.setsockopt_string(zmq.SUBSCRIBE, f"{self.SUBSCRIBER_PREFIX}{self.spec.id}")
         sub.connect(self.command_outbox)
         self.register_socket("inbox", sub, receiver=True)
         self.add_callback("inbox", self.on_inbox)
