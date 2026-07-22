@@ -152,9 +152,9 @@ class EventloopMixin:
         ``handler`` is called ``(subscribed: bool, node_id: str)`` for attributable events.
         """
         socket = self._sockets[name]
-        prefix = self.SUBSCRIBER_PREFIX
+        prefix = self.SUBSCRIBER_PREFIX.encode("utf-8")
         while not self._quitting.is_set():
-            frame = await socket.recv()
+            frame: bytes = await socket.recv()
             if not frame:
                 continue
             subscribed = frame[0] == 1
