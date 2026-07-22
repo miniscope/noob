@@ -14,6 +14,7 @@ from pydantic import (
 )
 
 from noob.event import EventUnion
+from noob.tube import TubeSpecification
 from noob.types import Epoch, Picklable
 
 if sys.version_info < (3, 12):
@@ -35,6 +36,7 @@ class MessageType(StrEnum):
     event = "event"
     error = "error"
     epoch_ended = "epoch_ended"
+    spec = "spec"
 
 
 class NodeStatus(StrEnum):
@@ -96,7 +98,8 @@ class ErrorValue(TypedDict):
 
 
 class ProcessValue(TypedDict):
-    epoch: Epoch
+    epoch: Epoch | None
+    """Epoch to process, or None to let the receiver decide (e.g. GUI-sent commands)"""
     input: dict | None
 
 
@@ -197,6 +200,16 @@ class EventMsg(Message):
     value: list[EventUnion]
 
 
+class SpecMsg(Message):
+    """
+    A tube's definition, streamed to viewers when it is loaded or edited.
+    ``node_id`` is the id of the tube the spec describes.
+    """
+
+    type_: Literal[MessageType.spec] = Field(MessageType.spec, alias="type")
+    value: TubeSpecification
+
+
 def _type_discriminator(v: dict | Message) -> str:
     typ = v.get("type", "any") if isinstance(v, dict) else v.type_
 
@@ -219,6 +232,7 @@ MessageUnion = A[
     | A[EventMsg, Tag("event")]
     | A[ErrorMsg, Tag("error")]
     | A[EpochEndedMsg, Tag("epoch_ended")]
+    | A[SpecMsg, Tag("spec")]
     | A[Message, Tag("any")],
     Discriminator(_type_discriminator),
 ]

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from noob.network.message import SpecMsg
 from noob.tube import TubeSpecification
 
 try:
@@ -63,7 +64,7 @@ def make_view_app() -> Litestar:
         try:
             spec = TubeSpecification.from_yaml(tube_path, context={"recursive": True})
             logger.debug("Loaded spec: %s", spec)
-            yield spec.model_dump_json()
+            yield SpecMsg(node_id=tube_id, value=spec).model_dump_json()
         except ValidationError as e:
             logger.error("Validation error for tube: %s", e)
 
@@ -79,9 +80,8 @@ def make_view_app() -> Litestar:
         async for _ in watcher:
             # totally fine, the spec is malformed when typing in it sometimes!
             try:
-                yield TubeSpecification.from_yaml(
-                    tube_path, context={"recursive": True}
-                ).model_dump_json()
+                spec = TubeSpecification.from_yaml(tube_path, context={"recursive": True})
+                yield SpecMsg(node_id=tube_id, value=spec).model_dump_json()
             except ValidationError as e:
                 logger.error("Validation error for tube: %s", e)
 
