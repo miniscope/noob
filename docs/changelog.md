@@ -1,5 +1,22 @@
 # Changelog
 
+## Upcoming
+
+**Changed**
+
+- [`#251`](https://github.com/miniscope/noob/pull/251) - 
+  Use pdm's experimental workspace support
+
+**Fixed**
+
+- [`#251`](https://github.com/miniscope/noob/pull/251) - 
+  A race condition could cause ZMQ runners to hang due to slow subscribers in ZMQ PUB/SUB sockets,
+  wherein the node marked itself as "ready" as soon as it had *started* connecting to an upstream PUB
+  node, rather than when the connection had been fully established.
+  Now, nodes dynamically track who is subscribed to them and report that in their `identify` messages,
+  so that subscribers can know when the publisher connection is open without needing to give the publisher
+  advance knowledge of who should be subscribed to it (keeping the asymmetry of information implied by dependencies)
+
 ## v1002.*
 
 ### v1002.0.0 - 26-07-20

@@ -279,7 +279,11 @@ class NodeRunner(EventloopMixin):
             await self.init()
             self._node = cast(Node, self._node)
             self._freerun.clear()
-            await asyncio.gather(self._poll_receivers(), self._process_loop())
+            await asyncio.gather(
+                self._poll_receivers(),
+                self._poll_subscriptions("outbox", self._on_outbox_subscription),
+                self._process_loop(),
+            )
         except KeyboardInterrupt:
             self.logger.debug("Got keyboard interrupt, quitting")
         except Exception as e:
@@ -466,10 +470,29 @@ class NodeRunner(EventloopMixin):
                     slots=(
                         [slot_name for slot_name in self._node.slots] if self._node.slots else None
                     ),
+                    subscribed_to=sorted(self.subscribes_to),
+                    subscribers=sorted(self._subscribers),
                 ),
             )
             await self.sockets["dealer"].send_multipart([ann.to_bytes()])
         self.logger.debug("Sent identification message: %s", ann)
+
+    async def _on_outbox_subscription(self, subscribed: bool, node_id: str) -> None:
+        """
+        A node (or the command) subscribed to / unsubscribed from our outbox.
+
+        We only learn this by observation, never by configuration, so we can add or
+        remove downstream nodes without the upstream needing any static knowledge of them.
+        Re-identify so the command re-announces our updated subscriber set, which is how
+        our subscribers confirm their pipe to us is live before they report ready.
+        """
+        self.logger.debug(
+            "Subscriber %s %s; subscribers now %s",
+            node_id,
+            "connected" if subscribed else "disconnected",
+            self._subscribers,
+        )
+        await self.identify()
 
     async def update_status(self, status: NodeStatus) -> None:
         """Update our internal status and announce it to the command node"""
@@ -538,7 +561,8 @@ class NodeRunner(EventloopMixin):
         self.logger.debug("Connected to command node at %s", self.command_router)
 
     def _init_outbox(self) -> None:
-        pub = self.context.socket(zmq.PUB)
+        pub = self.context.socket(zmq.XPUB)
+        pub.setsockopt(zmq.XPUB_VERBOSE, 1)
         pub.setsockopt_string(zmq.IDENTITY, self.spec.id)
         if self.protocol == "ipc":
             pub.bind(self.outbox_address)
@@ -556,6 +580,9 @@ class NodeRunner(EventloopMixin):
         sub = self.context.socket(zmq.SUB)
         sub.setsockopt_string(zmq.IDENTITY, self.spec.id)
         sub.setsockopt_string(zmq.SUBSCRIBE, "")
+        # also subscribe to an identity-carrying topic so the publishers we connect to
+        # can attribute the XPUB subscription event to us (and confirm our pipe is live)
+        sub.setsockopt_string(zmq.SUBSCRIBE, f"{self.SUBSCRIBER_PREFIX}{self.spec.id}")
         sub.connect(self.command_outbox)
         self.register_socket("inbox", sub, receiver=True)
         self.add_callback("inbox", self.on_inbox)
@@ -609,7 +636,7 @@ class NodeRunner(EventloopMixin):
                 self.sockets["inbox"].connect(outbox)
                 self.logger.debug("Subscribed to %s at %s", node_id, outbox)
         self._nodes = msg.value["nodes"]
-        if set(self._nodes) >= self.subscribes_to and self.status == NodeStatus.waiting:
+        if self.status == NodeStatus.waiting and self._subscriptions_confirmed():
             await self.update_status(NodeStatus.ready)
         # status and announce messages can be received out of order,
         # so if we observe the command node being out of sync, we update it.
@@ -618,6 +645,20 @@ class NodeRunner(EventloopMixin):
             and msg.value["nodes"][self._node.id]["status"] != self.status.value
         ):
             await self.update_status(self.status)
+
+    def _subscriptions_confirmed(self) -> bool:
+        """
+        True once every upstream node we subscribe to has observed our subscription
+        (lists us in its ``subscribers``), meaning those pipes are established and we
+        will not miss their events. This is the subscriber side of the slow-joiner fix:
+        we only advertise ourselves as ready when we can actually receive from everyone
+        we depend on. Nodes with no dependencies are trivially confirmed.
+        """
+        for upstream in self.subscribes_to:
+            node = self._nodes.get(upstream)
+            if node is None or self.spec.id not in node.get("subscribers", []):
+                return False
+        return True
 
     async def on_event(self, msg: EventMsg) -> None:
         self.logger.debug("RECEIVED EVENTS: %s", msg.value)
@@ -781,7 +822,8 @@ class NodeRunner(EventloopMixin):
         if msg.node_id in self.state.dependencies:
             self.state.update(msg.value)
             if self._assets_done(epoch + 1):
-                self.scheduler.done(epoch + 1, "assets")
+                with contextlib.suppress(AlreadyDoneError):
+                    self.scheduler.done(epoch + 1, "assets")
 
     def _assets_done(self, epoch: Epoch) -> bool:
         """Whether we've received all the events we expect to have received for the given epoch"""

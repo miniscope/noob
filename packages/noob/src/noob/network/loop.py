@@ -2,7 +2,7 @@ import asyncio
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import Any, ClassVar
 
 try:
     from zmq.asyncio import Context, Socket
@@ -44,7 +44,16 @@ class EventloopMixin:
     To help avoid cross-threading issues, the :meth:`.context`  and :meth:`.loop`
     properties do *not* automatically create the objects,
     raising a :class:`.RuntimeError` if they are accessed before ``_init_loop`` is called.
+
+    To handle slow subscribers in PUB/SUB, use an XPUB instead,
+    and each subscriber also subscribes to a topic with the :attr:`.SUBSCRIBER_PREFIX`:``id``.
+    The XPUB then polls for receive events with `_poll_subscriptions`,
+    and maintains a list of nodes that have subscribed to it.
+    Subscribers can then wait for the publisher to acknowledge its subscription before
+    marking themselves as ready.
     """
+
+    SUBSCRIBER_PREFIX: ClassVar[str] = "__subscriber__:"
 
     def __init__(self):
         self._context = None
@@ -61,6 +70,8 @@ class EventloopMixin:
             lambda: _CallbackDict(sync=[], asyncio=[])
         )
         """Callbacks for each receiver socket"""
+        self._subscribers: set[str] = set()
+        """The node IDs that we know to be subscribed to our XPUB socket"""
         if not hasattr(self, "logger"):
             self.logger = init_logger("eventloop")
 
@@ -126,6 +137,52 @@ class EventloopMixin:
             await self._poll_receiver(next(iter(self._receivers.keys())))
         else:
             await asyncio.gather(*[self._poll_receiver(name) for name in self._receivers])
+
+    async def _poll_subscriptions(
+        self, name: str, handler: Callable[[bool, str], Coroutine]
+    ) -> None:
+        """
+        Drain XPUB subscription events from an outbox socket.
+
+        XPUB delivers a single frame per (un)subscription: a leading ``\\x01`` (subscribe)
+        or ``\\x00`` (unsubscribe) byte followed by the subscribed topic. Subscribers
+        additionally subscribe to a ``__subscriber__:<node_id>`` topic so we can attribute
+        the event to a node id; the anonymous ``""`` data subscription is ignored here.
+
+        ``handler`` is called ``(subscribed: bool, node_id: str)`` for attributable events.
+        """
+        socket = self._sockets[name]
+        prefix = self.SUBSCRIBER_PREFIX.encode("utf-8")
+        while not self._quitting.is_set():
+            frame: bytes = await socket.recv()
+            if not frame:
+                continue
+            subscribed = frame[0] == 1
+            topic = frame[1:]
+            if not topic.startswith(prefix):
+                # the anonymous "" data subscription, or an unrelated topic
+                continue
+            node_id = topic[len(prefix) :].decode("utf-8")
+
+            changed = (
+                node_id not in self._subscribers if subscribed else node_id in self._subscribers
+            )
+            if not changed:
+                self.logger.debug(
+                    "Node %s %s, but already was! Ignoring.",
+                    node_id,
+                    "subscribed" if subscribed else "unsubscribed",
+                )
+                continue
+
+            if subscribed:
+                self._subscribers.add(node_id)
+            else:
+                self._subscribers.discard(node_id)
+
+            await handler(subscribed, node_id)
+            await asyncio.sleep(0)
+        self.logger.debug("Exiting subscription polling loop")
 
     async def _poll_receiver(self, name: str) -> None:
         socket = self._receivers[name]

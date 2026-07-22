@@ -13,6 +13,7 @@ license = {text = "MIT"}
 
 [dependency-groups]
 test = ["pytest", "pydantic>=2"]
+dev = ["noob-core[test]"]
 
 [project.urls]
 homepage = "https://noob.readthedocs.io"

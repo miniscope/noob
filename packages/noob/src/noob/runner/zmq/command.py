@@ -90,6 +90,7 @@ class CommandNode(EventloopMixin):
             # Use a taskgroup so we can reliably kill long-running coros
             async with asyncio.TaskGroup() as tg:
                 tg.create_task(self._poll_receivers())
+                tg.create_task(self._poll_subscriptions("outbox", self._on_outbox_subscription))
 
                 # wait here until we're told to quit
                 await self._quitting.wait()
@@ -134,7 +135,10 @@ class CommandNode(EventloopMixin):
 
     def _init_outbox(self) -> None:
         """Create the main control publisher"""
-        pub = self.context.socket(zmq.PUB)
+        # XPUB to allow tracking when subscription connections are active
+        # rather than just when they are initiated
+        pub = self.context.socket(zmq.XPUB)
+        pub.setsockopt(zmq.XPUB_VERBOSE, 1)
         pub.bind(self.pub_address)
         pub.setsockopt_string(zmq.IDENTITY, "command.outbox")
         self.register_socket("outbox", pub)
@@ -153,6 +157,10 @@ class CommandNode(EventloopMixin):
         sub = self.context.socket(zmq.SUB)
         sub.setsockopt_string(zmq.IDENTITY, "command.inbox")
         sub.setsockopt_string(zmq.SUBSCRIBE, "")
+        # identity-carrying subscription so each node's outbox XPUB can attribute our
+        # subscription to us and we can confirm the node->command pipe is live
+        # valid to set multiple filters - https://zeromq.org/socket-api/
+        sub.setsockopt_string(zmq.SUBSCRIBE, f"{self.SUBSCRIBER_PREFIX}command")
         self.register_socket("inbox", sub, receiver=True)
 
     async def announce(self) -> None:
@@ -200,17 +208,34 @@ class CommandNode(EventloopMixin):
         """
 
         def _ready_nodes() -> set[str]:
-            return {node_id for node_id, state in self._nodes.items() if state["status"] == "ready"}
+            # copy because _nodes is being actively mutated right now
+            nodes = self._nodes.copy()
+            return {node_id for node_id, state in nodes.items() if state["status"] == "ready"}
 
         def _is_ready() -> bool:
             ready_nodes = _ready_nodes()
             waiting_for = set(node_ids)
+            # nodes whose outbox we (the command inbox) have confirmed subscribing to,
+            # i.e. the node->command event pipe is live
+            inbox_confirmed = {
+                node_id
+                for node_id in waiting_for
+                if (node_status := self._nodes.get(node_id, None)) is not None
+                and "command" in node_status.get("subscribers", [])
+            }
             self.logger.debug(
-                "Checking if ready, ready nodes are: %s, waiting for %s",
-                ready_nodes,
+                "Checking if ready. waiting for %s; ready: %s; "
+                "node->command confirmed: %s; command->node confirmed: %s",
                 waiting_for,
+                ready_nodes,
+                inbox_confirmed,
+                self._subscribers,
             )
-            return waiting_for.issubset(ready_nodes)
+            return (
+                waiting_for.issubset(ready_nodes)
+                and waiting_for.issubset(inbox_confirmed)
+                and waiting_for.issubset(self._subscribers)
+            )
 
         with self._ready_condition:
             # ping periodically for identifications in case we have slow subscribers
@@ -261,6 +286,28 @@ class CommandNode(EventloopMixin):
             return
         self._nodes[msg.node_id]["status"] = msg.value
 
+        with self._ready_condition:
+            self._ready_condition.notify_all()
+
+    async def _on_outbox_subscription(self, subscribed: bool, node_id: str) -> None:
+        """
+        A node subscribed to / unsubscribed from our control outbox. Track it so
+        :meth:`.await_ready` can confirm the command->node control pipe is live before
+        we send process/start (otherwise those commands can be silently dropped).
+        """
+        self.logger.debug(
+            "Node %s %s our outbox; subscribers now %s",
+            node_id,
+            "subscribed to" if subscribed else "unsubscribed from",
+            self._subscribers,
+        )
+        # re-announce with updated subscribers list
+        # catch exceptions to ensure ready condition always reached, even while tearing down
+        if subscribed:
+            try:
+                await self.announce()
+            except Exception as e:
+                self.logger.exception("Exception announcing on subscription: %s", e)
         with self._ready_condition:
             self._ready_condition.notify_all()
 
