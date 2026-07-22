@@ -2,6 +2,11 @@
 
 ## Upcoming
 
+**Changed**
+
+- [`#251`](https://github.com/miniscope/noob/pull/251) - 
+  Use pdm's experimental workspace support
+
 **Fixed**
 
 - [`#251`](https://github.com/miniscope/noob/pull/251) - 

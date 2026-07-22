@@ -59,6 +59,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Cache Dependencies
+        id: cache-dependencies
+        uses: actions/cache@v6
+        with:
+          path: .venv
+          key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pylock.toml', 'packages/noob/pyproject.toml') }}
+
       - name: Install dependencies
         run: |
           python -m pip install pdm coverage
