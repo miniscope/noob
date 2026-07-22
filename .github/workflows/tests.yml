@@ -21,7 +21,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: packages/noob-core/dist
-          key: core-wheel-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('packages/noob-core/src/**', 'packages/noob-core/python/**', 'packages/noob-core/Cargo.toml', 'packages/noob-core/Cargo.lock', 'packages/noob-core/pyproject.toml') }}
+          key: core-wheel-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('packages/noob-core/src/**', 'packages/noob-core/python/**', 'packages/noob-core/Cargo.toml', 'packages/noob-core/Cargo.lock', 'packages/noob-core/pyproject.toml') }}
 
       - uses: dtolnay/rust-toolchain@stable
         if: steps.wheel-cache.outputs.cache-hit != 'true'
