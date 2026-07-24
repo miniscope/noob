@@ -64,6 +64,8 @@ export interface PyodideRunnerOptions {
   pyodideUrl?: string;
   /** Pacing of the client-side free-run loop. */
   intervalMs?: number;
+  /** Any additional dependencies to install into the environment from pypi */
+  extra_deps?: string[];
 }
 
 export class PyodideRunner implements TubeRunnerHandle {
@@ -108,6 +110,16 @@ export class PyodideRunner implements TubeRunnerHandle {
     for (const dep of PYODIDE_STOCK_DEPS) {
       this.#setStatus("loading", "installing " + dep);
       await pyodide.loadPackage(dep);
+    }
+
+    if (this.#opts.extra_deps !== undefined) {
+      await pyodide.loadPackage("micropip");
+      let micropip = pyodide.pyimport("micropip");
+
+      for (const dep of this.#opts.extra_deps) {
+        this.#setStatus("loading", "installing " + dep);
+        await micropip.install(dep);
+      }
     }
 
     if (this.#opts.wheels.length === 0) {

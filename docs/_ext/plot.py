@@ -14,6 +14,7 @@ from sphinx.util.typing import ExtensionMetadata
 from noob.tube import TubeSpecification
 
 logger = logging.getLogger(__name__)
+EXTRA_DEPS = ["faker"]
 
 SCRIPT_TEMPLATE = """
 
@@ -112,6 +113,7 @@ class NoobTubePlot(SphinxDirective):
         options = {"wheels": wheels}
         if config.noob_runner_pyodide_url is not None:
             options["pyodideUrl"] = config.noob_runner_pyodide_url
+        options['extra_deps'] = EXTRA_DEPS
         return options
 
 
