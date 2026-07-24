@@ -61,7 +61,7 @@ format.composite = [
 docs = """sphinx-autobuild docs docs/_build/html  --ignore '*lib.md'"""
 docs-js = """concurrently
   'npm --prefix js/ run watch:docs'
-  'sphinx-autobuild docs docs/_build/html --ignore '*lib.md'
+  'sphinx-autobuild docs docs/_build/html --ignore "*lib.md"'
 """
 docs-build.cmd = "make html"
 docs-build.working_dir = "docs"
