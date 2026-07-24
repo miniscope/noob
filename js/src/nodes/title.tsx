@@ -2,7 +2,10 @@
 
 import { type NodeProps, useNodesData } from "@xyflow/react";
 
-import { type TitleNode as TitleNodeType, type NodeUnion } from "../types.ts";
+import {
+  type TitleNode as TitleNodeType,
+  type NodeUnion,
+} from "../types/types.ts";
 
 export default function TitleNode({ id, data }: NodeProps<TitleNodeType>) {
   const nodeData = useNodesData<NodeUnion>(id);

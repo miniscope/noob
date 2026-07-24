@@ -1,4 +1,6 @@
 import { type Node } from "@xyflow/react";
+import type { NodeStatus } from "./events.ts";
+import type { PyProxy } from "pyodide/ffi";
 
 export interface TubeSpecification {
   noob_id: string;
@@ -48,7 +50,7 @@ export type AssetScope = (typeof AssetScope)[keyof typeof AssetScope];
 export interface NoobNode {
   id: string;
   type: string;
-  depends?: Record<string, string>[] | string;
+  depends?: (Record<string, string> | string)[] | string;
   params?: Record<string, string | object>;
   nodeinfo: NodeInfo;
 }
@@ -98,3 +100,12 @@ export type ElkNode = Node<ElkNodeData, "elk">;
 export type GroupNode = Node<ElkNodeData, "group">;
 export type TitleNode = Node<TitleNodeData, "title">;
 export type NodeUnion = ElkNode | GroupNode | TitleNode;
+
+export interface TubeRunner {
+  init(): void;
+  deinit(): void;
+  process(): unknown;
+  readonly status: NodeStatus;
+}
+
+export interface TubeRunnerProxy extends TubeRunner, PyProxy {}
