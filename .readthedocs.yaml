@@ -12,12 +12,12 @@ sphinx:
 build:
   os: ubuntu-22.04
   tools:
-    python: "3.13"
+    python: "3.14"
     nodejs: "24"
     rust: "1.96"
   jobs:
     pre_install:
-      - python -m pip install pdm
+      - python -m pip install pdm pyodide-build
       - cargo install sphinx-rustdocgen --root /home/docs/.asdf
     install:
       - npm --prefix js/ ci
@@ -26,3 +26,14 @@ build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run python -m pip install ./packages/noob-core
     pre_build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-js
+      - |
+        set -euo pipefail
+        EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)
+        RUST_TOOLCHAIN=$(pyodide config get rust_toolchain)
+        git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+        ~/emsdk/emsdk install "${EMSCRIPTEN_VERSION}"
+        ~/emsdk/emsdk activate "${EMSCRIPTEN_VERSION}"
+        rustup toolchain install "${RUST_TOOLCHAIN}"
+        rustup target add wasm32-unknown-emscripten --toolchain "${RUST_TOOLCHAIN}"
+        source ~/emsdk/emsdk_env.sh
+        VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-wheels
