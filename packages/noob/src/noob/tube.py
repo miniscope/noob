@@ -64,22 +64,22 @@ class TubeSpecification(ConfigYAMLMixin):
     extends: list[ConfigSource] | None = None
     """
     Other tubes that this tube extends.
-    
+
     All the node and other specifications from the other tubes are collapsed into this one
     such that later tubes in the list override earlier tubes
     (and the current tube overrides all the extended tubes).
-    
+
     Extensions are neither completely deep nor completely shallow.
     In general, items are merged as deeply as they can be, with some exceptions:
-    
+
     - depends: for specs with matching IDs, more recent declarations fully replace earlier ones.
-      This is to facilitate extending tubes being able to *remove* dependencies - 
+      This is to facilitate extending tubes being able to *remove* dependencies -
       rather than having a specific "remove" keyword, to remove a dependency,
-      copy all but the one to be removed. 
+      copy all but the one to be removed.
       To add a dependency, copy all the previous ones along with the one ones
     - return: only one return node can exist in a tube, so the id given to the most recent return
       is used and all other returns are removed.
-    
+
     In tubes that extend other tubes, fields that are typically required are treated as optional
     in the yaml spec in order to avoid needing to redefine evey property.
     For example, if a tube wants to just change a node's params from an extended tube,
@@ -90,7 +90,7 @@ class TubeSpecification(ConfigYAMLMixin):
     description: str | None = None
     """An optional description of the tube"""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", serialize_by_alias=True)
 
     @field_validator("nodes", "assets", "input", mode="before")
     @classmethod
@@ -262,7 +262,7 @@ class Tube(BaseModel):
     """
     input_collection: InputCollection = Field(default_factory=InputCollection)
     """
-    Specifications declared by the tube to be supplied 
+    Specifications declared by the tube to be supplied
     """
     spec: TubeSpecification | None = None
 
