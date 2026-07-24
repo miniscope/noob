@@ -1,13 +1,12 @@
-import { isMetaEvent, type Event } from "../types/events.ts";
+import { type Event, isMetaEvent } from "../types/events.ts";
 import {
   EVENT_BUFFER_SIZE,
   type NodeRuntime,
   type SignalRuntime,
-} from "./runtime.tsx";
+} from "../types/runner.ts";
 
 /* No-arg callback change notifier */
 export type Listener = () => void;
-
 export type Unsubscribe = () => void;
 
 export class Stream<T> {

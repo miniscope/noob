@@ -20,6 +20,7 @@ import type {
 } from "./base.ts";
 import type { Event } from "../types/events.ts";
 import type { PyodideInterface } from "pyodide";
+import type { PyDict } from "pyodide/ffi";
 import { Stream } from "./events.ts";
 
 /**
@@ -79,7 +80,7 @@ export class PyodideRunner implements TubeRunnerHandle {
   #opts: PyodideRunnerOptions;
   #session: TubeRunnerProxy | null = null;
   /** This runner's private python globals, isolating it from co-hosted runners in the shared interpreter. */
-  #namespace: ReturnType<PyodideInterface["toPy"]> | null = null;
+  #namespace: PyDict | null = null;
   #loop: ReturnType<typeof setInterval> | null = null;
   #enabling: Promise<void> | null = null;
 
@@ -114,7 +115,7 @@ export class PyodideRunner implements TubeRunnerHandle {
 
     if (this.#opts.extra_deps !== undefined) {
       await pyodide.loadPackage("micropip");
-      let micropip = pyodide.pyimport("micropip");
+      const micropip = pyodide.pyimport("micropip") as Micropip;
 
       for (const dep of this.#opts.extra_deps) {
         this.#setStatus("loading", "installing " + dep);
@@ -152,7 +153,7 @@ export class PyodideRunner implements TubeRunnerHandle {
     this.#namespace = pyodide.toPy({
       event_cb,
       tube_spec: JSON.stringify(this.#opts.spec),
-    });
+    }) as PyDict;
     this.#session = (await pyodide.runPythonAsync(
       `
     import json
@@ -266,4 +267,8 @@ export class PyodideRunner implements TubeRunnerHandle {
     this.errors.close();
     this.returns.close();
   }
+}
+
+interface Micropip {
+  install: (module: string) => Promise<void>;
 }

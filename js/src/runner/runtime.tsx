@@ -19,28 +19,12 @@ import {
 import type { Edge } from "@xyflow/react";
 import type { RunnerError, RunnerStatus, TubeRunnerHandle } from "./base.ts";
 import { type Epoch, type Event } from "../types/events.ts";
-import type { RuntimeStore } from "./events.ts";
-
-export const EVENT_BUFFER_SIZE = 500;
-
-export interface NodeRuntime {
-  epoch: Epoch;
-  /** monotonic batch counter at this node's last emission; key glow animations on it */
-  seq: number;
-}
-
-export interface SignalRuntime {
-  value: unknown;
-  seq: number;
-}
-
-type Listener = () => void;
-
-export interface RuntimeContextValue {
-  store: RuntimeStore;
-  /** slot handle id → the source (signal) handle id feeding it */
-  slotSources: Record<string, string>;
-}
+import type {
+  Listener,
+  NodeRuntime,
+  RuntimeContextValue,
+  SignalRuntime,
+} from "../types/runner.ts";
 
 /** Null outside a runnable view — graph components render statically then. */
 export const RuntimeContext = createContext<RuntimeContextValue | null>(null);

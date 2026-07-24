@@ -2,13 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSlotSources,
-  EVENT_BUFFER_SIZE,
   formatEpoch,
   formatValue,
 } from "../src/runner/runtime.tsx";
 import type { Event } from "../src/types/events.ts";
-import { Stream } from "../src/runner/events.ts";
-import { RuntimeStore } from "../src/runner/events.ts";
+import { RuntimeStore, Stream } from "../src/runner/events.ts";
+import { EVENT_BUFFER_SIZE } from "../src/types/runner.ts";
 
 function event(overrides: Partial<Event>): Event {
   return {
