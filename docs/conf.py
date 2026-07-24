@@ -63,8 +63,7 @@ html_css_files = [
     "css/noob-js.css",
     "css/rust.css",
 ]
-html_js_files = ["js/noob-js.js"]
-
+html_js_files = [("js/noob-js.js", {"type": "module"})]
 # --------------------------------------------------
 # Extension options
 # --------------------------------------------------
