@@ -43,7 +43,7 @@ class TubeNode(Node):
     """
 
     spec: NodeSpecification  # not optional for tube nodes
-    tube: ConfigSource
+    tube: ConfigSource | dict
 
     _tube: Union["Tube", None] = None
     _tube_spec: Union["TubeSpecification", None] = None

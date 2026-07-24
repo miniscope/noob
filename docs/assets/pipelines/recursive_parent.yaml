@@ -2,23 +2,20 @@ noob_id: docs-recursive-parent
 noob_model: noob.tube.TubeSpecification
 noob_version: 0.0.1
 input:
-  parent_start:
-    scope: tube
-    type: int
-  parent_multiply:
-    scope: process
-    type: int
   child_start:
     scope: tube
     type: int
+    default: 5
   child_multiply:
     scope: process
     type: int
+    default: 10
+
 nodes:
   a:
     type: noob.testing.count_source
     params:
-      start: input.parent_start
+      start: 1
 
   b:
     type: tube
@@ -30,9 +27,10 @@ nodes:
 
   c:
     type: noob.testing.multiply
+    params:
+      right: 5
     depends:
     - left: b.value
-    - right: input.parent_multiply
   d:
     type: return
     depends:
