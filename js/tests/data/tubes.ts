@@ -1,4 +1,4 @@
-import type { TubeSpecification } from "../../src/types";
+import type { TubeSpecification } from "../../src/types/types.ts";
 
 // placeholder value, not used in tests yet
 const nodeinfo = { node_id: "", type: "", signals: {}, slots: {} };

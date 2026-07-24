@@ -1,3 +1,6 @@
+from collections.abc import Callable
+from typing import Any
+
 from noob.testing.assets import AnyAsset, Initializer, LifecycleCounter, counter, counter_cm
 from noob.testing.nodes import (
     CountSource,
@@ -93,3 +96,15 @@ __all__ = [
     "zip_iter",
     "Initializer",
 ]
+
+
+def __getattr__(name: str) -> Callable[[Any], Any]:
+    """
+    When we just get any old random node, e.g. in the docs for illustration,
+    just create some passthrough function
+    """
+
+    def _passthrough(**kwargs: Any) -> Any:
+        return kwargs
+
+    return _passthrough

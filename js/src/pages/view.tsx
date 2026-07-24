@@ -1,72 +1,27 @@
-import type { NodeUnion, TubeSpecification } from "../types.ts";
-import {
-  Background,
-  ConnectionMode,
-  Controls,
-  type Edge,
-  ReactFlow,
-  useEdgesState,
-  useNodesState,
-} from "@xyflow/react";
-import { useEffect } from "react";
-import { tubeToFlow } from "../tube.tsx";
-import useLayoutNodes from "../useLayoutNodes.tsx";
-import ElkNode from "../nodes/elk.tsx";
-import TitleNode from "../nodes/title.tsx";
-import { InputEdge, ReturnEdge } from "../edge.tsx";
+import { useEffect, useState } from "react";
+import type { TubeSpecification } from "../types/types.ts";
+import { NoobFlow } from "../flow.tsx";
+import type { SpecMsg } from "../types/events.ts";
 
 interface ViewProps {
   tube_id: string;
   color: "dark" | "light";
 }
 
-const nodeTypes = {
-  elk: ElkNode,
-  title: TitleNode,
-  group: ElkNode,
-};
-
-const edgeTypes = {
-  inputEdge: InputEdge,
-  returnEdge: ReturnEdge,
-};
-
 /**
  * Live viewer that refreshes a tube definition from a websocket
  */
 export default function View(props: ViewProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<NodeUnion>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [spec, setSpec] = useState<TubeSpecification | null>(null);
 
   useEffect(() => {
     const socket = new WebSocket(`/spec/${props.tube_id}`);
     socket.addEventListener("message", (event) => {
       if (typeof event.data !== "string") return;
-      const spec = JSON.parse(event.data) as TubeSpecification;
-      const [edges, nodes] = tubeToFlow(spec);
-      setNodes(nodes);
-      setEdges(edges);
+      const spec = JSON.parse(event.data) as SpecMsg;
+      setSpec(spec.value);
     });
-  }, [props.tube_id, setNodes, setEdges]);
+  }, [props.tube_id]);
 
-  useLayoutNodes();
-
-  return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      colorMode={props.color}
-      connectionMode={ConnectionMode.Loose} // allow the inputs/returns of nested tubes to connect both ways
-      minZoom={0.1}
-      maxZoom={10}
-      fitView
-    >
-      <Background />
-      <Controls />
-    </ReactFlow>
-  );
+  return spec && <NoobFlow tube={spec} color={props.color} title={true} />;
 }

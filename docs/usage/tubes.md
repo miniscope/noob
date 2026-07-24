@@ -18,6 +18,7 @@ one of the goals of noob is to support portable, publishable, lockable[^comingso
 that don't require a python interpreter to be able to inspect.
 
 ```{noob-tube} docs-branch
+:runnable:
 ```                   
 
 ## Tube Specifications
