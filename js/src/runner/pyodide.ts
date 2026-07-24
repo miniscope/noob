@@ -228,7 +228,7 @@ export class PyodideRunner implements TubeRunnerHandle {
     // String(): NodeStatus is a python StrEnum — a str subclass, which can
     // cross the FFI as a proxy rather than a JS string
     if (this.#session)
-      this.#setStatus(String(this.#session.status) as RunnerStatus);
+      this.#setStatus(this.#session.running ? "ready" : "stopped");
   }
 
   #notifyError(e: PythonError): void {

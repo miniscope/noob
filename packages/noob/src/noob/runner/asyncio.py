@@ -31,7 +31,7 @@ class AsyncRunner(TubeRunner):
     exception_timeout: float = 10
     """
     When a node raises an error, wait this long (in seconds)
-    before cancelling the other currently running nodes. 
+    before cancelling the other currently running nodes.
     """
     max_pending_tasks: int = 128
     """

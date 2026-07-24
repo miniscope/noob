@@ -1,5 +1,4 @@
 import { type Node } from "@xyflow/react";
-import type { NodeStatus } from "./events.ts";
 import type { PyProxy } from "pyodide/ffi";
 
 export interface TubeSpecification {
@@ -105,7 +104,7 @@ export interface TubeRunner {
   init(): void;
   deinit(): void;
   process(): unknown;
-  readonly status: NodeStatus;
+  readonly running: boolean;
 }
 
 export interface TubeRunnerProxy extends TubeRunner, PyProxy {}

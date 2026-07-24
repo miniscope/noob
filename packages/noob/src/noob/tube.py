@@ -316,7 +316,7 @@ class Tube(BaseModel):
 
     @classmethod
     def from_specification(
-        cls, spec: TubeSpecification | ConfigSource, input: dict | None = None
+        cls, spec: TubeSpecification | ConfigSource | dict, input: dict | None = None
     ) -> Self:
         """
         Instantiate a tube model from its configuration
