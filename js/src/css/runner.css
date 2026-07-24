@@ -43,7 +43,7 @@
 
 @keyframes runtime-pulse {
   from {
-    box-shadow: 0 0 14px 4px var(--color-primary);
+    box-shadow: 0 0 5px 1px var(--color-primary);
   }
   to {
     box-shadow: 0 0 0 0 transparent;

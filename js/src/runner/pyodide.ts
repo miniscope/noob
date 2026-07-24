@@ -76,6 +76,8 @@ export class PyodideRunner implements TubeRunnerHandle {
   #status: RunnerStatus = "unloaded";
   #opts: PyodideRunnerOptions;
   #session: TubeRunnerProxy | null = null;
+  /** This runner's private python globals, isolating it from co-hosted runners in the shared interpreter. */
+  #namespace: ReturnType<PyodideInterface["toPy"]> | null = null;
   #loop: ReturnType<typeof setInterval> | null = null;
   #enabling: Promise<void> | null = null;
 
@@ -134,30 +136,32 @@ export class PyodideRunner implements TubeRunnerHandle {
       this.events.push(data);
     };
 
-    const js_ns = {
-      event_cb: event_cb,
+    // Each runner shares the one interpreter but runs in its own globals dict:
+    this.#namespace = pyodide.toPy({
+      event_cb,
       tube_spec: JSON.stringify(this.#opts.spec),
-    };
-    pyodide.registerJsModule("js_ns", js_ns);
-    this.#session = (await pyodide.runPythonAsync(`
+    });
+    this.#session = (await pyodide.runPythonAsync(
+      `
     import json
     from pydantic import TypeAdapter
-    
+
     from noob.event import EventUnion
     from noob.runner import SynchronousRunner
     from noob import Tube
-    from js_ns import tube_spec, event_cb
-    
+
     tube = Tube.from_specification(json.loads(tube_spec))
     runner = SynchronousRunner(tube)
     event_adapter = TypeAdapter[list[EventUnion]](list[EventUnion])
-    
+
     def callback(event):
         event_cb(event_adapter.dump_json([event]).decode("utf-8"))
-        
+
     runner.add_callback(callback)
     runner
-    `)) as TubeRunnerProxy;
+    `,
+      { globals: this.#namespace },
+    )) as TubeRunnerProxy;
     this.#emitStatus();
   }
 
@@ -243,6 +247,8 @@ export class PyodideRunner implements TubeRunnerHandle {
     this.#stopLoop();
     this.#session?.destroy();
     this.#session = null;
+    this.#namespace?.destroy();
+    this.#namespace = null;
     this.events.close();
     this.statusChanges.close();
     this.errors.close();

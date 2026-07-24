@@ -65,7 +65,7 @@ class NoobTubePlot(SphinxDirective):
     option_spec = {"runnable": directives.flag}
 
     def run(self) -> list[nodes.Node]:
-        spec = TubeSpecification.from_id(self.arguments[0])
+        spec = TubeSpecification.from_id(self.arguments[0], context={"recursive": True})
         tube_id_esc = re.sub(r"[^a-zA-Z0-9]", "_", self.arguments[0] + "_" + str(uuid.uuid4()))
         container = nodes.container(classes=["noob-tube-container"])
         container["data-plot-for"] = f"tube-container-{tube_id_esc}"
