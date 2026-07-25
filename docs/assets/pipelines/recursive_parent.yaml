@@ -20,7 +20,7 @@ nodes:
   b:
     type: tube
     params:
-      tube: testing-recursive-child
+      tube: docs-recursive-child
     depends:
       - child_multiply_inner: a.index
       - child_multiply_input: input.child_multiply
