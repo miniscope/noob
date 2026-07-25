@@ -68,6 +68,8 @@ def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")] | None, None
 def sporadic_word_noevent(
     every: int = 3,
 ) -> Generator[A[NoEventable[str], Name("word")] | None, None, None]:
+    from faker import Faker
+
     fake = Faker()
     i = 0
     while True:

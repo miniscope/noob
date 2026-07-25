@@ -98,7 +98,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> Callable[[Any], Any]:
+def __getattr__(name: str) -> Callable:
     """
     When we just get any old random node, e.g. in the docs for illustration,
     just create some passthrough function
