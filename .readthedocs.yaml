@@ -27,7 +27,7 @@ build:
     pre_build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-js
       - |
-        set -euo pipefail
+        set -eu
         EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)
         RUST_TOOLCHAIN=$(pyodide config get rust_toolchain)
         git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
@@ -35,5 +35,5 @@ build:
         ~/emsdk/emsdk activate "${EMSCRIPTEN_VERSION}"
         rustup toolchain install "${RUST_TOOLCHAIN}"
         rustup target add wasm32-unknown-emscripten --toolchain "${RUST_TOOLCHAIN}"
-        source ~/emsdk/emsdk_env.sh
+        . ~/emsdk/emsdk_env.sh
         VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-wheels
