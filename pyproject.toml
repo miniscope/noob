@@ -66,11 +66,7 @@ docs-js = """concurrently
 docs-build.cmd = "make html"
 docs-build.working_dir = "docs"
 docs-build-js = "npm --prefix js/ run build:docs"
-# Wheels the pyodide runner installs, built into _static/wheels/ where the
-# noob-tube directive globs them. noob is pure-python; noob-core cross-compiles
-# to wasm and needs emsdk + the wasm32-unknown-emscripten rust target on PATH
-# (`pyodide config get` names the versions; .readthedocs.yaml provisions them in
-# CI). Run once locally after python changes; RTD runs it every build.
+
 docs-build-wheels.composite = [
     "docs-clean-wheels",
     "docs-build-wheel-noob",
@@ -79,12 +75,14 @@ docs-build-wheels.composite = [
 docs-clean-wheels.shell = "rm -rf docs/_static/wheels && mkdir -p docs/_static/wheels"
 docs-build-wheel-noob = "pdm build --project packages/noob --dest docs/_static/wheels --no-sdist"
 docs-build-wheel-core = "pyodide build packages/noob-core --outdir docs/_static/wheels"
+
 docs-test.composite = [
     "rm -rf ./docs/_build || true",
     "docs-build-js",
     "docs-build",
 ]
 docs-test.env = {SPHINXOPTS = "-W --keep-going"}
+
 mypy = "mypy"
 benchmark.cmd = "pytest tests/bench.py --codspeed --timeout=15"
 benchmark.working_dir = "packages/noob"
