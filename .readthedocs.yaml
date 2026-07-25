@@ -26,16 +26,4 @@ build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run python -m pip install ./packages/noob-core
     pre_build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-js
-      - |
-        set -eu
-        EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)
-        RUST_TOOLCHAIN=$(pyodide config get rust_toolchain)
-        git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
-        ~/emsdk/emsdk install "${EMSCRIPTEN_VERSION}"
-        ~/emsdk/emsdk activate "${EMSCRIPTEN_VERSION}"
-        rustup toolchain install "${RUST_TOOLCHAIN}"
-        rustup target add wasm32-unknown-emscripten --toolchain "${RUST_TOOLCHAIN}"
-        # emsdk_env.sh only fails because it can't locate itself under dash; do
-        # its actual work (apply the emsdk env) directly, which is POSIX-clean
-        eval "$(~/emsdk/emsdk construct_env)"
-        VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-wheels
+      - bash scripts/rtd-build-wheels.sh
