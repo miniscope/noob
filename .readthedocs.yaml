@@ -26,4 +26,4 @@ build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run python -m pip install ./packages/noob-core
     pre_build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-js
-      - bash scripts/rtd-build-wheels.sh
+      - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-wheels

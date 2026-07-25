@@ -66,20 +66,7 @@ docs-js = """concurrently
 docs-build.cmd = "make html"
 docs-build.working_dir = "docs"
 docs-build-js = "npm --prefix js/ run build:docs"
-
-docs-build-wheels.composite = [
-    "docs-clean-wheels",
-    "docs-build-wheel-noob",
-    "docs-build-wheel-core",
-    "docs-collect-wheels",
-]
-docs-clean-wheels.shell = "rm -rf docs/_static/wheels && mkdir -p docs/_static/wheels"
-docs-build-wheel-noob = "pdm build --project packages/noob --dest packages/noob/dist --no-sdist"
-# A dev-like profile (fast, low-optimization); the docs wheel only runs example
-# tubes, so it doesn't need the workspace's fat-LTO release optimization.
-docs-build-wheel-core.cmd = "pyodide build packages/noob-core --outdir packages/noob-core/dist"
-docs-build-wheel-core.env = {CARGO_PROFILE_RELEASE_OPT_LEVEL = "0", CARGO_PROFILE_RELEASE_LTO = "false", CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "256", CARGO_BUILD_JOBS = "1"}
-docs-collect-wheels.shell = "cp packages/noob/dist/*.whl packages/noob-core/dist/*.whl docs/_static/wheels/"
+docs-build-wheels = "bash scripts/build-docs-wheels.sh"
 
 docs-test.composite = [
     "rm -rf ./docs/_build || true",
