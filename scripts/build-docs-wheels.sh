@@ -28,7 +28,7 @@ fi
 rm -rf docs/_static/wheels
 mkdir -p docs/_static/wheels
 
-pdm build --project packages/noob --dest packages/noob/dist --no-sdist
+pdm build --project packages/noob --dest dist --no-sdist
 
 # A dev-like profile (fast, low-optimization); the docs wheel only runs example
 # tubes, so it doesn't need the workspace's fat-LTO release optimization.
