@@ -26,14 +26,17 @@ build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run python -m pip install ./packages/noob-core
     pre_build:
       - VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-js
+      # RTD runs jobs under dash; emsdk_env.sh needs bash ($BASH_SOURCE) to
+      # locate itself, so run the whole block through bash.
       - |
-        set -eu
-        EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)
-        RUST_TOOLCHAIN=$(pyodide config get rust_toolchain)
-        git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
-        ~/emsdk/emsdk install "${EMSCRIPTEN_VERSION}"
-        ~/emsdk/emsdk activate "${EMSCRIPTEN_VERSION}"
-        rustup toolchain install "${RUST_TOOLCHAIN}"
-        rustup target add wasm32-unknown-emscripten --toolchain "${RUST_TOOLCHAIN}"
-        . ~/emsdk/emsdk_env.sh
-        VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-wheels
+        bash -euc '
+          EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)
+          RUST_TOOLCHAIN=$(pyodide config get rust_toolchain)
+          git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+          ~/emsdk/emsdk install "${EMSCRIPTEN_VERSION}"
+          ~/emsdk/emsdk activate "${EMSCRIPTEN_VERSION}"
+          rustup toolchain install "${RUST_TOOLCHAIN}"
+          rustup target add wasm32-unknown-emscripten --toolchain "${RUST_TOOLCHAIN}"
+          source ~/emsdk/emsdk_env.sh
+          VIRTUAL_ENV=$(dirname $(dirname $(which python))) pdm run docs-build-wheels
+        '
