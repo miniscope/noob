@@ -83,10 +83,6 @@ jobs:
         with:
           version: ${{ steps.pyodide.outputs.emscripten }}
 
-      - name: build docs wheels
-        if: steps.docs-wheel-cache.outputs.cache-hit != 'true'
-        run: pdm run docs-build-wheels
-
       - name: Install python dependencies
         run: |
           pip install pdm
@@ -96,6 +92,10 @@ jobs:
 
       - name: Install node dependencies
         run: npm --prefix js/ ci
+
+      - name: build docs wheels
+        if: steps.docs-wheel-cache.outputs.cache-hit != 'true'
+        run: pdm run docs-build-wheels
 
       - name: Build docs
         run: pdm run docs-test
