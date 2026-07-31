@@ -710,7 +710,10 @@ class NodeRunner(EventloopMixin):
         self._node = cast(Node, self._node)
         self.logger.debug("Received Process message: %s", msg)
         async with self._ready_condition:
-            self._epochs_todo.add(msg.value["epoch"])
+            if (epoch := msg.value["epoch"]) is None:
+                epoch = self.scheduler.epoch
+
+            self._epochs_todo.add(epoch)
 
             if self.has_input and self.depends:  # for mypy - depends is always true if has_input is
                 # combine with any tube-scoped input and store as events
@@ -731,7 +734,7 @@ class NodeRunner(EventloopMixin):
                     {k: Signal(name=k, annotation=None) for k in combined},
                     value,
                     node_id="input",
-                    epoch=msg.value["epoch"],
+                    epoch=epoch,
                 )
                 self.scheduler.update(events)
 

@@ -15,16 +15,21 @@ import type {
   TitleNode,
   TubeNode,
   TubeSpecification,
-} from "./types.ts";
+} from "./types/types.ts";
 import type { Edge } from "@xyflow/react";
 
 /**
  * Create the reactflow form of a tube specification
  */
-export function tubeToFlow(tube: TubeSpecification): [Edge[], NodeUnion[]] {
+export function tubeToFlow(
+  tube: TubeSpecification,
+  title = false,
+): [Edge[], NodeUnion[]] {
   const edges = getEdges(tube.nodes);
   let nodes = getNodes(tube.nodes);
-  nodes = [_titleNode(tube.noob_id, tube.description ?? ""), ...nodes];
+  if (title) {
+    nodes = [_titleNode(tube.noob_id, tube.description ?? ""), ...nodes];
+  }
 
   if (tube.input && Object.keys(tube.input).length !== 0) {
     nodes = [...nodes, _inputNode(tube.input)];
@@ -69,9 +74,22 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
   node.depends =
     typeof node.depends === "string" ? [{ value: node.depends }] : node.depends;
 
+  let positionIndex = 0;
   return Array.from(node.depends).map<Edge>((slotsig) => {
-    const slot = Object.keys(slotsig)[0];
-    const signal = slotsig[slot];
+    let slot: string;
+    let signal: string;
+    if (typeof slotsig === "string") {
+      // positional dependency: maps to the node's slot at this position
+      // (mirrors noob.node.base.Node.edges)
+      slot =
+        Object.keys(node.nodeinfo?.slots ?? {})[positionIndex] ??
+        String(positionIndex);
+      signal = slotsig;
+      positionIndex += 1;
+    } else {
+      slot = Object.keys(slotsig)[0];
+      signal = slotsig[slot];
+    }
     const signalParts = signal.split(".");
     let targetNode, targetHandle, sourceNode, sourceHandle;
     let edgeType = "default";

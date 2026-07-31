@@ -9,7 +9,6 @@ from time import sleep
 from typing import Annotated as A
 from typing import Any
 
-from faker import Faker
 from pydantic import Field
 
 from noob import Name, NodeSpecification, process_method
@@ -36,6 +35,8 @@ def letter_source() -> Generator[A[str, Name("letter")]]:
 
 
 def word_source() -> Generator[A[str, Name("word")]]:
+    from faker import Faker
+
     fake = Faker()
     while True:
         word = fake.word()
@@ -44,12 +45,16 @@ def word_source() -> Generator[A[str, Name("word")]]:
 
 
 def multi_words_source(n: int) -> Generator[A[list[str], Name("multi_words")]]:
+    from faker import Faker
+
     fake = Faker()
     while True:
         yield [fake.unique.word() for _ in range(n)]
 
 
 def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")] | None, None, None]:
+    from faker import Faker
+
     fake = Faker()
     i = 0
     while True:
@@ -63,6 +68,8 @@ def sporadic_word(every: int = 3) -> Generator[A[str, Name("word")] | None, None
 def sporadic_word_noevent(
     every: int = 3,
 ) -> Generator[A[NoEventable[str], Name("word")] | None, None, None]:
+    from faker import Faker
+
     fake = Faker()
     i = 0
     while True:
@@ -74,6 +81,8 @@ def sporadic_word_noevent(
 
 
 def word_counts() -> Generator[tuple[A[str, Name("word")], A[list[int], Name("counts")]]]:
+    from faker import Faker
+
     fake = Faker()
     while True:
         n_counts = random.randint(2, 5)

@@ -11,6 +11,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+dist-wasm/
 downloads/
 eggs/
 .eggs/
@@ -186,6 +187,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+test-results/
 *.local
 
 # Editor directories and files
@@ -217,3 +219,4 @@ reactflow-*.js
 elkjs-*.map
 react-*.map
 reactflow-*.map
+packages/noob/README.md

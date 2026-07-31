@@ -1,5 +1,4 @@
-from multiprocessing import Lock
-from multiprocessing.synchronize import Lock as LockType
+from threading import Lock
 from typing import Any, Generic, TypeVar, cast
 
 from pydantic import PrivateAttr
@@ -53,7 +52,7 @@ class Gather(Node, Generic[_TInput]):
     [['a', 'b'], ['c'], []] -> ['a', 'b', 'c'] 
     """
     _items: list[tuple[Epoch, _TInput]] = PrivateAttr(default_factory=list)
-    _lock: LockType = PrivateAttr(default_factory=Lock)
+    _lock: Lock = PrivateAttr(default_factory=Lock)
 
     def process(
         self, value: _TInput, epoch: Epoch, trigger: Any | None = None, n: int | None = None

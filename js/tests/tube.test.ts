@@ -1,7 +1,7 @@
 import { recursiveTube } from "./data/tubes";
 import { test, beforeAll, describe, expect } from "vitest";
 import { tubeToFlow, testExports } from "../src/tube";
-import type { TubeNode, NodeUnion, NoobNode } from "../src/types.ts";
+import type { TubeNode, NodeUnion, NoobNode } from "../src/types/types.ts";
 import type { Edge } from "@xyflow/react";
 
 const { getNodeEdges, getTubeNode, getEdges } = testExports;
@@ -24,6 +24,29 @@ describe("getNodeEdges", () => {
 
     expect(edges).length(1);
     expect(edges[0]).toHaveProperty("targetHandle", "test.slots.value");
+  });
+
+  test("maps positional dependencies to slots by index", () => {
+    // mirrors noob.node.base.Node.edges: a bare string in the depends list
+    // is a positional arg, landing on the slot at that position
+    const edges = getNodeEdges({
+      ...baseNode,
+      nodeinfo: {
+        ...nodeinfo,
+        slots: {
+          strings: { name: "strings", annotation: "list", required: true },
+        },
+      },
+      depends: ["b.value"],
+    });
+
+    expect(edges).length(1);
+    expect(edges[0]).toMatchObject({
+      source: "b",
+      sourceHandle: "b.signals.value",
+      target: "test",
+      targetHandle: "test.slots.strings",
+    });
   });
 
   describe("with prefix", () => {

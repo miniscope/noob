@@ -46,7 +46,7 @@ class InputSpecification(BaseModel):
     """An optional description of the input value"""
     required: bool = True
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", serialize_by_alias=True)
 
     __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)  # type: ignore[var-annotated]
 

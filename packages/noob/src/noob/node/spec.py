@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import inspect
 import sys
-from typing import Annotated, TypeAlias
+from typing import Annotated, Any, TypeAlias
 
 from annotated_types import Len
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from noob.edge import Signal, Slot
 from noob.types import AbsoluteIdentifier, DependencyIdentifier, PythonIdentifier
@@ -158,6 +165,18 @@ class NodeSpecification(BaseModel):
     """An optional description of the node"""
 
     model_config = ConfigDict(extra="forbid", serialize_by_alias=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def drop_computed(cls, data: Any) -> Any:
+        """
+        Accept our own serialized output: nodeinfo is computed on dump but
+        collides with ``extra="forbid"`` when a dumped spec is re-validated
+        (e.g. specs round-tripped through a GUI).
+        """
+        if isinstance(data, dict) and "nodeinfo" in data:
+            data = {key: val for key, val in data.items() if key != "nodeinfo"}
+        return data
 
     @field_validator("depends", mode="after")
     @classmethod

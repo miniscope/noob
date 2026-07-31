@@ -61,17 +61,20 @@ format.composite = [
 docs = """sphinx-autobuild docs docs/_build/html  --ignore '*lib.md'"""
 docs-js = """concurrently
   'npm --prefix js/ run watch:docs'
-  'sphinx-autobuild docs docs/_build/html --ignore '*lib.md'
+  'sphinx-autobuild docs docs/_build/html --ignore "*lib.md"'
 """
 docs-build.cmd = "make html"
 docs-build.working_dir = "docs"
 docs-build-js = "npm --prefix js/ run build:docs"
+docs-build-wheels = "bash scripts/build-docs-wheels.sh"
+
 docs-test.composite = [
     "rm -rf ./docs/_build || true",
     "docs-build-js",
     "docs-build",
 ]
 docs-test.env = {SPHINXOPTS = "-W --keep-going"}
+
 mypy = "mypy"
 benchmark.cmd = "pytest tests/bench.py --codspeed --timeout=15"
 benchmark.working_dir = "packages/noob"
