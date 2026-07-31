@@ -2,10 +2,33 @@
 
 ## Upcoming
 
+**Added**
+
+- [`#252`](https://github.com/miniscope/noob/pull/251) - 
+  Add a pyodide runner so that noob tubes can run directly in the docs!
+  This brings several basic JS features that we will need for the actual GUI,
+  run controls, events passed to nodes in the GUI, etc.
+  It has a generic event handler so that events that come from a local server
+  should work the same as events that come from pyodide.
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  For documentation purposes, a generic `__getattr__` was added to `noob.testing`,
+  so that when referring to "some node" an actual passthrough node can be gotten.
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  {meth}`.YAMLMixin.from_any` now allows a specification to be passed as a dict.
+
 **Changed**
 
 - [`#251`](https://github.com/miniscope/noob/pull/251) - 
   Use pdm's experimental workspace support
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  `TubeSpecification`s yielded in the GUI viewer are now wrapped in `SpecMsg`s,
+  so that all point-to-point communication within noob stays within a single message format.
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  {class}`.Gather` now uses a {class}`threading.Lock` rather than `multiprocessing` - 
+  multiprocessing was never necessary and isn't compatible with pyodide.
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  {class}`.ProcessMsg` can have `epoch` be `None`, when e.g. being controlled by some proxy
+  that allows the runner (specifically, its scheduler) to decide the epoch.
 
 **Fixed**
 
@@ -16,6 +39,11 @@
   Now, nodes dynamically track who is subscribed to them and report that in their `identify` messages,
   so that subscribers can know when the publisher connection is open without needing to give the publisher
   advance knowledge of who should be subscribed to it (keeping the asymmetry of information implied by dependencies)
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  {class}`.NodeSpecification` ignores `nodeinfo` when validating,
+  so specs can again be round-tripped.
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  {class}`.TubeSpecification`s are serialized by alias so that e.g. `type_` comes out as `type`
 
 ## v1002.*
 

@@ -1,9 +1,6 @@
 /**
  * In-page tube runner: a pyodide interpreter with noob installed, driven
- * directly. The runner classes are right there in the page — the session
- * proxy's methods are called like any object's; the only serialization is
- * `process_json()`, which returns each step's event batch as one JSON
- * string because event values can be arbitrary python objects.
+ * directly.
  *
  * `enable()` is lazy: nothing downloads before it (pyodide from a pinned
  * CDN, noob + noob-core wheels via micropip). Free-running is a client-side
@@ -188,7 +185,6 @@ export class PyodideRunner implements TubeRunnerHandle {
       this.#notifyError(e as PythonError);
       throw e;
     }
-    // this.#emitStatus();
   }
 
   init(): Promise<void> {
@@ -207,7 +203,6 @@ export class PyodideRunner implements TubeRunnerHandle {
   process(): Promise<void> {
     this.#run((session) => {
       const result = session.process();
-      // if (result.events.length > 0) this.events.push(result.events);
       this.returns.push(result);
     });
     return Promise.resolve();
@@ -242,8 +237,6 @@ export class PyodideRunner implements TubeRunnerHandle {
   }
 
   #emitStatus(): void {
-    // String(): NodeStatus is a python StrEnum — a str subclass, which can
-    // cross the FFI as a proxy rather than a JS string
     if (this.#session)
       this.#setStatus(this.#session.running ? "ready" : "stopped");
   }
