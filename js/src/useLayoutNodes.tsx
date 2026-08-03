@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { type Edge, useNodesInitialized, useReactFlow } from "@xyflow/react";
 
-import type { NodeUnion } from "./types";
+import type { NodeUnion } from "./types/types.ts";
 
 import type {
   ElkNode as OElkNode,
@@ -28,12 +28,10 @@ const layoutOptions = {
   "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
   "elk.layered.crossingMinimization.strategy": "MEDIAN_LAYER_SWEEP",
   "elk.layered.considerModelOrder.crossingCounterPortInfluence": "0.001",
-  "elk.layered.wrapping.strategy": "MULTI_EDGE",
   "elk.nodeSize.constraints": "NODE_LABELS PORT_LABELS PORTS",
   "elk.nodeLabels.placement": "INSIDE H_CENTER V_CENTER",
   "elk.nodeSize.options": "COMPUTE_PADDING",
   "elk.portConstraints": "FIXED_SIDE",
-
 };
 
 const elk = new ELK();
@@ -48,7 +46,10 @@ export const getLayoutedNodes = async (
   edges: Edge[],
 ): Promise<NodeUnion[]> => {
   const aspectRatio = window.screen.width / window.screen.height;
-  const layoutOpts = {...layoutOptions, 'elk.aspectRatio': String(aspectRatio)};
+  const layoutOpts = {
+    ...layoutOptions,
+    "elk.aspectRatio": String(aspectRatio),
+  };
   const graph = {
     id: "root",
     layoutOptions: layoutOpts,
@@ -62,14 +63,10 @@ export const getLayoutedNodes = async (
     })),
   };
 
-
-  console.log(layoutOpts)
-
   const layoutedGraph = await elk.layout(graph, {
     layoutOptions: layoutOpts,
   });
   const flatChildren = flattenChildren(layoutedGraph);
-  console.log(flatChildren, layoutedGraph);
 
   const titleNode = nodes.filter((n) => n.type === "title")[0];
   const titleHeight = titleNode?.measured?.height ?? 0;
@@ -171,7 +168,9 @@ function nodeToElk(n: NodeUnion, nodes: NodeUnion[]): PropertiedElkNode {
     // we are also passing the id, so we can also handle edges without a sourceHandle or targetHandle option
     ports: [...targetPorts, ...sourcePorts],
     children: childNodes,
-    ...childNodes.length != 0 && {layoutOptions: {"elk.layered.wrapping.strategy": "OFF"}}
+    ...(childNodes.length != 0 && {
+      layoutOptions: { "elk.layered.wrapping.strategy": "OFF" },
+    }),
   };
 }
 

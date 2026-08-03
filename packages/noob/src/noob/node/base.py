@@ -10,7 +10,6 @@ from typing import (
     Any,
     Self,
     TypeVar,
-    Union,
     cast,
     get_args,
 )
@@ -25,6 +24,7 @@ from pydantic import (
 )
 
 from noob.edge import Edge, Signal, Slot
+from noob.event import EventMaker
 from noob.logging import init_logger
 from noob.node.spec import NodeSpecification
 from noob.types import Epoch, EventMap
@@ -98,6 +98,7 @@ class Node(BaseModel):
     _gen: Generator | None = None
     _edges: list[Edge] | None = None
     _injections: dict[str, str] | None = None
+    _event_maker: EventMaker = PrivateAttr(default_factory=EventMaker)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -105,6 +106,7 @@ class Node(BaseModel):
         """See docstring of :meth:`.process` for description of post init wrapping of generators"""
         if inspect.isgeneratorfunction(self.process):
             self._wrap_generator(self.process)
+        self._event_maker.node_id = self.id
 
     # TODO: Support dependency injection in mypy plugin
     def init(self) -> None:
@@ -150,8 +152,8 @@ class Node(BaseModel):
 
     @classmethod
     def from_specification(
-        cls, spec: NodeSpecification, input_collection: Union[InputCollection, None] = None
-    ) -> Node | None:
+        cls, spec: NodeSpecification, input_collection: InputCollection | None = None
+    ) -> Node:
         """
         Create a node from its spec
 
@@ -177,15 +179,14 @@ class Node(BaseModel):
         # determine enabledness
         if isinstance(spec.enabled, str):
             if not input_collection:
-                raise ValueError("No input collection supplied, but inputs specified in enabled")
+                raise ValueError(
+                    "No input collection supplied, "
+                    f"but inputs specified as determining enabledness of node {spec.id}"
+                )
 
-            enabled = bool(input_collection.get(spec.enabled.split('.', 1)[-1]))
+            enabled = bool(input_collection.get(spec.enabled.split(".", 1)[-1]))
         else:
             enabled = spec.enabled
-
-        # FIXME: Temporary hack to get things running
-        if not enabled:
-            return None
 
         # additional kwargs that can be present or absent without default
         kwargs = {}
@@ -196,17 +197,21 @@ class Node(BaseModel):
         # Node classes do not have __call__ defined and thus should not be callable
         if inspect.isclass(obj):
             if issubclass(obj, Node):
-                return obj(id=spec.id, spec=spec, enabled=enabled, **params, **kwargs)
+                node = obj(id=spec.id, spec=spec, enabled=enabled, **params, **kwargs)
             else:
-                return WrapClassNode(
+                node = WrapClassNode(
                     id=spec.id, cls=obj, spec=spec, params=params, enabled=enabled, **kwargs
                 )
         else:
-            return WrapFuncNode(
+            node = WrapFuncNode(
                 id=spec.id, fn=obj, spec=spec, params=params, enabled=enabled, **kwargs
             )
 
-    @property
+        # update the spec's statefulness, which can be determined dynamically by a node
+        spec.stateful = node.stateful
+        return node
+
+    @functools.cached_property
     def signals(self) -> dict[str, Signal]:
         """
         Cached instance-level accessor for signals.
@@ -235,7 +240,7 @@ class Node(BaseModel):
         """
         return Signal.from_callable(cls.process)
 
-    @property
+    @functools.cached_property
     def slots(self) -> dict[str, Slot]:
         if self._slots is None:
             self._slots = self.get_slots(self.spec)

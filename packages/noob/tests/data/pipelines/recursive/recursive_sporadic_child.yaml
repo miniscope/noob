@@ -1,0 +1,15 @@
+noob_id: testing-recursive-sporadic-child
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  A child tube that returns sporadically
+
+nodes:
+  word:
+    type: noob.testing.sporadic_word_noevent
+    params:
+      every: 3
+  return:
+    type: return
+    depends:
+      - word: word.word

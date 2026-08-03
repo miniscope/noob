@@ -231,6 +231,33 @@ assets:
 The format does not change much for a class-based Asset. Like its function-based twin, all `__init__` parameters must
 be defined in the `params` section.
 
+### `contextmanager` Assets
+
+Assets can also be written as [context managers](https://docs.python.org/3/library/contextlib.html).
+
+Assets are a static object with setup and teardown,
+which fits perfectly into the design of contextmanagers:
+
+- Setup the asset before the `yield`
+- The object that is `yield`-ed is the asset
+- Teardown the object after the `yield`
+
+```python
+from contextlib import contextmanager
+
+@contextmanager
+def some_asset(*args, **kwargs) -> SomeObject:
+    # setup the asset here, this runs during `init`
+    something = make_asset(*args, **kwargs)
+    
+    # yield the asset
+    try:
+        yield something
+    finally:
+        # teardown the asset, this runs during `deinit`
+        something.close()
+```
+
 ### How do you use an Asset?
 
 The defined asset then can simply become a `depends` input for any node and used like any regular Python object,

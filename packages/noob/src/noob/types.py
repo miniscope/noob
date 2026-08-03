@@ -5,7 +5,7 @@ import builtins
 import pickle
 import re
 import sys
-from collections.abc import AsyncIterator, Iterable, Iterator, Sized
+from collections.abc import AsyncIterator, Iterator, Sized
 from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
@@ -14,23 +14,22 @@ from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
-    Literal,
     NamedTuple,
     TypeAlias,
     TypedDict,
     TypeVar,
 )
 
+from noob_core import Epoch  # noqa: F401
 from pydantic import (
     AfterValidator,
     BeforeValidator,
     Field,
-    GetCoreSchemaHandler,
     PlainSerializer,
     TypeAdapter,
     WrapSerializer,
 )
-from pydantic_core import CoreSchema, PydanticSerializationError, core_schema
+from pydantic_core import PydanticSerializationError
 from pydantic_core.core_schema import SerializerFunctionWrapHandler
 
 from noob.const import RESERVED_IDS
@@ -41,10 +40,9 @@ else:
     from typing import TypeIs
 
 if TYPE_CHECKING:
-    from noob import Tube
     from noob.event import Event
-    from noob.runner import TubeRunner
     from noob.input import InputCollection
+    from noob.runner import TubeRunner
 
 CONFIG_ID_PATTERN = r"[\w\-\/#]+"
 """
@@ -110,23 +108,12 @@ def _to_isoformat(val: datetime) -> str:
 
 
 def _to_jsonable_pickle(val: Any, handler: SerializerFunctionWrapHandler) -> Any:
-    from noob.logging import init_logger
-    logger = init_logger('types.pickling')
     try:
-        logger.debug("TRYING TO PICKLE")
         if isinstance(val, Iterator | AsyncIterator) and not isinstance(val, Sized):
             raise TypeError("Pickling the generator")
-        res = handler(val)
-        logger.debug("PICKLE RES %s", res)
-        return res
+        return handler(val)
     except (UnicodeDecodeError, TypeError, PydanticSerializationError):
-        stringform =  "pck__" + base64.b64encode(pickle.dumps(val)).decode("utf-8")
-
-        # logger.debug("SERIALIZING PICKLE: %s, %s", val, stringform)
-        return stringform
-    except Exception as e:
-        logger.exception("UNHANDLED EXCEPTION TYPE: %s", type(e))
-        raise
+        return "pck__" + base64.b64encode(pickle.dumps(val)).decode("utf-8")
 
 
 def _from_jsonable_pickle(val: Any) -> Any:
@@ -234,113 +221,4 @@ AbsoluteIdentifierAdapter = TypeAdapter(AbsoluteIdentifier)
 
 class RunnerContext(TypedDict):
     runner: TubeRunner
-    tube: Tube
     input_collection: InputCollection
-
-
-class EpochSegment(NamedTuple):
-    node_id: NodeID | Literal["tube"]
-    epoch: int
-
-
-class Epoch(tuple[EpochSegment, ...]):
-    def __new__(cls, epoch: int | Iterable[EpochSegment]):
-        if isinstance(epoch, int):
-            epoch = (EpochSegment("tube", epoch),)
-        return super().__new__(cls, epoch)
-
-    def make_subepochs(self, node_id: NodeID, n: int) -> list[Epoch]:
-        """
-        Make n subepochs for the current epoch.
-        """
-        return [self / EpochSegment(node_id=node_id, epoch=i) for i in range(n)]
-
-    @property
-    def parent(self) -> Epoch | None:
-        """If a subepoch, return the parent epoch. If the root epoch, return None"""
-        return Epoch(self[:-1]) if len(self) > 1 else None
-
-    @property
-    def parents(self) -> tuple[Epoch, ...]:
-        if len(self) == 1:
-            return tuple()
-        return tuple(Epoch(self[:i]) for i in range(-1, len(self) * -1, -1))
-
-    @property
-    def root(self) -> Epoch:
-        """The root epoch - self if epoch is not a subepoch, otherwise top-most parent"""
-        if len(self) == 1:
-            return self
-        else:
-            return self.parents[-1]
-
-    @classmethod
-    def __get_pydantic_core_schema__(
-        cls, source_type: Any, handler: GetCoreSchemaHandler
-    ) -> CoreSchema:
-        tuple_schema = core_schema.tuple_variable_schema(handler(EpochSegment))
-
-        def _cast(val: tuple | Epoch) -> Epoch:
-            if not isinstance(val, Epoch):
-                val = Epoch(val)
-            return val
-
-        return core_schema.chain_schema(
-            steps=[tuple_schema, core_schema.no_info_plain_validator_function(_cast)],
-        )
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, int):
-            if len(self) == 1:
-                return self[0].epoch == other
-            else:
-                return False
-        else:
-            return tuple.__eq__(self, other)
-
-    __hash__ = tuple.__hash__
-
-    def __gt__(self, other: Epoch | int) -> bool:  # type: ignore[override]
-        if isinstance(other, Epoch | tuple):
-            return tuple(e.epoch for e in self) > tuple(e.epoch for e in other)
-        elif isinstance(other, int):
-            return self[0].epoch > other
-        else:
-            raise TypeError("Can only compare equality to an int or another epoch")
-
-    def __ge__(self, other: Epoch | int) -> bool:  # type: ignore[override]
-        return self == other or self > other
-
-    def __lt__(self, other: Epoch | int) -> bool:  # type: ignore[override]
-        return not self > other
-
-    def __le__(self, other: Epoch | int) -> bool:  # type: ignore[override]
-        return self == other or self < other
-
-    def __truediv__(self, other: EpochSegment | tuple[str, int]) -> Epoch:
-        segment = EpochSegment(*other) if not isinstance(other, EpochSegment) else other
-
-        return Epoch((*self, segment))
-
-    def __add__(self, other: int) -> Epoch:  # type: ignore[override]
-
-        if not isinstance(other, int):
-            raise TypeError("Epoch addition is only defined with integers for now! PRs welcome!")
-        if len(self) == 1:
-            return Epoch(self[0].epoch + other)
-        else:
-            return Epoch((*self[:-1], EpochSegment(self[-1].node_id, self[-1].epoch + other)))
-
-    def __sub__(self, other: int) -> Epoch:
-        if not isinstance(other, int):
-            raise TypeError("Epoch subtraction is only defined with integers for now! PRs welcome!")
-        if len(self) == 1:
-            return Epoch(self[0].epoch - other)
-        else:
-            return Epoch((*self[:-1], EpochSegment(self[-1].node_id, self[-1].epoch - other)))
-
-    def __repr__(self) -> str:
-        if len(self) == 1:
-            return str(self[0].epoch)
-        else:
-            return str(tuple(tuple(ep) for ep in self))

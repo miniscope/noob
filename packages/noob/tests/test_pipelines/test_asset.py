@@ -1,8 +1,9 @@
 import pytest
 
 from noob import SynchronousRunner, Tube
-from noob.asset import AssetScope
+from noob.asset import Asset, AssetScope, AssetSpecification, WrapFuncAsset
 from noob.runner.zmq import ZMQRunner
+from noob.testing import LifecycleCounter
 from noob.types import Epoch
 from noob.utils import iscoroutinefunction_partial
 
@@ -152,6 +153,30 @@ async def test_asset_depends_post_gather(loaded_tube, all_runners):
             last_b = result["b_value"]
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-depends-asset-multi"], indirect=True)
+async def test_asset_depends_multi(loaded_tube, all_runners):
+    """
+    Multiple assets can be updated from the same signal
+    """
+    runner = all_runners
+    assert set(runner.tube.state.dependencies.keys()) == {"c"}
+    assert runner.tube.state.dependencies["c"]["iterator"] == {"counter", "counter2"}
+    for i in range(5):
+        if iscoroutinefunction_partial(runner.process):
+            result = await runner.process()
+        else:
+            result = runner.process()
+
+        # in the first iteration, the values should differ,
+        # but in subsequent iterations, after copied from the same signal,
+        # they are the same.
+        if i == 0:
+            assert result["a_value"] != result["b_value"]
+        else:
+            assert result["a_value"] == result["b_value"]
+
+
 def test_asset_nocopy_when_unused():
     """
     Don't copy assets when there is no chance for them to be mutated after they are stored
@@ -194,3 +219,69 @@ def test_selective_node_init():
 
         with runner._asset_context(AssetScope.node, no.edges):
             assert not runner.tube.state.assets["initializer"].obj
+
+
+def test_contextmanager_asset():
+    """
+    WrapFuncAsset enters and exits a contextmanager factory directly,
+    and can be re-initialized after deinit.
+    """
+    spec = AssetSpecification(
+        id="counter", type="noob.testing.counter_cm", scope="runner", params={"start": 0}
+    )
+    asset = Asset.from_specification(spec)
+    assert isinstance(asset, WrapFuncAsset)
+
+    asset.init()
+    obj = asset.obj
+    assert isinstance(obj, LifecycleCounter)
+    assert obj.entered == 1
+    assert obj.exited == 0
+
+    asset.deinit()
+    assert obj.entered == 1
+    assert obj.exited == 1
+    assert asset.obj is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loaded_tube", ["testing-contextmanager-asset"], indirect=True)
+async def test_contextmanager_asset_lifecycle(loaded_tube, all_runners):
+    """
+    A ``contextlib.contextmanager``-decorated factory is entered on init,
+    its yielded value is the asset object, and it is exited on deinit.
+    """
+    runner = all_runners
+    not_zmq = not isinstance(runner, ZMQRunner)
+
+    for i in range(3):
+        if iscoroutinefunction_partial(runner.process):
+            result = await runner.process()
+        else:
+            result = runner.process()
+
+        # node scoped assets can be shared but are deinited before being shared
+        assert result["node_a"].entered == 1
+        assert result["node_a"].exited == 1
+        assert result["node_b"].entered == 1
+        assert result["node_b"].exited == 1
+
+        # advanced twice - once when the asset is deinit'd after node a, and again during b
+        assert result["node_a_value"] == 2
+        assert result["node_b_value"] == 4
+
+        # process scoped assets can be shared and are not deinit'd before sharing
+        assert result["process_a"].entered == 1
+        assert result["process_a"].exited == (1 if not_zmq else 0)
+        assert result["process_b"].entered == 1
+        assert result["process_b"].exited == (1 if not_zmq else 0)
+        assert result["process_a_value"] == 2
+        assert result["process_b_value"] == 3
+
+        # runner scoped assets are kept alive while the runner is!
+        assert result["runner_a"].entered == 1
+        assert result["runner_a"].exited == 0
+        assert result["runner_b"].entered == 1
+        assert result["runner_b"].exited == 0
+        assert result["runner_a_value"] == 2 + (2 * i)
+        assert result["runner_b_value"] == 3 + (2 * i)

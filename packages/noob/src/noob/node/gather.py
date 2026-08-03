@@ -1,7 +1,4 @@
-import uuid
-from datetime import UTC, datetime
-from multiprocessing import Lock
-from multiprocessing.synchronize import Lock as LockType
+from threading import Lock
 from typing import Any, Generic, TypeVar, cast
 
 from pydantic import PrivateAttr
@@ -55,7 +52,7 @@ class Gather(Node, Generic[_TInput]):
     [['a', 'b'], ['c'], []] -> ['a', 'b', 'c'] 
     """
     _items: list[tuple[Epoch, _TInput]] = PrivateAttr(default_factory=list)
-    _lock: LockType = PrivateAttr(default_factory=Lock)
+    _lock: Lock = PrivateAttr(default_factory=Lock)
 
     def process(
         self, value: _TInput, epoch: Epoch, trigger: Any | None = None, n: int | None = None
@@ -77,14 +74,7 @@ class Gather(Node, Generic[_TInput]):
                     # collapse epoch if in a sub-epoch
                     ep = epoch.parent if len(epoch) > 1 else epoch
                     ep = cast(Epoch, ep)
-                    return Event(
-                        id=uuid.uuid4().int,
-                        timestamp=datetime.now(UTC),
-                        node_id=self.id,
-                        signal="value",
-                        epoch=ep,
-                        value=items,
-                    )
+                    return self._event_maker.new_event(epoch=ep, value=items)
                 finally:
                     # clear list after returning
                     self._items = []

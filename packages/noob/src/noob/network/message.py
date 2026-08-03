@@ -14,6 +14,7 @@ from pydantic import (
 )
 
 from noob.event import EventUnion
+from noob.tube import TubeSpecification
 from noob.types import Epoch, Picklable
 from noob.logging import init_logger
 
@@ -36,6 +37,7 @@ class MessageType(StrEnum):
     event = "event"
     error = "error"
     epoch_ended = "epoch_ended"
+    spec = "spec"
 
 
 class NodeStatus(StrEnum):
@@ -82,6 +84,12 @@ class IdentifyValue(TypedDict):
     status: NodeStatus
     signals: list[str] | None
     slots: list[str] | None
+    subscribed_to: list[str]
+    """Node ids whose events we subscribe to (our upstream dependencies)"""
+    subscribers: list[str]
+    """
+    Node ids that have subscribed to us, discovered by watching the receive side of our XPUB outbox
+    """
 
 
 class AnnounceValue(TypedDict):
@@ -96,7 +104,8 @@ class ErrorValue(TypedDict):
 
 
 class ProcessValue(TypedDict):
-    epoch: Epoch
+    epoch: Epoch | None
+    """Epoch to process, or None to let the receiver decide (e.g. GUI-sent commands)"""
     input: dict | None
 
 
@@ -197,6 +206,16 @@ class EventMsg(Message):
     value: list[EventUnion]
 
 
+class SpecMsg(Message):
+    """
+    A tube's definition, streamed to viewers when it is loaded or edited.
+    ``node_id`` is the id of the tube the spec describes.
+    """
+
+    type_: Literal[MessageType.spec] = Field(MessageType.spec, alias="type")
+    value: TubeSpecification
+
+
 def _type_discriminator(v: dict | Message) -> str:
     typ = v.get("type", "any") if isinstance(v, dict) else v.type_
 
@@ -219,6 +238,7 @@ MessageUnion = A[
     | A[EventMsg, Tag("event")]
     | A[ErrorMsg, Tag("error")]
     | A[EpochEndedMsg, Tag("epoch_ended")]
+    | A[SpecMsg, Tag("spec")]
     | A[Message, Tag("any")],
     Discriminator(_type_discriminator),
 ]

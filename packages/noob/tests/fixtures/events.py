@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from noob.event import Event
+from noob.event import Event, EventMaker
 from noob.types import Epoch
 
 
@@ -22,3 +22,8 @@ def non_equivalent_event() -> Event:
         epoch=Epoch(0),
         value=NonEquivalent(),
     )
+
+
+@pytest.fixture()
+def eventmaker() -> EventMaker:
+    return EventMaker()

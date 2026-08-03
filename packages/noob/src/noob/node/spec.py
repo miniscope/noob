@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import inspect
 import sys
-from typing import Annotated, TypeAlias
+from typing import Annotated, Any, TypeAlias
 
 from annotated_types import Len
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from noob.edge import Signal, Slot
 from noob.types import AbsoluteIdentifier, DependencyIdentifier, PythonIdentifier
@@ -159,6 +166,18 @@ class NodeSpecification(BaseModel):
 
     model_config = ConfigDict(extra="forbid", serialize_by_alias=True)
 
+    @model_validator(mode="before")
+    @classmethod
+    def drop_computed(cls, data: Any) -> Any:
+        """
+        Accept our own serialized output: nodeinfo is computed on dump but
+        collides with ``extra="forbid"`` when a dumped spec is re-validated
+        (e.g. specs round-tripped through a GUI).
+        """
+        if isinstance(data, dict) and "nodeinfo" in data:
+            data = {key: val for key, val in data.items() if key != "nodeinfo"}
+        return data
+
     @field_validator("depends", mode="after")
     @classmethod
     def slots_unique(cls, val: DependsType | None) -> DependsType | None:
@@ -182,7 +201,9 @@ class NodeSpecification(BaseModel):
     def enabled_is_bool_or_input(cls, val: bool | AbsoluteIdentifier) -> bool | AbsoluteIdentifier:
         """If the "enabled" value is a string, it must be a reference to an input value"""
         if isinstance(val, str):
-            assert val.startswith('input.'), "Dynamic computation of enabled can only be performed from a tube-scoped input"
+            assert val.startswith(
+                "input."
+            ), "Dynamic computation of enabled can only be performed from a tube-scoped input"
         return val
 
     @computed_field  # type: ignore[prop-decorator]
@@ -203,7 +224,5 @@ class NodeSpecification(BaseModel):
             signals=node_cls.get_signals(self),
             slots=node_cls.get_slots(self),
         )
-
-
 
     __get_pydantic_json_schema__ = classmethod(id_optional_json_schema)  # type: ignore[var-annotated]

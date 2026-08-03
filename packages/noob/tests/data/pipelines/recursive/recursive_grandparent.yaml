@@ -1,0 +1,35 @@
+noob_id: testing-recursive-grandparent
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  Trivial wrapper around recursive-parent just for the sake of testing recursive tube spec loading
+input:
+  parent_start:
+    scope: tube
+    type: int
+  parent_multiply:
+    scope: process
+    type: int
+  child_start:
+    scope: tube
+    type: int
+  child_multiply:
+    scope: process
+    type: int
+
+nodes:
+  parent:
+    type: tube
+    params:
+      tube: testing-recursive-parent
+      parent_start: input.parent_start
+      child_start: input.child_start
+    depends:
+      - parent_multiply: input.parent_multiply
+      - child_multiply: input.child_multiply
+  return:
+    type: return
+    depends:
+      - index: parent.index
+      - child: parent.child
+      - parent: parent.parent

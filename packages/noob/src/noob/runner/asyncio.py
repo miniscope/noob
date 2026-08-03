@@ -31,7 +31,7 @@ class AsyncRunner(TubeRunner):
     exception_timeout: float = 10
     """
     When a node raises an error, wait this long (in seconds)
-    before cancelling the other currently running nodes. 
+    before cancelling the other currently running nodes.
     """
     max_pending_tasks: int = 128
     """
@@ -43,7 +43,6 @@ class AsyncRunner(TubeRunner):
         self._running = asyncio.Event()
         self._node_ready = asyncio.Event()
         self._init_lock = asyncio.Lock()
-        self._scheduler_lock = asyncio.Lock()
         self._task_sem = asyncio.Semaphore(self.max_pending_tasks)
         self._pending_futures = set()
         self._exception: BaseException | None = None
@@ -70,14 +69,13 @@ class AsyncRunner(TubeRunner):
         with self._asset_context(AssetScope.process):
             await self._before_process()
 
-            while self.tube.scheduler.is_active():
-                ready = await self._get_ready()
+            async for ready in self._get_ready():
                 ready = self._filter_ready(ready, self.tube.scheduler)
                 for node_info in ready:
                     await self._task_sem.acquire()
                     self._process_node(node_info=node_info, input=input)
 
-            self._after_process()
+            await self._after_process()
             result = self.collect_return()
         return result
 
@@ -181,7 +179,6 @@ class AsyncRunner(TubeRunner):
         node = self._get_node(node_id)
 
         # FIXME: since nodes can run quasiconcurrently, need to ensure unique assets per node
-        self.tube.state.init(AssetScope.node, node.edges)
         args, kwargs = self._collect_input(node, epoch, input)
         node, args, kwargs = self._before_call_node(node, *args, **kwargs)
         value = self._call_node(node, *args, **kwargs)
@@ -191,23 +188,24 @@ class AsyncRunner(TubeRunner):
     async def _before_process(self) -> None:  # type: ignore[override]
         if not self._running.is_set():
             await self.init()
+        self.tube.state.init(AssetScope.process)
         self.store.clear()
-        async with self._scheduler_lock:
-            self.tube.scheduler.add_epoch()
 
-    async def _get_ready(self, epoch: Epoch | None = None) -> list[MetaEvent]:  # type: ignore[override]
+    async def _after_process(self) -> None:  # type: ignore[override]
+        self.tube.state.deinit(AssetScope.process)
+
+    async def _get_ready(self, epoch: Epoch | None = None) -> AsyncGenerator[list[MetaEvent]]:  # type: ignore[override]
         if self._exception:
             await self._raise_exception()
-        async with self._scheduler_lock:
-            ready = self.tube.scheduler.get_ready()
-        if not ready:
-            # if none are ready, wait until another node is complete and check again
-            self._node_ready.clear()
-            await self._node_ready.wait()
-            async with self._scheduler_lock:
-                return self.tube.scheduler.get_ready()
-        else:
-            return ready
+        for ready in self.tube.scheduler.iter_epoch(epoch):
+            if not ready:
+                # if none are ready, wait until another node is complete and check again
+                self._node_ready.clear()
+                await self._node_ready.wait()
+                if self._exception:
+                    await self._raise_exception()
+                continue
+            yield ready
 
     def _call_node(self, node: Node, *args: Any, **kwargs: Any) -> Any:
         future: asyncio.Task | asyncio.Future
@@ -248,12 +246,13 @@ class AsyncRunner(TubeRunner):
             return
 
         value = future.result()
+        self.tube.state.deinit(AssetScope.node, node.edges)
+
         events = self.store.add_value(node.signals, value, node.id, epoch)
         if events is not None:
             all_events = self.tube.scheduler.update(events)
             if node.id in self.tube.state.dependencies:
                 self.tube.state.update(events)
-            self.tube.state.deinit(AssetScope.node, node.edges)
             self._call_callbacks(all_events)
         self._task_sem.release()
         self._node_ready.set()

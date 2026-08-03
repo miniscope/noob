@@ -8,28 +8,34 @@ import type {
   ElkNode as ElkNodeType,
   GroupNode,
   Handle,
-  Handles, InputSpecification,
+  Handles,
+  InputSpecification,
   NodeUnion,
   NoobNode,
   TitleNode,
   TubeNode,
   TubeSpecification,
-} from "./types.ts";
+} from "./types/types.ts";
 import type { Edge } from "@xyflow/react";
 
 /**
  * Create the reactflow form of a tube specification
  */
-export function tubeToFlow(tube: TubeSpecification): [Edge[], NodeUnion[]] {
+export function tubeToFlow(
+  tube: TubeSpecification,
+  title = false,
+): [Edge[], NodeUnion[]] {
   const edges = getEdges(tube.nodes);
   let nodes = getNodes(tube.nodes);
-  nodes = [_titleNode(tube.noob_id, tube.description ?? ""), ...nodes];
+  if (title) {
+    nodes = [_titleNode(tube.noob_id, tube.description ?? ""), ...nodes];
+  }
 
   if (tube.input && Object.keys(tube.input).length !== 0) {
-    nodes = [...nodes, _inputNode(tube.input)]
+    nodes = [...nodes, _inputNode(tube.input)];
   }
   if (tube.assets && Object.keys(tube.assets).length !== 0) {
-    nodes = [...nodes, _assetNode(tube.assets)]
+    nodes = [...nodes, _assetNode(tube.assets)];
   }
   return [edges, nodes];
 }
@@ -68,9 +74,22 @@ function getNodeEdges(node: NoobNode, prefix?: string): Edge[] {
   node.depends =
     typeof node.depends === "string" ? [{ value: node.depends }] : node.depends;
 
+  let positionIndex = 0;
   return Array.from(node.depends).map<Edge>((slotsig) => {
-    const slot = Object.keys(slotsig)[0];
-    const signal = slotsig[slot];
+    let slot: string;
+    let signal: string;
+    if (typeof slotsig === "string") {
+      // positional dependency: maps to the node's slot at this position
+      // (mirrors noob.node.base.Node.edges)
+      slot =
+        Object.keys(node.nodeinfo?.slots ?? {})[positionIndex] ??
+        String(positionIndex);
+      signal = slotsig;
+      positionIndex += 1;
+    } else {
+      slot = Object.keys(slotsig)[0];
+      signal = slotsig[slot];
+    }
     const signalParts = signal.split(".");
     let targetNode, targetHandle, sourceNode, sourceHandle;
     let edgeType = "default";
@@ -162,7 +181,7 @@ function getGenericNode(node: NoobNode, prefix?: string): ElkNodeType[] {
  */
 function getTubeNode(node: TubeNode, prefix?: string): NodeUnion[] {
   // Make the outer grouping node
-  const newPrefix = prefix ? `${prefix}.${node.id}` : node.id
+  const newPrefix = prefix ? `${prefix}.${node.id}` : node.id;
 
   const innerTube = node.params.tube;
   const targetHandles = innerTube.input
@@ -211,15 +230,12 @@ function getTubeNode(node: TubeNode, prefix?: string): NodeUnion[] {
     key: newPrefix,
   } as GroupNode;
 
-
-
   // Then the children that go within it
   let childNodes = Object.values(innerTube.nodes)
     .filter((child) => child.type !== "return")
     .flatMap<NodeUnion>((child) => getNode(child, newPrefix));
   if (innerTube.assets && Object.keys(innerTube.assets).length !== 0) {
-    childNodes = [...childNodes, _assetNode(innerTube.assets, newPrefix)]
-    console.log(childNodes);
+    childNodes = [...childNodes, _assetNode(innerTube.assets, newPrefix)];
   }
   childNodes = childNodes.map((child) => {
     return {
@@ -296,12 +312,14 @@ function _inputNode(input: Record<string, InputSpecification>): ElkNodeType {
         };
       }),
     },
-  }
+  };
 }
 
 // TODO: dedicated representation of assets
-function _assetNode(assets: Record<string, AssetSpecification>, prefix?: string): ElkNodeType {
-  console.log(assets)
+function _assetNode(
+  assets: Record<string, AssetSpecification>,
+  prefix?: string,
+): ElkNodeType {
   return {
     id: prefix ? `${prefix}.assets` : "assets",
     position: { x: 0, y: 0 },
@@ -312,14 +330,18 @@ function _assetNode(assets: Record<string, AssetSpecification>, prefix?: string)
       targetHandles: [],
       sourceHandles: Object.values(assets).map((i) => {
         return {
-          id: prefix ? `${prefix}.assets.signals.${i.id}` : `assets.signals.${i.id}`,
+          id: prefix
+            ? `${prefix}.assets.signals.${i.id}`
+            : `assets.signals.${i.id}`,
           label: i.id,
-          key: prefix ? `${prefix}.assets.signals.${i.id}` : `assets.signals.${i.id}`,
+          key: prefix
+            ? `${prefix}.assets.signals.${i.id}`
+            : `assets.signals.${i.id}`,
           required: true,
         };
       }),
     },
-  }
+  };
 }
 
 export const testExports = {

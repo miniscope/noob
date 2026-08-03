@@ -1,0 +1,42 @@
+name: Lint Rust
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - packages/noob-core/**
+      - .github/workflows/lint-rust.yml
+  pull_request:
+    paths:
+      - packages/noob-core/**
+      - .github/workflows/lint-rust.yml
+
+permissions:
+  contents: read
+
+jobs:
+  clippy:
+    name: clippy linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/noob-core
+      - name: Clippy (warnings are errors)
+        run: cargo clippy --manifest-path packages/noob-core/Cargo.toml --all-targets -- -D warnings
+
+
+  format:
+     name: rustfmt formatting
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v6
+       - uses: dtolnay/rust-toolchain@stable
+         with:
+           components: rustfmt
+       - name: Check formatting
+         run: cargo fmt --check --manifest-path packages/noob-core/Cargo.toml

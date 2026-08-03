@@ -1,22 +1,46 @@
 [project]
-dependencies = []
 requires-python = ">=3.11"
-
-[tool.pdm.dev-dependencies]
-dev = [
-    "copier>=9.12.0",
-    "-e file:///${PROJECT_ROOT}/packages/noob[dev]",
-    "-e file:///${PROJECT_ROOT}/packages/nobes[dev]",
+dependencies = [
+    "noob[dev] @ file:///${PROJECT_ROOT}/packages/noob",
+    "nobes[dev] @ file:///${PROJECT_ROOT}/packages/nobes",
+    "nobes-core @ file:///${PROJECT_ROOT}/packages/nobes-core",
+    "nobes-files @ file:///${PROJECT_ROOT}/packages/nobes-files",
+    "nobes-image @ file:///${PROJECT_ROOT}/packages/nobes-image",
+    "nobes-input @ file:///${PROJECT_ROOT}/packages/nobes-input",
+    "nobes-os @ file:///${PROJECT_ROOT}/packages/nobes-os",
+    "nobes-video @ file:///${PROJECT_ROOT}/packages/nobes-video",
+    "nobes-web @ file:///${PROJECT_ROOT}/packages/nobes-web",
 ]
 
-[tool.pdm.resolution.overrides]
-nobes-core = "file:///${PROJECT_ROOT}/packages/nobes-core"
-nobes-files = "file:///${PROJECT_ROOT}/packages/nobes-files"
-nobes-image = "file:///${PROJECT_ROOT}/packages/nobes-image"
-nobes-input = "file:///${PROJECT_ROOT}/packages/nobes-input"
-nobes-os = "file:///${PROJECT_ROOT}/packages/nobes-os"
-nobes-video = "file:///${PROJECT_ROOT}/packages/nobes-video"
-nobes-web = "file:///${PROJECT_ROOT}/packages/nobes-web"
+[dependency-groups]
+core = [
+    "noob-core[dev] @ file:///${PROJECT_ROOT}/packages/noob-core",
+]
+dev = [
+    "copier>=9.12.0",
+]
+docs = [
+    "sphinxcontrib-rust>=1.2.1",
+]
+
+[tool.pdm.workspace]
+members = [
+    "packages/noob",
+    "packages/noob-core",
+    "packages/nobes",
+    "packages/nobes-core",
+    "packages/nobes-files",
+    "packages/nobes-image",
+    "packages/nobes-input",
+    "packages/nobes-os",
+    "packages/nobes-video",
+    "packages/nobes-web",
+]
+
+[tool.pdm.resolution]
+# exclude from the lockfile so that in CI we can build once and share the wheel
+excludes = ["noob-core"]
+
 
 [tool.pdm.scripts]
 test-noob.cmd = "pytest --cov=noob --cov-append"
@@ -34,25 +58,29 @@ format.composite = [
     "ruff check --fix",
 ]
 
-docs = """sphinx-autobuild docs docs/_build/html"""
+docs = """sphinx-autobuild docs docs/_build/html  --ignore '*lib.md'"""
 docs-js = """concurrently
   'npm --prefix js/ run watch:docs'
-  'sphinx-autobuild docs docs/_build/html'
+  'sphinx-autobuild docs docs/_build/html --ignore "*lib.md"'
 """
 docs-build.cmd = "make html"
 docs-build.working_dir = "docs"
 docs-build-js = "npm --prefix js/ run build:docs"
+docs-build-wheels = "bash scripts/build-docs-wheels.sh"
+
 docs-test.composite = [
     "rm -rf ./docs/_build || true",
     "docs-build-js",
     "docs-build",
 ]
 docs-test.env = {SPHINXOPTS = "-W --keep-going"}
+
 mypy = "mypy"
 benchmark.cmd = "pytest tests/bench.py --codspeed --timeout=15"
 benchmark.working_dir = "packages/noob"
 new_nobes = "copier copy templates/nobes packages"
 render_schema = "python scripts/render_schema.py"
+
 
 [tool.black]
 target-version = ["py311", "py312", "py313"]
@@ -132,13 +160,19 @@ known-first-party = ["noob", "nobes"]
 
 [tool.mypy]
 mypy_path = "$MYPY_CONFIG_FILE_DIR/packages"
-packages = ["noob", "nobes"]
+packages = ["noob", "nobes", "noob_core"]
 warn_redundant_casts = true
 warn_unused_ignores = true
 check_untyped_defs = true
 show_error_context = true
 show_column_numbers = true
 show_error_code_links = true
+strict_equality = true
 pretty = true
 color_output = true
 plugins = ['pydantic.mypy']
+
+[tool.coverage.report]
+omit = [
+    "*/testing/*"
+]

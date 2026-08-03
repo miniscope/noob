@@ -1,0 +1,21 @@
+noob_id: testing-stateless-source
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  A tube with a stateless source node and a stateful dependent - 
+  the stateless source node should just iterate arbitrarily,
+  while the stateful dependent only runs when the preceding epoch has completed.
+
+nodes:
+  a:
+    type: noob.testing.count_source
+    stateful: false
+    params:
+      start: 1
+  b:
+    type: noob.testing.multiply
+    stateful: true
+    params:
+      left: 1
+    depends:
+    - right: a.index

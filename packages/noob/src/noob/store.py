@@ -7,12 +7,11 @@ from collections import defaultdict
 from collections.abc import Generator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from itertools import count
 from threading import Condition
 from typing import Any, Literal, TypeAlias, overload
 
 from noob.edge import Edge, Signal
-from noob.event import Event, is_event
+from noob.event import Event, EventMaker, is_event
 from noob.types import Epoch, EventMap, NodeID, SignalName
 
 EventDict: TypeAlias = dict[Epoch, dict[NodeID, dict[SignalName, list[Event]]]]
@@ -38,7 +37,7 @@ class EventStore:
     """
 
     events: EventDict = field(default_factory=_make_event_dict)
-    counter: count = field(default_factory=count)
+    event_maker: EventMaker = field(default_factory=EventMaker)
 
     _event_condition: Condition = field(default_factory=Condition)
     _subepochs: dict[Epoch, set[Epoch]] = field(default_factory=lambda: defaultdict(set))
@@ -99,29 +98,25 @@ class EventStore:
             values = [value] if len(signals) == 1 else value
 
             new_events = []
-            try:
-                for signal, val in zip(signals, values):
-                    # Nodes can emit explicit events or collections of events
-                    if is_event(val):
-                        self.add(val)
-                        new_events.append(val)
-                    elif isinstance(val, Sequence) and len(val) > 0 and is_event(val[0]):
-                        for e in val:
-                            self.add(e)
-                        new_events.extend(val)
-                    else:
-                        new_event = Event(
-                            id=next(self.counter),
-                            timestamp=timestamp,
-                            node_id=node_id,
-                            epoch=epoch,
-                            signal=signal,
-                            value=val,
-                        )
-                        self.add(new_event)
-                        new_events.append(new_event)
-            except:
-                breakpoint()
+            for signal, val in zip(signals, values):
+                # Nodes can emit explicit events or collections of events
+                if is_event(val):
+                    self.add(val)
+                    new_events.append(val)
+                elif isinstance(val, Sequence) and len(val) > 0 and is_event(val[0]):
+                    for e in val:
+                        self.add(e)
+                    new_events.extend(val)
+                else:
+                    new_event = self.event_maker.new_event(
+                        node_id=node_id,
+                        signal=signal,
+                        epoch=epoch,
+                        value=val,
+                        timestamp=timestamp,
+                    )
+                    self.add(new_event)
+                    new_events.append(new_event)
 
             self._event_condition.notify_all()
         return new_events

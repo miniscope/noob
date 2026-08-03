@@ -18,6 +18,7 @@ one of the goals of noob is to support portable, publishable, lockable[^comingso
 that don't require a python interpreter to be able to inspect.
 
 ```{noob-tube} docs-branch
+:runnable:
 ```                   
 
 ## Tube Specifications
@@ -378,6 +379,7 @@ Multiple signals can be merged as inputs to a single node's slots:
 ```
 
 ```{noob-tube} docs-merge
+:runnable:
 ```
 
 ### Branch
@@ -389,6 +391,7 @@ An event from a single signal can be branched an fed to multiple nodes:
 ```
 
 ```{noob-tube} docs-branch
+:runnable:
 ```
  
 ### Gather
@@ -404,6 +407,7 @@ With a fixed `n` value in the `gather` node's params, the gather node collects `
 ```
 
 ```{noob-tube} docs-gather-n
+:runnable:
 ```
 
 Where here the `letter_source` emits individual letters, the `gather` node collects 5 of them at a time, and the `concat` node joins them back together
@@ -428,6 +432,7 @@ emitting the events it has collected since the last trigger
 ```
 
 ```{noob-tube} docs-gather-dependent
+:runnable:
 ```
 
 Where the `gather` node collects numbers from the `a1` count source until the `a2` "sporadic_word" node returns a value.
@@ -440,7 +445,7 @@ so a set of runs might look like:
 | 0     | 0    |     |     |     |
 | 1     | 1    |     |     |     |
 | 2     | 2    |     |     |     |
-| 3     | 3    | "electricity"     | [0, 1, 2, 3] | {"electricity": [0, 1, 2, 3]} |
+| 3     | 3    | "electricity"     | `[0, 1, 2, 3]` | `{"electricity": [0, 1, 2, 3]}` |
 
 
 ### Map
@@ -472,6 +477,7 @@ Say you have a "child" tube like this
 ```
 
 ```{noob-tube} docs-recursive-child
+:runnable:
 ```
 
 You can include it in some "parent" tube like this:
@@ -481,6 +487,7 @@ You can include it in some "parent" tube like this:
 ```
 
 ```{noob-tube} docs-recursive-parent
+:runnable:
 ```
 
 ## Disabling Nodes

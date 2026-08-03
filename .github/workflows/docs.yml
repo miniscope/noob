@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-python@v5
         id: setup-python
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: 'pip'
 
       - name: Set up node
@@ -39,13 +39,63 @@ jobs:
           cache: npm
           cache-dependency-path: "js/package-lock.json"
 
+      # wasm wheels for the docs
+      - name: Restore built docs wheel
+        id: docs-wheel-cache
+        uses: actions/cache@v4
+        with:
+          path: docs/_static/wheels
+          key: docs-wheels-ubuntu-latest-${{ hashFiles('packages/noob-core/src/**', 'packages/noob-core/python/**', 'packages/noob-core/Cargo.toml', 'packages/noob-core/Cargo.lock', 'packages/noob-core/pyproject.toml', 'packages/noob/**') }}
+
+      # regular wheels for installation
+      - name: Restore built wheel
+        id: wheel-cache
+        uses: actions/cache@v4
+        with:
+          path: packages/noob-core/dist
+          key: core-wheel-ubuntu-latest-${{ hashFiles('packages/noob-core/src/**', 'packages/noob-core/python/**', 'packages/noob-core/Cargo.toml', 'packages/noob-core/Cargo.lock', 'packages/noob-core/pyproject.toml') }}
+
+      - name: Install pyodide-build
+        run: pip install pyodide-build
+      - name: Get pyodide-declared toolchain versions
+        id: pyodide
+        run: |
+          echo "emscripten=$(pyodide config get emscripten_version)" >> "$GITHUB_OUTPUT"
+          echo "rust=$(pyodide config get rust_toolchain)" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        id: toolchain
+        with:
+          toolchain: ${{ steps.pyodide.outputs.rust }}
+          targets: wasm32-unknown-emscripten
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.wheel-cache.outputs.cache-hit != 'true'
+        with:
+          workspaces: packages/noob-core
+      - name: Build wheel
+        if: steps.wheel-cache.outputs.cache-hit != 'true'
+        run: pipx run maturin build --release --out dist
+        working-directory: packages/noob-core
+
+      - uses: emscripten-core/setup-emsdk@v16
+        if: steps.docs-wheel-cache.outputs.cache-hit != 'true'
+        with:
+          version: ${{ steps.pyodide.outputs.emscripten }}
+
       - name: Install python dependencies
         run: |
           pip install pdm
-          pdm install --with docs
+          pdm install --with docs --with dev
+          pdm run python -m ensurepip
+          pdm run python -m pip install --no-index --find-links ./packages/noob-core/dist noob-core
 
       - name: Install node dependencies
         run: npm --prefix js/ ci
+
+      - name: build docs wheels
+        if: steps.docs-wheel-cache.outputs.cache-hit != 'true'
+        run: pdm run docs-build-wheels
 
       - name: Build docs
         run: pdm run docs-test

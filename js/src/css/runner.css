@@ -1,0 +1,184 @@
+/* runtime display + controls for runnable tubes */
+
+.noob-runnable {
+  padding: 0 0.5em;
+}
+
+.noob-runnable-flow {
+  height: 15em;
+}
+
+/* the tube's latest collected return value, parked over the flow */
+.noob-return-panel {
+  max-width: 40%;
+  padding: 0.3em 0.6em;
+  border: 1px solid var(--color-node-border);
+  border-radius: 0.4em;
+  background: color-mix(in srgb, var(--color-background) 85%, transparent);
+  font-size: 0.8em;
+
+  .return-label {
+    color: var(--color-text-minor);
+    font-style: italic;
+  }
+
+  pre {
+    margin: 0.2em 0 0;
+    font-family: monospace;
+    color: var(--color-primary);
+    white-space: pre-wrap;
+    max-height: 8em;
+    overflow-y: auto;
+  }
+}
+
+/* node activity pulse: remounted per batch, animates out */
+.react-flow__node .runtime-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: var(--xy-node-border-radius-default);
+  pointer-events: none;
+  animation: runtime-pulse 0.9s ease-out forwards;
+}
+
+@keyframes runtime-pulse {
+  from {
+    box-shadow: 0 0 5px 1px var(--color-primary);
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.react-flow__node .nodeEpoch {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  font-size: 0.7em;
+  color: var(--color-primary);
+}
+
+.handle-label .handle-value {
+  margin-left: 0.5em;
+  font-size: 0.85em;
+  font-family: monospace;
+  color: var(--color-primary);
+  animation: value-arrive 0.9s ease-out forwards;
+}
+
+@keyframes value-arrive {
+  from {
+    filter: brightness(2);
+  }
+  to {
+    filter: brightness(1);
+  }
+}
+
+.react-flow__edge path.runtime-edge-active {
+  stroke: var(--color-primary);
+  animation: edge-pulse 0.9s ease-out forwards;
+}
+
+@keyframes edge-pulse {
+  from {
+    filter: drop-shadow(0 0 6px var(--color-primary));
+  }
+  to {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+.noob-runner-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.3em 0;
+  font-size: 0.9em;
+
+  button {
+    font: inherit;
+    padding: 0.2em 0.8em;
+    border: 1px solid var(--color-node-border);
+    border-radius: 0.4em;
+    background: var(--color-background);
+    color: var(--color-text);
+    cursor: pointer;
+  }
+
+  button:hover:not(:disabled) {
+    border-color: var(--color-primary);
+  }
+
+  button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .runner-status {
+    margin-left: auto;
+    font-style: italic;
+    font-size: 0.85em;
+    color: var(--color-text-minor);
+  }
+
+  .runner-error {
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+    padding: 0.1em 0.5em;
+    border: 1px solid var(--xy-theme-selected);
+    border-radius: 0.4em;
+    color: var(--xy-theme-selected);
+    max-width: 50%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+.noob-event-table {
+  font-size: 0.8em;
+  max-height: 18em;
+  overflow-y: auto;
+
+  summary {
+    cursor: pointer;
+    color: var(--color-text-minor);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th {
+    text-align: left;
+    color: var(--color-text-minor);
+    font-weight: 400;
+    font-style: italic;
+  }
+
+  td {
+    font-family: monospace;
+    padding: 0.1em 0.6em 0.1em 0;
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    cursor: pointer;
+  }
+
+  tbody tr:hover {
+    color: var(--color-primary);
+  }
+
+  tr.meta-event {
+    color: var(--color-text-minor);
+  }
+
+  tr.event-detail pre {
+    white-space: pre-wrap;
+    margin: 0.2em 0;
+  }
+}

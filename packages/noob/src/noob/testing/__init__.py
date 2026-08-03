@@ -1,4 +1,7 @@
-from noob.testing.assets import AnyAsset, Initializer, counter
+from collections.abc import Callable
+from typing import Any
+
+from noob.testing.assets import AnyAsset, Initializer, LifecycleCounter, counter, counter_cm
 from noob.testing.nodes import (
     CountSource,
     CountSourceDecor,
@@ -36,6 +39,7 @@ from noob.testing.nodes import (
     repeat,
     rewind,
     sporadic_word,
+    sporadic_word_noevent,
     switch,
     this_or_that,
     word_counts,
@@ -61,6 +65,7 @@ __all__ = [
     "passthrough",
     "repeat",
     "sporadic_word",
+    "sporadic_word_noevent",
     "word_counts",
     "word_source",
     "multi_concat",
@@ -75,7 +80,9 @@ __all__ = [
     "StatefulMultiply",
     "UnannotatedGenerator",
     "counter",
+    "counter_cm",
     "CountSourceDecor",
+    "LifecycleCounter",
     "increment",
     "inject_epoch",
     "inject_eventmap",
@@ -89,3 +96,15 @@ __all__ = [
     "zip_iter",
     "Initializer",
 ]
+
+
+def __getattr__(name: str) -> Callable:
+    """
+    When we just get any old random node, e.g. in the docs for illustration,
+    just create some passthrough function
+    """
+
+    def _passthrough(**kwargs: Any) -> Any:
+        return kwargs
+
+    return _passthrough

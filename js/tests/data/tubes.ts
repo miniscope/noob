@@ -1,4 +1,4 @@
-import type { TubeSpecification } from "../../src/types";
+import type { TubeSpecification } from "../../src/types/types.ts";
 
 // placeholder value, not used in tests yet
 const nodeinfo = { node_id: "", type: "", signals: {}, slots: {} };
@@ -13,6 +13,7 @@ export const recursiveTube: TubeSpecification = {
     child_start: { id: "child_start", type: "int", scope: "tube" },
     child_multiply: { id: "child_multiply", type: "int", scope: "process" },
   },
+  assets: {},
   nodes: {
     a: {
       type: "noob.testing.count_source",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/miniscope/noob/tree/v1000.1.1/schema/tube.schema.json",
+  "$id": "https://github.com/miniscope/noob/tree/v1002.0.1/schema/tube.schema.json",
   "$defs": {
     "AssetScope": {
       "enum": [
@@ -118,6 +118,11 @@
           ],
           "default": null,
           "title": "Description"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
         }
       },
       "required": [],
@@ -180,9 +185,16 @@
           "title": "Params"
         },
         "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
           "default": true,
-          "title": "Enabled",
-          "type": "boolean"
+          "title": "Enabled"
         },
         "stateful": {
           "anyOf": [
@@ -272,7 +284,7 @@
       "type": "string"
     },
     "noob_version": {
-      "default": "1000.1.1",
+      "default": "1002.0.1",
       "title": "Noob Version",
       "type": "string"
     },

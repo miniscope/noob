@@ -160,7 +160,9 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         return cls.from_yaml(cls.path_from_id(id), context)
 
     @classmethod
-    def from_any(cls: type[Self], source: ConfigSource | Self, context: dict | None = None) -> Self:
+    def from_any(
+        cls: type[Self], source: ConfigSource | Self | dict, context: dict | None = None
+    ) -> Self:
         """
         Try and instantiate a config model from any supported constructor.
 
@@ -179,6 +181,8 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         """
         if isinstance(source, cls):
             return source
+        elif isinstance(source, dict):
+            return cls(**source)
         elif isinstance(source, str) and valid_config_id(source):
             return cls.from_id(source, context)
         elif isinstance(source, Path | str):
@@ -212,7 +216,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
                 from noob.logging import init_logger
 
                 init_logger("config").debug(
-                    "Model fo r%s found at %s", cls._model_name(), config_file
+                    "Model for %s found at %s", cls._model_name(), config_file
                 )
                 return config_file
 

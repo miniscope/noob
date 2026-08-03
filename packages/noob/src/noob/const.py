@@ -8,3 +8,8 @@ RESERVED_IDS = (
 
 META_SIGNAL = "__META__"
 """Signal name used for meta events from a node"""
+
+GUI_NODE_ID = "__gui"
+"""
+Sender ``node_id`` for GUI-originated runner messages.
+"""

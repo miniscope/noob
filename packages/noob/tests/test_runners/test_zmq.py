@@ -10,6 +10,7 @@ from noob import Tube
 from noob.event import Event
 from noob.input import InputCollection
 from noob.network.message import EventMsg, IdentifyMsg, IdentifyValue, Message, NodeStatus
+from noob.node import Return
 from noob.node.spec import NodeSpecification
 from noob.runner.zmq import NodeRunner, ZMQRunner
 from noob.types import Epoch
@@ -46,6 +47,8 @@ def test_message_roundtrip():
             outbox="ipc:///abc/123",
             signals=list(node.signals),
             slots=[s for s in node.slots],
+            subscribed_to=["a"],
+            subscribers=["c"],
         ),
     )
     as_bytes = msg.to_bytes()
@@ -158,7 +161,7 @@ async def test_statelessness():
             await sleep(0.1)
         assert len(events) == 2
 
-        # two more from the stateless chian
+        # two more from the stateless chain
         runner.command.process(Epoch(2), input={"multiply": 7})
         start = time()
         while len(events) < 4 and time() - start < 1:
@@ -175,19 +178,19 @@ async def test_statelessness():
     assert len(events) == 12
     assert runner.store.events[Epoch(0)]["a"]["value"][0]["value"] == 11 * 3
     assert runner.store.events[Epoch(0)]["b"]["value"][0]["value"] == 11
-    # node d runs epoch 1 and 2 first, since they were queued first
-    # and we forced a stateful node to be stateless, so
-    # 1 (from count source) * 3 (from internal state) * 11 (input)
-    assert runner.store.events[Epoch(0)]["d"]["value"][0]["value"] == 11 * 3
+    # node d still runs epochs in order, since its stateful predecessor only starts at 0.
+    # we do the best we can do run in order even while stateless.
+    # 1 (from count source) * 1 (from internal state) * 11 (input)
+    assert runner.store.events[Epoch(0)]["d"]["value"][0]["value"] == 11
 
     assert runner.store.events[Epoch(1)]["a"]["value"][0]["value"] == 3
     assert runner.store.events[Epoch(1)]["b"]["value"][0]["value"] == 3
-    # 2 (from count source) * 1 (from internal state) * 3
-    assert runner.store.events[Epoch(1)]["d"]["value"][0]["value"] == 3 * 2 * 1
+    # 2 (from count source) * 2 (from internal state) * 3
+    assert runner.store.events[Epoch(1)]["d"]["value"][0]["value"] == 2 * 2 * 3
 
     assert runner.store.events[Epoch(2)]["a"]["value"][0]["value"] == 7 * 2
     assert runner.store.events[Epoch(2)]["b"]["value"][0]["value"] == 7
-    assert runner.store.events[Epoch(2)]["d"]["value"][0]["value"] == 7 * 3 * 2
+    assert runner.store.events[Epoch(2)]["d"]["value"][0]["value"] == 7 * 3 * 3
 
 
 @pytest.mark.asyncio
@@ -389,7 +392,7 @@ async def test_noderunner_stores_clear():
 
     runner._freerun.set()
     assert len(runner.store.events) == 3
-    iterator = runner.await_inputs()
+    iterator = runner.iter_inputs()
     _, _, epoch = await anext(iterator)
     runner.scheduler.end_epoch(Epoch(0))
     # store clears after the yield
@@ -589,3 +592,43 @@ def test_assets_receives_assets_from(asset_noderunners):
     }
     assert runners["c3"].receives_assets_from == {}
     assert runners["d1"].receives_assets_from == {"count_runner_depends": {"c2", "c1"}}
+
+
+@pytest.mark.parametrize("spec", ["testing-basic", "testing-gather-dependent"])
+def test_subscription_barrier_establishes_pipes(spec):
+    """
+    The XPUB subscription barrier must confirm every event pipe before init returns.
+
+    This guards against the ZMQ 'slow joiner': a publisher silently drops messages sent
+    before a subscriber's subscription has propagated. ``init`` must not complete until
+    every pipe is observed live:
+
+    * the command's inbox is subscribed to every node's outbox (node -> command)
+    * every node is subscribed to the command's control outbox (command -> node)
+    * for every dependency edge U -> D, D is subscribed to U (node -> node)
+    """
+    tube = Tube.from_specification(spec)
+    runner = ZMQRunner(tube=tube)
+    real_nodes = {nid for nid, node in tube.nodes.items() if not isinstance(node, Return)}
+    with runner:
+        command = runner.command
+        assert command is not None
+        nodes = command._nodes
+
+        # node -> command: command's inbox subscribed to every node outbox
+        for node_id in real_nodes:
+            assert "command" in nodes[node_id].get(
+                "subscribers", []
+            ), f"command never confirmed its subscription to {node_id}'s outbox"
+
+        # command -> node: every node subscribed to the command's control outbox
+        assert (
+            real_nodes <= command._subscribers
+        ), f"command outbox missing subscribers: {real_nodes - command._subscribers}"
+
+        # node -> node: each downstream confirmed subscribed to its upstream
+        for edge in tube.edges:
+            if edge.source_node in real_nodes and edge.target_node in real_nodes:
+                assert edge.target_node in nodes[edge.source_node].get(
+                    "subscribers", []
+                ), f"{edge.target_node} never confirmed subscribing to {edge.source_node}"

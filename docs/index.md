@@ -19,12 +19,24 @@ TubeClassicEdition()
 
 ```{toctree}
 :maxdepth: 2
-:caption: Contents:
+:caption: Usage:
 
-usage/index
-examples/index
+usage/nodes
+usage/tubes
+usage/runners
+usage/assets
+usage/epochs
+usage/events
+usage/config
+usage/zmq
+```
+
+```{toctree}
+:maxdepth: 3
+:caption: Developer:
+
 api/index
-
+api/noob-core/index
 ```
 
 ```{toctree}

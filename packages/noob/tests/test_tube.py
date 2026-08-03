@@ -126,3 +126,22 @@ def test_extends_merge_depends():
     merged = merge_tube_specs(left, right)
     assert len(merged["nodes"]) == 1
     assert merged["nodes"]["a"]["depends"] == right["nodes"]["a"]["depends"]
+
+
+def test_recursive_spec_load():
+    """
+    Loading a spec recursively loads all its children
+    """
+    spec = TubeSpecification.from_id("testing-recursive-grandparent", context={"recursive": True})
+
+    assert isinstance(spec.nodes["parent"].params["tube"], TubeSpecification)
+    parent = spec.nodes["parent"].params["tube"]
+    assert isinstance(parent.nodes["b"].params["tube"], TubeSpecification)
+    child = parent.nodes["b"].params["tube"]
+
+    parent_expected = TubeSpecification.from_id(
+        "testing-recursive-parent", context={"recursive": True}
+    )
+    child_expected = TubeSpecification.from_id("testing-recursive-child")
+    assert parent_expected == parent
+    assert child_expected == child

@@ -2,6 +2,265 @@
 
 ## Upcoming
 
+**Added**
+
+- [`#252`](https://github.com/miniscope/noob/pull/251) - 
+  Add a pyodide runner so that noob tubes can run directly in the docs!
+  This brings several basic JS features that we will need for the actual GUI,
+  run controls, events passed to nodes in the GUI, etc.
+  It has a generic event handler so that events that come from a local server
+  should work the same as events that come from pyodide.
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  For documentation purposes, a generic `__getattr__` was added to `noob.testing`,
+  so that when referring to "some node" an actual passthrough node can be gotten.
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  {meth}`.YAMLMixin.from_any` now allows a specification to be passed as a dict.
+
+**Changed**
+
+- [`#251`](https://github.com/miniscope/noob/pull/251) - 
+  Use pdm's experimental workspace support
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  `TubeSpecification`s yielded in the GUI viewer are now wrapped in `SpecMsg`s,
+  so that all point-to-point communication within noob stays within a single message format.
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  {class}`.Gather` now uses a {class}`threading.Lock` rather than `multiprocessing` - 
+  multiprocessing was never necessary and isn't compatible with pyodide.
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  {class}`.ProcessMsg` can have `epoch` be `None`, when e.g. being controlled by some proxy
+  that allows the runner (specifically, its scheduler) to decide the epoch.
+
+**Fixed**
+
+- [`#251`](https://github.com/miniscope/noob/pull/251) - 
+  A race condition could cause ZMQ runners to hang due to slow subscribers in ZMQ PUB/SUB sockets,
+  wherein the node marked itself as "ready" as soon as it had *started* connecting to an upstream PUB
+  node, rather than when the connection had been fully established.
+  Now, nodes dynamically track who is subscribed to them and report that in their `identify` messages,
+  so that subscribers can know when the publisher connection is open without needing to give the publisher
+  advance knowledge of who should be subscribed to it (keeping the asymmetry of information implied by dependencies)
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  {class}`.NodeSpecification` ignores `nodeinfo` when validating,
+  so specs can again be round-tripped.
+- [`#252`](https://github.com/miniscope/noob/pull/251) -
+  {class}`.TubeSpecification`s are serialized by alias so that e.g. `type_` comes out as `type`
+
+## v1002.*
+
+### v1002.0.0 - 26-07-20
+
+This version reimplements the TopoSorter and the Scheduler in a rust extension module `noob-core`,
+and with that makes some dramatic performance improvements.
+
+You can see the [noob-core](./api/noob-core/index.md) documentation for more details on the implementation.
+
+This was a relatively faithful port,
+but we resolved a number of bugs and made a few planned changes and improvements
+as they were encountered while porting the code.
+
+**Changed**
+
+- {rust:struct}`~noob_core::epoch::Epoch`, {rust:struct}`~noob_core::sorter::Sorter` (formerly `TopoSorter`),
+  and {class}`~noob.scheduler.Scheduler` ({rust:struct}`noob_core::scheduler::Scheduler`) have been moved to {rust:crate}`noob_core`.
+- {attr}`.Epoch.root` now returns an int, and {attr}`.Epoch.root_epoch` an actual epoch object.
+- `done`/`resurrect` now validate all nodes before mutating anything.
+  Python used to raise mid-loop, leaving partial state behind.
+- {meth}`.Scheduler.done` is idempotent for a single graph item and epoch -
+  sorter mutations are gated on expire_node's return value, making duplicate calls harmless.
+- {class}`.Epoch` ordering is now correctly lexicographic as
+  `(root: int, (node_id: str, subepoch: int), ...)` tuples.
+- Previously, {class}`.Scheduler` would create subgraphs by filtering only those nodes for which we had a specification.
+  This is usually true in noob, but an unnecessary assumption,
+  since we should just consider the whole graph topology everywhere.
+- {meth}`.Scheduler.expire` on a completed epoch silently no-ops like {meth}`.Scheduler.done` does (python used to `raise`).
+- Since {meth}`.Scheduler.epoch_completed` is so much cheaper now,
+  all checks for epoch completion use it rather than ad-hoc checks to the `epoch_log`
+
+**Removed**
+
+- **`TopoSorter` was removed from the python package and is now a rust-only struct.**
+  If there is any interest in exposing the topo sorter to python,
+  that can be done, but keeping it private in rust encourages the scheduler to be the
+- `node_id` was removed from the signature of {meth}`.Scheduler.get_ready`.
+  In general we want to put development pressure on improving the graph model,
+  rather than carving hacks out of the scheduler.
+- A number of places where `epoch` could be `None` in scheduler methods:
+  Now that the scheduler manages epochs more tightly,
+  we want any callers to always follow the scheduler,
+  and that typically means knowing the epoch.
+
+**Fixed**
+
+- `TopoSorter.mark_expired` could double process nodes,
+  since it didn't deduplicate or filter by whether a node was actually out/already done
+  when unlocking optional successors.
+- Disabled but stateful nodes no longer added to topo sorter:
+  We don't model nodes that don't affect the graph.
+- Sorter creation no longer accidentally add disabled stateful nodes.
+- {meth}`.Scheduler.source_nodes` filters disabled nodes.
+- Previously, optional dependency logic could become incorrect:
+  first the optional successors could be unlocked, but then canceled.
+  This defeats the purpose of what optional dependencies do,
+  so now we flip the order, and optional deps are unlocked after handling normal expiration.
+  This also moves the readying successors logic to the sorter,
+  which is where it should be anyway.
+
+**Perf**
+
+- Well, the whole thing is like twice as fast.
+
+## v1001.*
+
+### v1001.0.0 - 26-07-16
+
+**Added**
+
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  `stateful` is propagated from {class}`~.Node` classes back to {class}`~.NodeSpecification` s.
+  `stateful` can be specified explicitly in the spec, or computed automatically by the node class.
+  So we need to make sure to propagate that with the spec for e.g. the `ZMQRunner`
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  {meth}`~.Scheduler.iter_epoch` and {meth}`~.Scheduler.iter_ready` methods
+  to iterate over a single epoch's nodes, or any nodes, respectively, as they are ready.
+  This will largely replace the previous pattern of repeatedly calling `get_ready` 
+  within a `while scheduler.is_active()` loop.
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  A special `('meta', 'previous_epoch')` signal is added to {class}`.TopoSorter`s
+  to model statefulness and inter-epoch dependencies within the graph directly.
+  Nodes that are `stateful` will depend on this signal, 
+  which is marked as done when the previous epoch completes.
+  This ensures that nodes that must be run with ordered inputs are in all contexts,
+  and dramatically simplifies scheduling while also making concurrent runners
+  naturally to handle multiple epochs simultaneously with stateless tubes.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  A {attr}`.Scheduler.epoch` property was added to get the current epoch.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  {meth}`.TopoSorter.get_state` convenience method to get a summary of a topo sorter's state
+  (for debugging purposes).
+  This copies the internal sets to protect them from mutation,
+  and so shouldn't be used in any perf-sensitive paths.
+- [`#233`](https://github.com/miniscope/noob/pull/233) -
+  Preliminary representation of assets as nodes in JS viewer
+- [`#234`](https://github.com/miniscope/noob/pull/234) - 
+  Inputs can be `optional` and have a `default`. 
+  These defaults have to be basic yaml types at the moment,
+  more elaborate types are still TODO.
+- [`#234`](https://github.com/miniscope/noob/pull/234) -
+  Nodes can use a tube-scoped `input` to control their enabledness
+- [`#234`](https://github.com/miniscope/noob/pull/234) -
+  The {class}`~noob.input.InputCollection` is now passed in the dependency-injected
+  {class}`~noob.types.RunnerContext`
+- [`#237`](https://github.com/miniscope/noob/pull/237) - 
+  {class}`~noob.node.Node`s now have an {attr}`~noob.node.Node.logger` property 
+  that lazily instantiates a logger, if accessed.
+- [`#244`](https://github.com/miniscope/noob/issues/239) - 
+  Tube nodes propagate the signals of the enclosed tube by reading the deps of its "return" node.
+- [`246`](https://github.com/miniscope/noob/pull/246) -
+  Support contextmanagers as assets.
+
+**Changed**
+
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  Moved scheduling logic out of runners and into the scheduler!
+  Runners used to have to internally keep their own counters of the current/active epochs,
+  which was a huge mess and a bad division of labor.
+  Now the relationship between a runner and the scheduler is much less janky.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  The ZMQRunner was simplified and its terrible state management was streamlined.
+  There are still some flaky test failures from threading deadlocks, but we are getting there.
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  the {class}`.TubeRunner`'s `_get_ready` method was made an iterator, yielding from the scheduler.
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  The {class}`.TopoSorter` no longer returns `NodeSignal`s as "ready".
+  Instead it marks them as being "out" along with the node, returning only the node as ready.
+  Previously, they could be returned with a warning in the event of a bug or an
+  inconsistent scheduling state that marked a node as done without marking its signals as done.
+  Signals can't be run, it makes no sense for them to be ready.
+  They are always out at the same time that a node is,
+  even if they can have different ending conditions
+  (i.e. being marked "done" by emitting an event or "expired" by emitting `NoEvent`)
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  The {class}`.Scheduler`'s node completion methods all return a list of {class}`.MetaEvent`s
+  rather than one or `None`, allowing multiple epochs to be marked as completed at once.
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  An epoch is considered completed by {meth}`.Scheduler.epoch_completed` 
+  *only* when it is fully complete, rather than when no more progress can be made,
+  but a completion event has not been emitted. 
+  This clarifies the distinction and use between it and {meth}`.Scheduler.is_active`,
+  which returns `False` when an epoch *should* be marked as completed 
+  because no more progress can be made, 
+  while `epoch_completed` checks if that completion event has been emitted. 
+- [`#234`](https://github.com/miniscope/noob/pull/234) -
+  The `type` of an input can be an arbitrary python type expression instead of an absolute identifier.
+  These are still unused, but they will be used for static type checking in the future.
+- [`#235`](https://github.com/miniscope/noob/pull/235/) -
+  Assets (and other specifications) now include their `id` when being dumped to json
+
+**Fixed**
+
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  The `ZMQRunner` now more correctly locks the state around its scheduler,
+  avoiding race conditions between the command node thread and the main thread.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Events in the parent epoch that are from a node that is *not* the one that induced subepochs
+  can mark their counterparts in subepochs as expired.
+  This is how it was supposed to work, and how `gather`ing works - 
+  To decrease cardinality, a node emits an event in the parent.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Empty sets are no longer created in the Scheduler's `_subepochs` dict for every epoch,
+  even when there are no subepochs.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Dynamically enabling/disabling a node with the scheduler now works in epochs that have already been scheduled,
+  however this means that nodes should only be enabled/disabled in between running epochs,
+  or else nodes may be re-ran in those epochs.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Even stateless tubes run in a "best effort" epoch order -
+  when a bunch of epochs are queued up out of order,
+  the scheduler ensures that ready nodes are yielded in an epoch-sorted order.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Fix!!!! a longstanding threadlocking problem in the ZMQRunner.
+  Twofold: the socket iteration method never actually yielded the eventloop when it was flooeded
+  with messages from an upstream node that is much faster than it.
+  This meant noderunners would sometimes just never process any events because they were just receiving messages.
+  Similarly, the command node would get flooded, and it would never actually call the coro used to quit it.
+  So: force a context switch using sleep(0) in the socket receive iterator,
+  and use a TaskGroup to more reliably force the command node to quit the thread,
+  freeing the socket.
+- [`#233`](https://github.com/miniscope/noob/pull/233) -
+  Correctly handle nexted prefixes in JS viewer
+- [`#234`](https://github.com/miniscope/noob/pull/234) -
+  {class}`.node.Tube` nodes now correctly accept params in their specs
+  and forward them and other inputs to the {class}`~noob.tube.Tube` they wrap.
+- [`#234`](https://github.com/miniscope/noob/pull/234) -
+  The {class}`.ZMQRunner` 's {class}`.zmq.node.NodeRunner` class now correctly injects
+  a requested {class}`~noob.types.RunnerContext`
+- [`#236`](https://github.com/miniscope/noob/pull/236) -
+  `context: recursive` when loading a tube specification actually recurses more than two levels
+- [`#236`](https://github.com/miniscope/noob/pull/236) -
+  Validation errors for tube specifications are logged rather than suppressed so it's possible to know
+  what is wrong with the spec while working on it
+- [`238`](https://github.com/miniscope/noob/pull/238) - 
+  No more validation errors on type annotations on node process functions from the
+  {class}`~noob.edge.Signal` class.
+- [`#200`](https://github.com/miniscope/noob/issues/200),
+  [`#244`](https://github.com/miniscope/noob/pull/244) - 
+  Allow multiple assets to be updated from the same node,
+  either multiple signals to different assets or the same signal to multiple assets.
+- [`#162`](https://github.com/miniscope/noob/issues/162)
+  [`#239`](https://github.com/miniscope/noob/issues/239)
+  [`#245`](https://github.com/miniscope/noob/issues/245) - 
+  Correctly propagate NoEvents from nested tubes
+- [`246`](https://github.com/miniscope/noob/pull/246) -
+  Only `init` node-scoped assets when required by edges,
+  rather than initializing all assets when edges are `None`
+- [`246`](https://github.com/miniscope/noob/pull/246) -
+  Don't double-init node-scoped assets in the async runner.
+
+**Removed**
+- [`#231`](https://github.com/miniscope/noob/pull/231) - 
+  {class}`.zmq.NodeRunner` 's `await_inputs` and `await_node` methods 
+  were removed in favor of the scheduler iterators.
+
 **Perf**
 
 - [`#224`](https://github.com/miniscope/noob/pull/224) - 
@@ -13,6 +272,27 @@
 - [`#230`](https://github.com/miniscope/noob/pull/230) ([@vaishnavidesai09](https://github.com/vaishnavidesai09)) -
   Use a sets for O(1) lookups in the epoch log rather than O(n) lookups in deque.
   ~6% scheduler performance improvement.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  Cached {attr}`.Node.signals` and {attr}`.Node.slots` as they are frequently accessed props
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  More of the {class}`.TopoSorter`'s methods were adapted to be batched set operations
+  rather than iterators.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  {class}`.Epoch` 's `__eq__` method was removed to avoid using it during lookups,
+  using hash instead and normal tuple equality.
+  Being able to `==` an integer wasn't worth the performance cost.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  {class}`.Epoch`'s creation was optimized to avoid remaking {class}`.EpochSegment`s.
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  {class}`.Epoch` gained `__slots__`
+- [`#232`](https://github.com/miniscope/noob/pull/232) -
+  Use a snowflake-like identifier for event IDs rather than UUIDs,
+  add helpers for consistently making events.
+
+**CI**
+- [`#231`](https://github.com/miniscope/noob/pull/231) -
+  pytest hooks were added to set the debug logging level when re-running an action in debug mode.
+
 
 ## v1000.*
 
