@@ -383,8 +383,7 @@ class Tube(BaseModel):
 
     @classmethod
     def _init_scheduler(cls, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> Scheduler:
-        node_specs = {id_: node for id_, node in nodes.items()}
-        return Scheduler.from_specification(node_specs, edges)
+        return Scheduler.from_specification(nodes, edges)
 
     @classmethod
     def _init_state(

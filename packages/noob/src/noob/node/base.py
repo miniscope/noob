@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import functools
 import inspect
 import logging
@@ -185,6 +186,9 @@ class Node(BaseModel):
                 )
 
             enabled = bool(input_collection.get(spec.enabled.split(".", 1)[-1]))
+            # FIXME: Temporary hack - this is extremely implicit, just to get mio running
+            # to get enabledness to the scheduler - want a clearer way of resolving this.
+            spec.enabled = enabled
         else:
             enabled = spec.enabled
 
@@ -397,19 +401,16 @@ class WrapClassNode(Node):
     instance: type | None = None
     _gen: Generator | None = PrivateAttr(default=None)
 
-    def model_post_init(self, context: Any, /) -> None:
-        """
-        Get the method decorated with :func:`.process_method`,
-        assign it to `process`, see class docstring.
-        """
+    def init(self) -> None:
         self.instance = self.cls(**self.params)
         fn_name = self._get_process_method(self.cls)
         fn = getattr(self.instance, fn_name)
         self.__dict__["process"] = fn
-        super().model_post_init(context)
 
     def deinit(self) -> None:
         self.instance = None
+        with contextlib.suppress(KeyError):
+            del self.__dict__["process"]
 
     @classmethod
     def get_signals(cls, spec: NodeSpecification | None = None) -> dict[str, Signal]:

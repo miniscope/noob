@@ -27,7 +27,7 @@ but can be depended on
 """
 
 
-@dataclass()
+@dataclass
 class Scheduler:
     nodes: dict[str, NodeSpecification]
     edges: list[Edge]
