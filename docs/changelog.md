@@ -56,6 +56,8 @@
   so specs can again be round-tripped.
 - [`#252`](https://github.com/miniscope/noob/pull/251) -
   {class}`.TubeSpecification`s are serialized by alias so that e.g. `type_` comes out as `type`
+- [`#256`](https://github.com/miniscope/noob/pull/256) -
+  `deinit` on wrapped generator nodes actually deinitializes them, and `init` recreates them.
 
 ## v1002.*
 
