@@ -219,8 +219,6 @@ class TubeRunner(ABC):
         except (KeyboardInterrupt, StopIteration):
             # fine, just return
             pass
-        finally:
-            self.deinit()
 
         return outputs if outputs else None
 
