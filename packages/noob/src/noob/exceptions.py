@@ -1,5 +1,5 @@
 from noob_core.exceptions import *  # noqa: F403
-from noob_core.exceptions import NoobCoreError
+from noob_core.exceptions import NoobCoreError, SchedulerError
 
 
 class NoobError(NoobCoreError):
@@ -88,3 +88,7 @@ class TerminateTaskGroup(NoobError):
     """
     https://docs.python.org/3/library/asyncio-task.html#terminating-a-task-group
     """
+
+
+class SchedulerExhaustedError(SchedulerError, RuntimeError):
+    """A scheduler is exhausted and can't do any more useful work!"""

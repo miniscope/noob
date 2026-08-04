@@ -15,6 +15,14 @@
   so that when referring to "some node" an actual passthrough node can be gotten.
 - [`#252`](https://github.com/miniscope/noob/pull/251) -
   {meth}`.YAMLMixin.from_any` now allows a specification to be passed as a dict.
+- [`#256`](https://github.com/miniscope/noob/pull/256) - 
+  Generators and other nodes that have some limited lifespan may now emit a `MetaSignal.Exhausted`
+  to signal that they are done forever and will emit no more events.
+  The scheduler will finish out any remaining items that can be reached/
+  any outstanding work from previously emitted events,
+  and then further calls to iterate nodes will raise a `SchedulerExhaustedError`.
+  Exhaustion is node-specific: if there are other source nodes that can still run,
+  then the scheduler will continue to do that.
 
 **Changed**
 
@@ -29,6 +37,10 @@
 - [`#252`](https://github.com/miniscope/noob/pull/251) -
   {class}`.ProcessMsg` can have `epoch` be `None`, when e.g. being controlled by some proxy
   that allows the runner (specifically, its scheduler) to decide the epoch.
+- [`#256`](https://github.com/miniscope/noob/pull/256) -
+  Runners now no longer automatically `deinit` at the end of a `run` or `iter` call:
+  implicit initialization will become an error in future versions,
+  and in the meantime we don't want to also have implicit deinitialization.
 
 **Fixed**
 
@@ -44,6 +56,8 @@
   so specs can again be round-tripped.
 - [`#252`](https://github.com/miniscope/noob/pull/251) -
   {class}`.TubeSpecification`s are serialized by alias so that e.g. `type_` comes out as `type`
+- [`#256`](https://github.com/miniscope/noob/pull/256) -
+  `deinit` on wrapped generator nodes actually deinitializes them, and `init` recreates them.
 
 ## v1002.*
 
