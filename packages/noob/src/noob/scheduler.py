@@ -11,7 +11,7 @@ from noob_core import Scheduler as _RustScheduler
 
 from noob.edge import Edge
 from noob.event import Event, EventMaker, MetaEvent, MetaEventType, MetaSignal
-from noob.exceptions import EpochCompletedError, EpochExistsError
+from noob.exceptions import EpochCompletedError, EpochExistsError, SchedulerExhaustedError
 from noob.logging import init_logger
 from noob.node import NodeSpecification
 from noob.types import Epoch, NodeID, NodeSignal, SignalName
@@ -79,6 +79,10 @@ class Scheduler:
                 self._core.add_epoch_at(epoch)
         if self._core.epoch_completed(epoch):
             raise EpochCompletedError(f"Epoch {epoch} has already been completed")
+        if not self._core.is_active_at(epoch) and self._core.exhausted:
+            raise SchedulerExhaustedError(
+                "Scheduler is exhausted and cannot run until re-initialized"
+            )
         while self._core.is_active_at(epoch):
             yield self.get_ready(epoch)
 
@@ -90,6 +94,11 @@ class Scheduler:
         TODO: document stateful/stateless behavior, need for callers to handle breaks in iteration
         """
         if not self._core.is_active():
+            if self._core.exhausted:
+                raise SchedulerExhaustedError(
+                    "Scheduler is exhausted and cannot run until re-initialized"
+                )
+
             self._core.add_epoch()
 
         while self._core.is_active():
@@ -173,7 +182,13 @@ class Scheduler:
 
         ended = self._core.update(
             [
-                (e["epoch"], e["node_id"], e["signal"], e["value"] is MetaSignal.NoEvent)
+                (
+                    e["epoch"],
+                    e["node_id"],
+                    e["signal"],
+                    e["value"] is MetaSignal.NoEvent,
+                    e["value"] is MetaSignal.Exhausted,
+                )
                 for e in events
             ]
         )

@@ -50,11 +50,11 @@ impl PyScheduler {
     /// and pass to the internal update method.
     pub(crate) fn update(
         &mut self,
-        events: Vec<(EpochArg, String, String, bool)>,
+        events: Vec<(EpochArg, String, String, bool, bool)>,
     ) -> PyResult<Vec<Epoch>> {
         let interner = interner();
         let mut core_events = Vec::with_capacity(events.len());
-        for (epoch, node_id, signal, no_event) in events {
+        for (epoch, node_id, signal, no_event, exhausted) in events {
             // filter the events to only those that we want to process further with the relevant sorters
             // do this here, as soon as we can, to avoid any unnecessary work/iteration later.
             let Some(node) = interner
@@ -77,6 +77,7 @@ impl PyScheduler {
                 node,
                 signal,
                 no_event,
+                exhausted,
             });
         }
         Ok(self.0.update(core_events)?)
@@ -302,6 +303,11 @@ impl PyScheduler {
             .map(|(epoch, subeps)| (epoch.clone(), HashSet::from_iter(subeps.iter().cloned())))
             .collect()
     }
+
+    #[getter(exhausted)]
+    fn exhausted(&self) -> bool {
+        self.0.exhausted
+    }
 }
 
 /// Python-compatible counterpart of SorterState
@@ -371,4 +377,5 @@ pub struct UpdateEvent {
     pub node: ItemID,
     pub signal: Option<ItemID>,
     pub no_event: bool,
+    pub exhausted: bool,
 }

@@ -70,6 +70,8 @@ pub struct Scheduler {
     /// All the nodes and signals that we care about for updates -
     /// i.e. all those that are present in our template sorter
     pub(crate) graph_items: FxHashSet<ItemID>,
+    /// Whether a graph is exhausted: i.e. in a new epoch, there are no nodes capable of running.
+    pub exhausted: bool,
 
     /// Sorters for active epochs (dropped on completion)
     epochs: BTreeMap<Epoch, Sorter>,
@@ -111,6 +113,7 @@ impl Scheduler {
             subgraph_templates: FxHashMap::default(),
             source_nodes,
             graph_items,
+            exhausted: false,
             epochs: BTreeMap::new(),
             epoch_log: BTreeSet::new(),
             epoch_log_len: DEFAULT_EPOCH_LOG_LEN,
@@ -137,6 +140,10 @@ impl Scheduler {
         let mut done_epochs: Vec<Epoch> = Vec::new();
         for e in events {
             if done_nodes.insert((e.epoch.clone(), e.node)) {
+                if e.exhausted {
+                    self.exhaust(e.node)?;
+                }
+
                 match self.done(&e.epoch, e.node, false) {
                     Ok(mut epochs) if !epochs.is_empty() => {
                         done_epochs.append(&mut epochs);
@@ -148,7 +155,7 @@ impl Scheduler {
                 }
             }
             if let Some(signal) = e.signal {
-                if e.no_event {
+                if e.no_event || e.exhausted {
                     done_epochs.append(&mut self.expire(&e.epoch, signal, true, true)?);
                 } else {
                     done_epochs.append(&mut self.done(&e.epoch, signal, true)?);
@@ -696,6 +703,45 @@ impl Scheduler {
         }
 
         Ok(events)
+    }
+
+    /// Mark a node as having been exhausted:
+    /// Unlike expired nodes, which did run but emitted no event,
+    /// Exhausted nodes can't be run any more, ever - e.g. a generator that emitted StopIteration.
+    /// This does *not necessarily* mean that *no* nodes can run in a tube:
+    /// e.g. nodes that don't depend on the exhausted node can continue to run,
+    /// and nodes that do depend on it but have previous events banked up run those to completion.
+    ///
+    /// Exhausted nodes are marked as disabled and the topo sorter template is rebuilt.
+    ///
+    /// Calls [Scheduler.done] after the node is marked as exhausted
+    /// so the current epoch can be completed (the signals will be marked as expired)
+    fn exhaust(&mut self, item: ItemID) -> CoreResult<()> {
+        let interner = interner();
+        let node_str = interner.resolve(item).node_id();
+
+        if let Some(node_flags) = self.nodes.get_mut(node_str) {
+            node_flags.enabled = false;
+        } else {
+            self.nodes.insert(
+                node_str.to_owned(),
+                NodeFlags {
+                    enabled: false,
+                    stateful: None,
+                },
+            );
+        }
+
+        self.template = {
+            let mut slot = interner_mut();
+            let interner = Arc::make_mut(&mut slot);
+            Sorter::from_graph(interner, &self.nodes, &self.edges)?
+        };
+
+        if self.generations().is_empty() {
+            self.exhausted = true;
+        }
+        Ok(())
     }
 
     /// Declare that an epoch has been completed,

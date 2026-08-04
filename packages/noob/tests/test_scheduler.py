@@ -6,7 +6,8 @@ import pytest
 
 from noob import NodeSpecification, SynchronousRunner, Tube
 from noob.edge import Edge
-from noob.event import Event, EventMaker, MetaEventType
+from noob.event import Event, EventMaker, MetaEventType, MetaSignal
+from noob.exceptions import SchedulerExhaustedError
 from noob.scheduler import Scheduler
 from noob.types import Epoch
 
@@ -609,3 +610,58 @@ def test_statelessness_source():
     expected.add(("a", Epoch(6)))
     actual = {(r["value"], r["epoch"]) for r in all_ready}
     assert actual == expected
+
+
+def test_exhaustion():
+    """
+    If an iterator node has been exhausted,
+    completes any remaining work, and then raises EpochExhausted if we try and iterate more
+    """
+    tube = Tube.from_specification("testing-exhaustion")
+    scheduler = tube.scheduler
+
+    # queue up three epochs
+    scheduler.add_epoch(Epoch(0))
+    scheduler.add_epoch(Epoch(1))
+    scheduler.add_epoch(Epoch(2))
+    for i in range(3):
+        scheduler.update(
+            [
+                Event(
+                    epoch=Epoch(i),
+                    id=100,
+                    timestamp=datetime.now(),
+                    node_id="a",
+                    signal="index",
+                    value=i,
+                )
+            ]
+        )
+
+    # then we exhaust
+    scheduler.update(
+        [
+            Event(
+                epoch=Epoch(3),
+                id=100,
+                timestamp=datetime.now(),
+                node_id="a",
+                signal="index",
+                value=MetaSignal.Exhausted,
+            )
+        ]
+    )
+
+    # we can still iterate over the existing epochs and finish the work
+    was_ready = []
+    for ready in scheduler.iter_ready():
+        was_ready.extend(ready)
+        for r in ready:
+            scheduler.done(r["epoch"], r["value"], with_signals=True)
+
+    assert len(was_ready) == 3, was_ready
+
+    # but then trying to iterate more after raises
+    with pytest.raises(SchedulerExhaustedError):
+        for _ in scheduler.iter_ready():
+            pass
