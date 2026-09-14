@@ -61,20 +61,61 @@ pub(crate) fn resolve_or_intern_node(node_id: &str) -> ItemID {
 #[derive(Clone, Debug, Hash, PartialEq, Eq, IntoPyObject)]
 pub enum Item {
     Node(String),
+    /// A named event stream a node emits
     Signal(String, String),
+    /// A named event stream a node may receive
+    Slot(String, String),
 }
 
 impl Item {
+    /// Whether an item is a signal.
     pub fn is_signal(&self) -> bool {
-        matches!(self, Item::Signal(..))
+        matches!(self, Item::Signal { .. })
+    }
+
+    /// Whether an item is a slot.
+    pub fn is_slot(&self) -> bool {
+        matches!(self, Item::Slot { .. })
     }
 
     /// The node id: itself for nodes, the node part for signals
     pub fn node_id(&self) -> &str {
         match self {
             Item::Node(n) => n,
-            Item::Signal(n, _) => n,
+            Item::Signal(n, _) | Item::Slot(n, _) => n,
         }
+    }
+}
+
+impl From<ItemID> for Item {
+    fn from(id: ItemID) -> Self {
+        println!("In Epoch From ItemID");
+        let interner = interner();
+        interner.resolve(id).to_owned()
+    }
+}
+
+impl From<String> for Item {
+    fn from(value: String) -> Self {
+        Item::Node(value)
+    }
+}
+
+impl From<&str> for Item {
+    fn from(value: &str) -> Self {
+        Item::Node(value.to_string())
+    }
+}
+
+impl From<(String, String)> for Item {
+    fn from(value: (String, String)) -> Self {
+        Item::Signal(value.0, value.1)
+    }
+}
+
+impl From<(&str, &str)> for Item {
+    fn from(value: (&str, &str)) -> Self {
+        Item::Signal(value.0.to_string(), value.1.to_string())
     }
 }
 
@@ -84,7 +125,7 @@ impl fmt::Display for Item {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Item::Node(n) => write!(f, "'{n}'"),
-            Item::Signal(n, s) => write!(f, "('{n}', '{s}')"),
+            Item::Signal(n, s) | Item::Slot(n, s) => write!(f, "('{n}', '{s}')"),
         }
     }
 }
@@ -102,6 +143,16 @@ pub const TUBE_NODE: ItemID = 2;
 pub const INPUT_NODE: ItemID = 3;
 /// "assets"
 pub const ASSETS_NODE: ItemID = 4;
+
+/// The nodes that are part of the graph model but aren't real "nodes" per se,
+/// but meta-constructs that constrain scheduling
+pub const META_NODES: [ItemID; 5] = [
+    PREVIOUS_EPOCH,
+    META_NODE,
+    TUBE_NODE,
+    INPUT_NODE,
+    ASSETS_NODE,
+];
 
 /// Interns [`Item`]s to dense `ItemID` ids shared by all sorters in a scheduler,
 /// so that all graph algorithms operate on integers rather than strings.
@@ -140,6 +191,12 @@ impl Interner {
         id
     }
 
+    pub fn intern_slot(&mut self, node: &str, slot: &str) -> ItemID {
+        let id = self.intern(Item::Slot(node.to_owned(), slot.to_owned()));
+        self.intern_node(node);
+        id
+    }
+
     pub fn get(&self, item: &Item) -> Option<ItemID> {
         self.items.get_index_of(item).map(|i| i as ItemID)
     }
@@ -154,6 +211,10 @@ impl Interner {
 
     pub fn is_signal(&self, id: ItemID) -> bool {
         self.resolve(id).is_signal()
+    }
+
+    pub fn is_slot(&self, id: ItemID) -> bool {
+        self.resolve(id).is_slot()
     }
 
     /// For a signal item, the interned id of its node part.

@@ -1,8 +1,7 @@
-use rustc_hash::{FxHashMap, FxHashSet};
-
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{ASSETS_NODE, INPUT_NODE, Interner, Item, ItemID, PREVIOUS_EPOCH};
+use crate::item::{ASSETS_NODE, INPUT_NODE, Interner, Item, ItemID, META_NODES, PREVIOUS_EPOCH};
 use crate::{FxIndexMap, FxIndexSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// The fields of `noob.edge.Edge` the sorter cares about.
 /// The boundary layer is responsible for extracting these from python.
@@ -11,26 +10,29 @@ pub struct EdgeRec {
     pub source_node: String,
     pub source_signal: String,
     pub target_node: String,
+    pub target_slot: String,
     pub required: bool,
 }
 
-impl From<(&str, &str, &str, bool)> for EdgeRec {
-    fn from(value: (&str, &str, &str, bool)) -> Self {
+impl From<(&str, &str, &str, &str, bool)> for EdgeRec {
+    fn from(value: (&str, &str, &str, &str, bool)) -> Self {
         EdgeRec {
             source_node: value.0.to_string(),
             source_signal: value.1.to_string(),
             target_node: value.2.to_string(),
-            required: value.3,
+            target_slot: value.3.to_string(),
+            required: value.4,
         }
     }
 }
 /// Default edge to required
-impl From<(&str, &str, &str)> for EdgeRec {
-    fn from(value: (&str, &str, &str)) -> Self {
+impl From<(&str, &str, &str, &str)> for EdgeRec {
+    fn from(value: (&str, &str, &str, &str)) -> Self {
         EdgeRec {
             source_node: value.0.to_string(),
             source_signal: value.1.to_string(),
             target_node: value.2.to_string(),
+            target_slot: value.3.to_string(),
             required: true,
         }
     }
@@ -57,8 +59,16 @@ pub struct NodeRec {
     pub nqueue: i64,
     pub successors: FxIndexSet<ItemID>,
     pub predecessors: FxIndexSet<ItemID>,
-    pub optional_predecessors: FxIndexSet<ItemID>,
+    /// Mapping between upstream signals to this node's slots that have an optional dependency
+    /// e.g. for some optional edge `a.b -> c.d`, then node `c` has the mapping `{a.b: c.d}`
+    /// Currently only used to populate optional_successors for out-of-order graph creation
+    pub optional_predecessors: FxHashMap<ItemID, ItemID>,
+    /// Set of downstream slots that should be marked as "done" if a signal is expired
+    /// and there is an optional dep on the other end of a required chain
     pub optional_successors: FxIndexSet<ItemID>,
+    /// The slots that a node has connected -
+    /// not static, slots that are expired as part of an optional dependency chain are removed from the set
+    pub slots: FxHashSet<ItemID>,
 }
 
 /// Port of `noob.toposort.TopoSorter`, operating on interned item ids.
@@ -114,12 +124,13 @@ impl Sorter {
             }
         }
         for edge in edges {
-            let target = interner.intern_node(&edge.target_node);
-            if sorter.disabled.contains(&target) {
+            let target_node = interner.intern_node(&edge.target_node);
+            if sorter.disabled.contains(&target_node) {
                 continue;
             }
             let signal = interner.intern_signal(&edge.source_node, &edge.source_signal);
-            sorter.add(interner, target, &[signal], edge.required)?;
+            let target_slot = interner.intern_slot(&edge.target_node, &edge.target_slot);
+            sorter.add(interner, target_slot, &[signal], edge.required)?;
         }
         for (node_id, flags) in nodes {
             let id = interner.intern_node(node_id);
@@ -145,13 +156,26 @@ impl Sorter {
         }
     }
 
+    /// Add a new dependency to the sorter
+    /// The `target` may refer to a node or a node's slot -
+    /// if a slot ID is passed, the dependency is still attached to the node,
+    /// but the slot ID is used for correct bookkeeping for chains of optional nodes.
     pub fn add(
         &mut self,
         interner: &mut Interner,
-        node: ItemID,
+        target: ItemID,
         predecessors: &[ItemID],
         required: bool,
     ) -> CoreResult<()> {
+        // If we are given a slot, the dependencies go to the node -
+        // slots aren't in the graph model explicitly (yet?)
+        let is_slot = interner.is_slot(target);
+        let node = if is_slot {
+            interner.node_part(target)
+        } else {
+            target
+        };
+
         // refuse to add nodes that are out / done
         let mut reasons: Vec<&str> = Vec::new();
         if self.out.contains(&node) {
@@ -163,7 +187,7 @@ impl Sorter {
         if !reasons.is_empty() {
             return Err(CoreError::Value(format!(
                 "{} cannot be added: {}",
-                interner.resolve(node),
+                interner.resolve(target),
                 reasons.join(", ")
             )));
         }
@@ -202,8 +226,12 @@ impl Sorter {
         for &p in &new_predecessors {
             rec.predecessors.insert(p);
         }
+        if is_slot {
+            rec.slots.insert(target);
+        }
         // note: python passes *all* given predecessors here, not just new ones
-        self.update_optionals(interner, node, predecessors, required);
+        // pass target rather than node here, because we want to use the slot if we have it
+        self.update_optionals(interner, target, predecessors, required);
 
         let ndone_predecessors = new_predecessors
             .iter()
@@ -221,29 +249,43 @@ impl Sorter {
         Ok(())
     }
 
+    /// Handle long-range optional dependencies.
+    /// If some node emits a NoEvent, but there is a chain of required dependencies in between it
+    /// and some other node that has an optional dependency on it,
+    /// then that downstream node needs to be told that something it optionally depends on expired,
+    /// otherwise it would just not run -
+    /// a shortcut to fully propagating NoEvents through large graphs.
     fn update_optionals(
         &mut self,
         interner: &Interner,
-        node: ItemID,
+        target: ItemID,
         predecessors: &[ItemID],
         required: bool,
     ) {
-        if interner.is_signal(node) {
+        // signals are trivially dependent on their node
+        if interner.is_signal(target) {
             return;
         }
+        let is_slot = interner.is_slot(target);
+        let node = if is_slot {
+            interner.node_part(target)
+        } else {
+            target
+        };
         let info = self.get_nodeinfo(node);
+
         if required {
             predecessors.iter().for_each(|p| {
-                info.optional_predecessors.swap_remove(p);
+                info.optional_predecessors.remove(p);
             });
         } else {
             predecessors.iter().for_each(|p| {
-                info.optional_predecessors.insert(*p);
+                info.optional_predecessors.insert(*p, target);
             });
         }
 
         let mut to_visit: FxIndexSet<ItemID> = info.successors.clone();
-        let mut new_successors: Vec<ItemID> = Vec::new();
+        let mut new_successors: FxIndexSet<ItemID> = FxIndexSet::default();
         let mut seen: FxIndexSet<ItemID> = FxIndexSet::default();
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
@@ -251,10 +293,13 @@ impl Sorter {
             for next_successor in successors {
                 let next_info = self.get_nodeinfo(next_successor);
                 if !interner.is_signal(next_successor)
-                    && next_info.optional_predecessors.contains(&current)
+                    && let Some(slot) = next_info.optional_predecessors.get(&current)
                 {
-                    new_successors.push(next_successor);
+                    // If we have reached a successor node with an optional edge,
+                    // we add it to our optional successors and stop walking its successors
+                    new_successors.insert(*slot);
                 } else {
+                    // Otherwise, if a signal or a node with only required deps, keep walking.
                     to_visit.extend(next_info.successors.difference(&seen));
                     seen.extend(next_info.successors.iter().copied());
                 }
@@ -271,31 +316,46 @@ impl Sorter {
         let info = self.get_nodeinfo(node);
         let mut to_visit: FxIndexSet<ItemID> = info
             .predecessors
-            .difference(&info.optional_predecessors)
+            .iter()
+            .filter(|p| !info.optional_predecessors.contains_key(p))
             .copied()
             .collect();
         let mut seen: FxIndexSet<ItemID> = FxIndexSet::default();
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
-            current_info.optional_successors.swap_remove(&node);
+            current_info.optional_successors.swap_remove(&target);
             to_visit.extend(
                 current_info
                     .predecessors
-                    .difference(&current_info.optional_predecessors)
-                    .copied()
-                    .filter(|p| !seen.contains(p)),
+                    .iter()
+                    .filter(|p| {
+                        !seen.contains(*p) && 
+                        !current_info.optional_predecessors.contains_key(p)
+                    })
             );
             seen.extend(current_info.predecessors.iter().copied());
         }
 
         // second pass - re-add optionals
         let info = self.get_nodeinfo(node);
-        let mut to_visit: FxIndexSet<ItemID> = info.optional_predecessors.clone();
+        let our_optional_successors = info.optional_successors.clone();
+        let mut to_visit: FxIndexSet<ItemID> = info.predecessors.clone();
         let mut seen: FxIndexSet<ItemID> = FxIndexSet::default();
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
             if interner.is_signal(current) {
-                current_info.optional_successors.insert(node);
+                // If a signal, we always have only required dependencies on nodes
+                // we want to go up one level to the node to see if it's part of a continued chain
+                if !required {
+                    current_info.optional_successors.insert(target);
+                }
+                // hoist our optional successors up the chain:
+                // if b -.-> c and is added first,
+                // and a --> b is added later,
+                // propagate the optional dep up to `a`
+                current_info
+                    .optional_successors
+                    .extend(our_optional_successors.iter().copied());
             }
             if current_info.optional_predecessors.is_empty() {
                 to_visit.extend(current_info.predecessors.difference(&seen));
@@ -348,7 +408,7 @@ impl Sorter {
         true
     }
 
-    pub fn mark_expired(&mut self, nodes: &[ItemID], unlock_optionals: bool) {
+    pub fn mark_expired(&mut self, interner: &Interner, nodes: &[ItemID], unlock_optionals: bool) {
         let mut newly_expired: Vec<ItemID> = Vec::with_capacity(nodes.len());
         for &node in nodes {
             if self.expire_node(node) {
@@ -365,17 +425,21 @@ impl Sorter {
 
         for node in newly_expired {
             let successors = self.optional_successors_of(node);
-            for successor in successors {
-                let successor_info = self.get_nodeinfo(successor);
-                successor_info.nqueue -= 1;
+            for successor_slot in successors {
+                let node = interner.node_part(successor_slot);
+                let successor_info = self.get_nodeinfo(node);
+                if successor_info.slots.remove(&successor_slot) {
+                    successor_info.nqueue -= 1;
+                }
+
                 if successor_info.nqueue == 0
-                    && !self.done.contains(&successor)
-                    && !self.out.contains(&successor)
+                    && !self.done.contains(&node)
+                    && !self.out.contains(&node)
                 {
-                    if self.disabled.contains(&successor) {
-                        self.expire_node(successor);
+                    if self.disabled.contains(&node) {
+                        self.expire_node(node);
                     } else {
-                        self.mark_ready(&[successor]);
+                        self.mark_ready(&[node]);
                     }
                 }
             }
@@ -425,7 +489,7 @@ impl Sorter {
                 successor_info.nqueue -= 1;
                 if successor_info.nqueue == 0 {
                     if self.disabled.contains(&successor) {
-                        self.mark_expired(&[successor], true);
+                        self.mark_expired(interner, &[successor], true);
                     } else {
                         self.mark_ready(&[successor]);
                     }

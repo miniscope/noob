@@ -13,7 +13,9 @@ class Scheduler:
     subepochs: dict[Epoch, set[Epoch]]
 
     def __init__(
-        self, nodes: list[tuple[str, bool, bool | None]], edges: list[tuple[str, str, str, bool]]
+        self,
+        nodes: list[tuple[str, bool, bool | None]],
+        edges: list[tuple[str, str, str, str, bool]],
     ): ...
     def add_epoch(self) -> Epoch: ...
     def add_epoch_at(self, epoch: Epoch) -> Epoch: ...

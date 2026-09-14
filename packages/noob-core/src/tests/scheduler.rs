@@ -1,21 +1,22 @@
 use super::*;
 
 // TODO: consolidate test helpers
-fn edge(source: &str, signal: &str, target: &str, required: bool) -> EdgeRec {
+fn edge(source: &str, signal: &str, target: &str, slot: &str, required: bool) -> EdgeRec {
     EdgeRec {
         source_node: source.into(),
         source_signal: signal.into(),
         target_node: target.into(),
+        target_slot: slot.into(),
         required,
     }
 }
 
 fn diamond() -> Vec<EdgeRec> {
     vec![
-        edge("a", "a1", "b", true),
-        edge("a", "a2", "c", true),
-        edge("b", "b1", "d", true),
-        edge("c", "c1", "d", true),
+        edge("a", "a1", "b", "x", true),
+        edge("a", "a2", "c", "x", true),
+        edge("b", "b1", "d", "x", true),
+        edge("c", "c1", "d", "y", true),
     ]
 }
 
@@ -896,7 +897,7 @@ fn test_is_active_at_stale_registry() {
 #[test]
 fn test_get_ready_at_includes_subepochs() {
     let mut edges = diamond();
-    edges.push(edge("x", "x1", "y", true));
+    edges.push(edge("x", "x1", "y", "y1", true));
     let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let a = interner().get(&Item::Node("a".to_string())).unwrap();
     let b = interner().get(&Item::Node("b".to_string())).unwrap();
