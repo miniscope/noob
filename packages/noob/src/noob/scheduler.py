@@ -311,7 +311,7 @@ class Scheduler:
         self._core = _RustScheduler(
             [(id_, bool(spec.enabled), spec.stateful) for id_, spec in self.nodes.items()],
             [
-                (e.source_node, e.source_signal, e.target_node, e.target_slot, e.required)
+                (e.source_node, e.source_signal, e.target_node, str(e.target_slot), e.required)
                 for e in self.edges
             ],
         )
