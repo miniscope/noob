@@ -40,6 +40,7 @@ def test_wrapped_cls_generator():
     """
 
     node = WrapClassNode(cls=CountSourceDecor, **_annoying_kwargs)
+    node.init()
     items = []
     for _ in range(5):
         items.append(node.process())
