@@ -430,6 +430,9 @@ class WrapClassNode(Node):
         fn_name = self._get_process_method(self.cls)
         fn = getattr(self.instance, fn_name)
         self.__dict__["process"] = fn
+        if inspect.isgeneratorfunction(self.process):
+            self._wrap_generator(self.process)
+
         if init_name := self._get_sentinel_method(self.cls, "init"):
             getattr(self.instance, init_name)()
 
