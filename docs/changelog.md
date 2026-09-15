@@ -44,6 +44,9 @@
   so specs can again be round-tripped.
 - [`#252`](https://github.com/miniscope/noob/pull/251) -
   {class}`.TubeSpecification`s are serialized by alias so that e.g. `type_` comes out as `type`
+- [`#262`](https://github.com/miniscope/noob/pull/262) - 
+  When a return node excludes keys that were not emitted when used in a Tube Node,
+  fill in `NoEvent`s.
 
 ## v1002.*
 
