@@ -456,7 +456,7 @@ fn test_exhausted_disabled() {
 
     let mut interner = Interner::default();
     let sorter = Sorter::from_graph(&mut interner, &nodes, &edges).unwrap();
-    assert!(sorter.exhausted)
+    assert!(sorter.exhausted);
 }
 
 #[test]
