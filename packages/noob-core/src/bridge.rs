@@ -23,7 +23,7 @@ impl PyScheduler {
     #[new]
     fn new(
         nodes: Vec<(String, bool, Option<bool>)>,
-        edges: Vec<(String, String, String, bool)>,
+        edges: Vec<(String, String, String, String, bool)>,
     ) -> PyResult<Self> {
         let nodes: FxIndexMap<String, NodeFlags> = nodes
             .into_iter()
@@ -32,10 +32,11 @@ impl PyScheduler {
         let edges: Vec<EdgeRec> = edges
             .into_iter()
             .map(
-                |(source_node, source_signal, target_node, required)| EdgeRec {
+                |(source_node, source_signal, target_node, target_slot, required)| EdgeRec {
                     source_node,
                     source_signal,
                     target_node,
+                    target_slot,
                     required,
                 },
             )
