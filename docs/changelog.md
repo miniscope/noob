@@ -15,6 +15,8 @@
   so that when referring to "some node" an actual passthrough node can be gotten.
 - [`#252`](https://github.com/miniscope/noob/pull/251) -
   {meth}`.YAMLMixin.from_any` now allows a specification to be passed as a dict.
+- [`#261`](https://github.com/miniscope/noob/pull/261) - 
+  added `@init_method` and `@deinit_method` decorators
 
 **Changed**
 
