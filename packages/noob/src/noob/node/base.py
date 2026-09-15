@@ -127,7 +127,9 @@ class Node(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context: Any) -> None:
-        """See docstring of :meth:`.process` for description of post init wrapping of generators"""
+        """
+        See docstring of :meth:`.Node.process` for description of post init wrapping of generators
+        """
         if inspect.isgeneratorfunction(self.process):
             self._wrap_generator(self.process)
         self._event_maker.node_id = self.id
