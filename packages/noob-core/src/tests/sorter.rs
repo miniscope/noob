@@ -466,7 +466,6 @@ fn test_exhausted_meta_nodes() {
         source_node: "input".to_string(),
         source_signal: "a".to_string(),
         target_node: "a".to_string(),
-        target_slot: "x".to_string(),
         required: true,
     });
     // connected to 'b', which remains active, and thus in the graph when a is disabled
@@ -474,7 +473,6 @@ fn test_exhausted_meta_nodes() {
         source_node: "assets".to_string(),
         source_signal: "a".to_string(),
         target_node: "b".to_string(),
-        target_slot: "x".to_string(),
         required: true,
     });
 
