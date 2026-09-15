@@ -60,6 +60,13 @@ class Scheduler:
         first = self._core.first_active_epoch()
         return first if first is not None else self.add_epoch()
 
+    @property
+    def exhausted(self) -> bool:
+        """
+        Nodes have become exhausted such that there is no more useful work that the scheduler can do
+        """
+        return self._core.exhausted
+
     def iter_epoch(self, epoch: Epoch | None = None) -> Iterator[list[MetaEvent]]:
         """
         Iter batches of ready events from an epoch until it's completed.
@@ -73,6 +80,10 @@ class Scheduler:
         """
         if epoch is None:
             first = self._core.first_active_epoch()
+            if first is None and self._core.exhausted:
+                raise SchedulerExhaustedError(
+                    "Scheduler is exhausted and cannot run until re-initialized"
+                )
             epoch = first if first is not None else self.add_epoch()
         else:
             with contextlib.suppress(EpochExistsError):

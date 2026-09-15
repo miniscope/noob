@@ -106,12 +106,13 @@ class TubeNode(Node):
                 )
                 for key, value in res.items()
             ]
+
         elif res is None:
             now = datetime.now(UTC)
+            signal = MetaSignal.Exhausted if self._tube.scheduler.exhausted else MetaSignal.NoEvent
+
             return [
-                self._event_maker.new_event(
-                    signal=key, epoch=epoch, value=MetaSignal.NoEvent, timestamp=now
-                )
+                self._event_maker.new_event(signal=key, epoch=epoch, value=signal, timestamp=now)
                 for key in self.signals
             ]
         else:

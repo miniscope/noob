@@ -2,7 +2,7 @@ use crate::bridge::UpdateEvent;
 use crate::epoch::Epoch;
 use crate::exceptions::{CoreError, CoreResult};
 use crate::item::{Interner, Item, ItemID, META_NODE, PREVIOUS_EPOCH, interner, interner_mut};
-use crate::sorter::{EdgeRec, NodeFlags, Sorter, SorterState};
+use crate::sorter::{EdgeRec, NodeFlags, Sorter, SorterState, generations};
 use crate::{FxIndexMap, FxIndexSet};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cmp::Reverse;
@@ -140,6 +140,7 @@ impl Scheduler {
         let mut done_epochs: Vec<Epoch> = Vec::new();
         for e in events {
             if done_nodes.insert((e.epoch.clone(), e.node)) {
+                // Exhaust first so `done` doesn't add successor epochs
                 if e.exhausted {
                     self.exhaust(e.node)?;
                 }
@@ -358,6 +359,11 @@ impl Scheduler {
             return Err(CoreError::EpochCompleted(epoch));
         }
         if !self.epochs.contains_key(&epoch) {
+            if self.exhausted {
+                return Err(CoreError::SchedulerExhaustedError(
+                    "Scheduler is exhausted!".to_string(),
+                ));
+            }
             self.add_epoch_at(epoch.clone())?;
         }
         Ok(EpochIter {
@@ -369,7 +375,7 @@ impl Scheduler {
     /// Create and iterator that iterates over all ready events until there are no more left,
     /// in any epoch.
     pub fn iter_ready(&mut self) -> ReadyIter<'_> {
-        if !self.is_active() {
+        if !self.is_active() && !self.exhausted {
             self.add_epoch();
         }
         ReadyIter { scheduler: self }
@@ -470,6 +476,9 @@ impl Scheduler {
         }
 
         if !self.epochs.contains_key(epoch) {
+            if self.exhausted {
+                return Ok(Vec::new());
+            }
             self.add_epoch_at(epoch.clone())?;
         }
         let graph = self.epochs.get_mut(epoch).expect("Epoch was just added");
@@ -511,7 +520,11 @@ impl Scheduler {
         // Eagerly add the next epoch whenever the source nodes in a root epoch are done -
         // for async/multi-epoch runners,
         // this allows nodes to run as soon as they are topologically available.
-        if epoch.is_root() && self.source_nodes.contains(&item) && self.sources_finished(epoch) {
+        if !self.exhausted
+            && epoch.is_root()
+            && self.source_nodes.contains(&item)
+            && self.sources_finished(epoch)
+        {
             let next = epoch + 1;
             if !self.epochs.contains_key(&next) && !self.epoch_completed(&next) {
                 self.add_epoch_at(next)?;
@@ -717,9 +730,21 @@ impl Scheduler {
     /// Calls [Scheduler.done] after the node is marked as exhausted
     /// so the current epoch can be completed (the signals will be marked as expired)
     fn exhaust(&mut self, item: ItemID) -> CoreResult<()> {
+        self.disable(item);
+
+        self.template = {
+            let mut slot = interner_mut();
+            let interner = Arc::make_mut(&mut slot);
+            Sorter::from_graph(interner, &self.nodes, &self.edges)?
+        };
+
+        self.exhausted = self.template.exhausted;
+        Ok(())
+    }
+
+    fn disable(&mut self, item: ItemID) {
         let interner = interner();
         let node_str = interner.resolve(item).node_id();
-
         if let Some(node_flags) = self.nodes.get_mut(node_str) {
             node_flags.enabled = false;
         } else {
@@ -731,17 +756,6 @@ impl Scheduler {
                 },
             );
         }
-
-        self.template = {
-            let mut slot = interner_mut();
-            let interner = Arc::make_mut(&mut slot);
-            Sorter::from_graph(interner, &self.nodes, &self.edges)?
-        };
-
-        if self.generations().is_empty() {
-            self.exhausted = true;
-        }
-        Ok(())
     }
 
     /// Declare that an epoch has been completed,
@@ -758,7 +772,11 @@ impl Scheduler {
         // or when we receive out of order events e.g. in `update`
         let mut events: Vec<Epoch> = Vec::new();
         let next = &epoch + 1;
-        if next.is_root() && !self.epochs.contains_key(&next) && !self.epoch_completed(&next) {
+        if !self.exhausted
+            && next.is_root()
+            && !self.epochs.contains_key(&next)
+            && !self.epoch_completed(&next)
+        {
             self.add_epoch_at(next.clone())?;
         }
 
@@ -867,23 +885,7 @@ impl Scheduler {
     /// Topological generations of the sorter:
     /// sets of graph items that would be yielded if all of the items in the preceding generation were marked done.
     pub fn generations(&self) -> Vec<Vec<ItemID>> {
-        let mut sorter = self.template.clone();
-        let mut groups = Vec::new();
-        let interner = interner();
-        if sorter.ready.contains(&PREVIOUS_EPOCH) {
-            sorter
-                .done(&interner, &[PREVIOUS_EPOCH])
-                .expect("Just checked");
-        }
-        while sorter.is_active() {
-            let ready = sorter.get_ready(&interner);
-            groups.push(ready);
-            let out: Vec<u32> = sorter.out.iter().copied().collect();
-            sorter
-                .done(&interner, &out)
-                .expect("Out nodes by definition can't fail to be marked done");
-        }
-        groups
+        generations(self.template.clone(), &interner())
     }
 
     /// Any nodes that have no dependencies within the graph.

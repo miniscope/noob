@@ -3,7 +3,7 @@ use crate::epoch::Epoch;
 use crate::exceptions::CoreError;
 use crate::item::{Interner, Item, ItemID, interner};
 use crate::scheduler::Scheduler;
-use crate::sorter::{EdgeRec, NodeFlags};
+use crate::sorter::{EdgeRec, NodeFlags, NodeRec, SorterState};
 use pyo3::exceptions::PyValueError;
 use pyo3::import_exception;
 use pyo3::prelude::*;
@@ -247,8 +247,47 @@ impl PyScheduler {
 
     fn get_epoch_state(&self, epoch: Epoch) -> PyResult<PySorterState> {
         let state = self.0.get_epoch_state(&epoch)?;
+        Ok(state.into())
+    }
+
+    #[getter(epoch_log)]
+    fn epoch_log(&self) -> BTreeSet<u32> {
+        self.0.epoch_log()
+    }
+
+    #[getter(subepochs)]
+    fn subepochs(&self) -> FxHashMap<Epoch, HashSet<Epoch>> {
+        self.0
+            .subepochs()
+            .iter()
+            .map(|(epoch, subeps)| (epoch.clone(), HashSet::from_iter(subeps.iter().cloned())))
+            .collect()
+    }
+
+    #[getter(exhausted)]
+    fn exhausted(&self) -> bool {
+        self.0.exhausted
+    }
+}
+
+/// Python-compatible counterpart of SorterState
+#[derive(IntoPyObject)]
+struct PySorterState {
+    pub ready: FxHashSet<Item>,
+    pub out: FxHashSet<Item>,
+    pub done: FxHashSet<Item>,
+    pub disabled: FxHashSet<Item>,
+    pub ran: FxHashSet<Item>,
+    pub pending: FxHashSet<Item>,
+    pub npassedout: i64,
+    pub nfinished: i64,
+    pub info: FxHashMap<Item, PyNodeRec>,
+}
+
+impl From<SorterState> for PySorterState {
+    fn from(state: SorterState) -> Self {
         let interner = interner();
-        Ok(PySorterState {
+        PySorterState {
             ready: state
                 .ready
                 .iter()
@@ -287,40 +326,59 @@ impl PyScheduler {
                 .collect(),
             npassedout: state.npassedout,
             nfinished: state.nfinished,
-        })
-    }
-
-    #[getter(epoch_log)]
-    fn epoch_log(&self) -> BTreeSet<u32> {
-        self.0.epoch_log()
-    }
-
-    #[getter(subepochs)]
-    fn subepochs(&self) -> FxHashMap<Epoch, HashSet<Epoch>> {
-        self.0
-            .subepochs()
-            .iter()
-            .map(|(epoch, subeps)| (epoch.clone(), HashSet::from_iter(subeps.iter().cloned())))
-            .collect()
-    }
-
-    #[getter(exhausted)]
-    fn exhausted(&self) -> bool {
-        self.0.exhausted
+            info: state
+                .info
+                .into_iter()
+                .map(|(k, v)| (interner.resolve(k).clone(), PyNodeRec::from(v)))
+                .collect(),
+        }
     }
 }
 
-/// Python-compatible counterpart of SorterState
 #[derive(IntoPyObject)]
-struct PySorterState {
-    pub ready: FxHashSet<Item>,
-    pub out: FxHashSet<Item>,
-    pub done: FxHashSet<Item>,
-    pub disabled: FxHashSet<Item>,
-    pub ran: FxHashSet<Item>,
-    pub pending: FxHashSet<Item>,
-    pub npassedout: i64,
-    pub nfinished: i64,
+struct PyNodeRec {
+    nqueue: i64,
+    successors: FxHashSet<Item>,
+    predecessors: FxHashSet<Item>,
+    optional_predecessors: FxHashMap<Item, Item>,
+    optional_successors: FxHashSet<Item>,
+}
+
+impl From<NodeRec> for PyNodeRec {
+    fn from(node_rec: NodeRec) -> Self {
+        let interner = interner();
+        PyNodeRec {
+            nqueue: node_rec.nqueue,
+            successors: node_rec
+                .successors
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .cloned()
+                .collect(),
+            predecessors: node_rec
+                .predecessors
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .cloned()
+                .collect(),
+            optional_predecessors: node_rec
+                .optional_predecessors
+                .iter()
+                .map(|(signal, slot)| {
+                    (
+                        interner.resolve(*signal).clone(),
+                        interner.resolve(*slot).clone(),
+                    )
+                })
+                .collect(),
+            optional_successors: node_rec
+                .optional_successors
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .cloned()
+                .collect(),
+        }
+    }
 }
 
 #[derive(FromPyObject)]
@@ -357,6 +415,7 @@ import_exception!(noob_core.exceptions, AlreadyDoneError);
 import_exception!(noob_core.exceptions, NotAddedError);
 import_exception!(noob_core.exceptions, EpochExistsError);
 import_exception!(noob_core.exceptions, EpochCompletedError);
+import_exception!(noob_core.exceptions, SchedulerExhaustedError);
 
 impl From<CoreError> for PyErr {
     fn from(err: CoreError) -> PyErr {
@@ -365,6 +424,7 @@ impl From<CoreError> for PyErr {
             CoreError::NotAdded(msg) => NotAddedError::new_err(msg),
             CoreError::EpochExists(msg) => EpochExistsError::new_err(msg.to_string()),
             CoreError::EpochCompleted(msg) => EpochCompletedError::new_err(msg.to_string()),
+            CoreError::SchedulerExhaustedError(msg) => SchedulerExhaustedError::new_err(msg),
             other => PyValueError::new_err(other.to_string()),
         }
     }

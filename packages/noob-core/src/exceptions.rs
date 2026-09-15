@@ -18,6 +18,8 @@ pub enum CoreError {
     EpochExists(Epoch),
     /// The epoch that is being referred to has already been completed and logged
     EpochCompleted(Epoch),
+    /// A scheduler is exhausted and can't do any more useful work!
+    SchedulerExhaustedError(String),
     /// `ValueError`
     Value(String),
 }
@@ -28,7 +30,10 @@ pub type CoreResult<T> = Result<T, CoreError>;
 impl fmt::Display for CoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CoreError::AlreadyDone(msg) | CoreError::NotAdded(msg) | CoreError::Value(msg) => {
+            CoreError::AlreadyDone(msg)
+            | CoreError::NotAdded(msg)
+            | CoreError::SchedulerExhaustedError(msg)
+            | CoreError::Value(msg) => {
                 write!(f, "{msg}")
             }
             CoreError::EpochExists(epoch) => {
