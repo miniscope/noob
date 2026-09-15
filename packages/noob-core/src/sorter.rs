@@ -1,5 +1,5 @@
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{ASSETS_NODE, INPUT_NODE, Interner, Item, ItemID, META_NODES, PREVIOUS_EPOCH};
+use crate::item::{ASSETS_NODE, INPUT_NODE, Interner, Item, ItemID, PREVIOUS_EPOCH};
 use crate::{FxIndexMap, FxIndexSet};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -324,15 +324,9 @@ impl Sorter {
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
             current_info.optional_successors.swap_remove(&target);
-            to_visit.extend(
-                current_info
-                    .predecessors
-                    .iter()
-                    .filter(|p| {
-                        !seen.contains(*p) && 
-                        !current_info.optional_predecessors.contains_key(p)
-                    })
-            );
+            to_visit.extend(current_info.predecessors.iter().filter(|p| {
+                !seen.contains(*p) && !current_info.optional_predecessors.contains_key(p)
+            }));
             seen.extend(current_info.predecessors.iter().copied());
         }
 

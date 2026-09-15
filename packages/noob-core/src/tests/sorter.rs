@@ -480,7 +480,6 @@ fn test_unlock_optionals_bookkeeping() {
     let combine_frame_idx = interner.intern_signal("combine", "frame_idx");
 
     assert_eq!(sorter.get_nodeinfo(target).nqueue, 2);
-    let state = sorter.clone_state();
     assert_eq!(
         sorter.get_nodeinfo(combine_frame_idx).optional_successors,
         IndexSet::from([target_optional])
