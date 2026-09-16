@@ -102,6 +102,9 @@ class MetaEventType(StrEnum):
 
 class MetaSignal(StrEnum):
     NoEvent = f"{META_SIGNAL}NoEvent"
+    """No event was emitted! Expire all dependent nodes"""
+    Exhausted = f"{META_SIGNAL}Exhausted"
+    """A node has no more remaining events to yield."""
 
 
 class MetaEvent(Event):

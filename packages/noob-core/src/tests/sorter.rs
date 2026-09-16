@@ -446,3 +446,61 @@ fn test_source_nodes_disabled() {
     let sorter = Sorter::from_graph(&mut interner, &nodes, &edges).unwrap();
     assert!(sorter.source_nodes().is_empty());
 }
+
+/// Sorters are exhausted when they have no nodes that can be reached,
+/// or only meta nodes are reachable.
+#[test]
+fn test_exhausted_disabled() {
+    let (mut nodes, edges) = chain_graph(Some(true));
+    nodes["a"].enabled = false;
+
+    let mut interner = Interner::default();
+    let sorter = Sorter::from_graph(&mut interner, &nodes, &edges).unwrap();
+    assert!(sorter.exhausted);
+}
+
+#[test]
+fn test_exhausted_meta_nodes() {
+    let (mut nodes, mut edges) = chain_graph(Some(true));
+    edges.push(EdgeRec {
+        source_node: "input".to_string(),
+        source_signal: "a".to_string(),
+        target_node: "a".to_string(),
+        required: true,
+    });
+    // connected to 'b', which remains active, and thus in the graph when a is disabled
+    edges.push(EdgeRec {
+        source_node: "assets".to_string(),
+        source_signal: "a".to_string(),
+        target_node: "b".to_string(),
+        required: true,
+    });
+
+    let mut interner = Interner::default();
+    let sorter = Sorter::from_graph(&mut interner, &nodes, &edges).unwrap();
+    let input = interner.get(&Item::Node("input".into())).unwrap();
+    let assets = interner.get(&Item::Node("assets".into())).unwrap();
+
+    // not exhausted just because the meta nodes are first
+    assert_eq!(
+        sorter.ready,
+        FxIndexSet::from_iter(vec![input, assets, PREVIOUS_EPOCH])
+    );
+    assert!(!sorter.exhausted);
+
+    // now when they're the only reachable nodes, should be exhausted
+    nodes["a"].enabled = false;
+    let sorter = Sorter::from_graph(&mut interner, &nodes, &edges).unwrap();
+    // input is not present, because it is only added by "a", which is not added because it's disabled.
+    assert_eq!(
+        sorter.ready,
+        FxIndexSet::from_iter(vec![assets, PREVIOUS_EPOCH]),
+        "generations: {:?}",
+        generations(sorter.clone(), &interner)
+    );
+    assert!(
+        sorter.exhausted,
+        "generations: {:?}",
+        generations(sorter.clone(), &interner)
+    );
+}

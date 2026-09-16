@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::exceptions::{CoreError, CoreResult};
-use crate::item::{ASSETS_NODE, INPUT_NODE, Interner, Item, ItemID, PREVIOUS_EPOCH};
+use crate::item::{ASSETS_NODE, INPUT_NODE, Interner, Item, ItemID, META_NODES, PREVIOUS_EPOCH};
 use crate::{FxIndexMap, FxIndexSet};
 
 /// The fields of `noob.edge.Edge` the sorter cares about.
@@ -83,6 +83,9 @@ pub struct Sorter {
     pub ran: FxIndexSet<ItemID>,
     pub npassedout: i64,
     pub nfinished: i64,
+    /// Whether the constructed sorter is trivial and does no useful work -
+    /// i.e. no nodes can be reached, or the only nodes are meta-nodes like `input`
+    pub exhausted: bool,
 }
 
 /// Independent, cloned state of the sorter to be used when debugging
@@ -96,6 +99,7 @@ pub struct SorterState {
     pub pending: FxHashSet<ItemID>,
     pub npassedout: i64,
     pub nfinished: i64,
+    pub info: FxIndexMap<ItemID, NodeRec>,
 }
 
 impl Sorter {
@@ -132,6 +136,8 @@ impl Sorter {
                 sorter.add(interner, id, &[PREVIOUS_EPOCH], true)?;
             }
         }
+
+        sorter.exhausted = is_exhausted(sorter.clone(), interner);
         Ok(sorter)
     }
 
@@ -330,7 +336,7 @@ impl Sorter {
     }
 
     pub fn is_active(&self) -> bool {
-        self.nfinished < self.npassedout || !self.ready.is_empty()
+        !self.exhausted && (self.nfinished < self.npassedout || !self.ready.is_empty())
     }
 
     fn expire_node(&mut self, node: ItemID) -> bool {
@@ -570,8 +576,39 @@ impl Sorter {
             pending,
             npassedout: self.npassedout,
             nfinished: self.nfinished,
+            info: self.info.clone(),
         }
     }
+}
+
+/// Get the generations from a sorter
+/// Note: this *consumes* the sorter - it should be cloned by the caller
+pub(crate) fn generations(mut sorter: Sorter, interner: &Interner) -> Vec<Vec<ItemID>> {
+    let mut groups = Vec::new();
+    if sorter.ready.contains(&PREVIOUS_EPOCH) {
+        sorter
+            .done(interner, &[PREVIOUS_EPOCH])
+            .expect("Just checked");
+    }
+    while sorter.is_active() {
+        let ready = sorter.get_ready(interner);
+        groups.push(ready);
+        let out: Vec<u32> = sorter.out.iter().copied().collect();
+        sorter
+            .done(interner, &out)
+            .expect("Out nodes by definition can't fail to be marked done");
+    }
+    groups
+}
+
+fn is_exhausted(sorter: Sorter, interner: &Interner) -> bool {
+    let generations = generations(sorter, interner);
+    let meta_nodes: FxHashSet<ItemID> = META_NODES.into_iter().collect();
+    generations.is_empty() ||
+        // one generation that's all meta
+        (generations.len() == 1 &&
+            generations[0].iter().all(|item| meta_nodes.contains(item))
+        )
 }
 
 /// graph coloring for cycle detection: a node absent from the color map

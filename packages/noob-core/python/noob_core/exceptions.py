@@ -5,6 +5,7 @@ __all__ = [
     "EpochExistsError",
     "NotAddedError",
     "AlreadyDoneError",
+    "SchedulerExhaustedError",
 ]
 
 
@@ -37,3 +38,7 @@ class AlreadyDoneError(SchedulerError, ValueError):
     """
     Node was marked done, but it was already done!
     """
+
+
+class SchedulerExhaustedError(SchedulerError, RuntimeError):
+    """A scheduler is exhausted and can't do any more useful work!"""

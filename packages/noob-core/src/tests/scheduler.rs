@@ -1159,3 +1159,104 @@ fn test_downstream_nodes_exclude() {
     let downstream = downstream_nodes(&edges, "a", &exclude);
     assert_eq!(downstream, FxIndexSet::from_iter(["a", "c", "d"]));
 }
+
+/// Nodes can be exhausted during an update,
+/// which disables them for future updates but finishes processing stored events
+#[test]
+fn test_update_exhaust_node() {
+    let mut nodes = FxIndexMap::default();
+    nodes.insert(
+        "a".to_string(),
+        NodeFlags {
+            enabled: true,
+            stateful: Some(false),
+        },
+    );
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(nodes, edges).unwrap();
+    let a = interner().get(&Item::Node("a".to_string())).unwrap();
+    let a1 = interner()
+        .get(&Item::Signal("a".to_string(), "a1".to_string()))
+        .unwrap();
+    let a2 = interner()
+        .get(&Item::Signal("a".to_string(), "a2".to_string()))
+        .unwrap();
+    let b = interner().get(&Item::Node("b".to_string())).unwrap();
+    let c = interner().get(&Item::Node("c".to_string())).unwrap();
+    let d = interner().get(&Item::Node("d".to_string())).unwrap();
+
+    // complete a in a few epochs
+    let ep1 = scheduler.add_epoch();
+    let ep2 = scheduler.add_epoch();
+    let ep3 = scheduler.add_epoch();
+    let ep4 = scheduler.add_epoch();
+    scheduler.done(&ep1, a, true).unwrap();
+    scheduler.done(&ep2, a, true).unwrap();
+    scheduler.done(&ep3, a, true).unwrap();
+
+    // and then expire it
+    scheduler
+        .update(vec![
+            UpdateEvent {
+                epoch: ep4.clone(),
+                node: a,
+                signal: Some(a1),
+                no_event: false,
+                exhausted: true,
+            },
+            UpdateEvent {
+                epoch: ep4.clone(),
+                node: a,
+                signal: Some(a2),
+                no_event: false,
+                exhausted: true,
+            },
+        ])
+        .expect("Should be able to exhaust the node!");
+
+    // node is no longer enabled
+    assert!(!scheduler.nodes.get("a").unwrap().enabled);
+
+    // and we iterate through the remaining ones and stop
+    let mut batches: Vec<Vec<(Epoch, ItemID)>> = Vec::new();
+    let mut it = scheduler.iter_ready();
+    while let Some(batch) = it.next() {
+        let mut nodes = Vec::new();
+        for (epoch, node) in batch {
+            it.done(&epoch, node, true).unwrap();
+            nodes.push((epoch, node));
+        }
+        batches.push(nodes);
+    }
+
+    assert_eq!(
+        batches,
+        vec![
+            vec![
+                (ep1.clone(), b),
+                (ep1.clone(), c),
+                (ep2.clone(), b),
+                (ep2.clone(), c),
+                (ep3.clone(), b),
+                (ep3.clone(), c)
+            ],
+            vec![(ep1.clone(), d), (ep2.clone(), d), (ep3.clone(), d),]
+        ],
+        "a: {}, ep1: {}, ep2: {}",
+        a,
+        ep1,
+        ep2
+    );
+
+    // scheduler should be exhausted
+    assert!(
+        scheduler.exhausted,
+        "{:?}, is active: {}",
+        scheduler.template.clone_state(),
+        scheduler.template.is_active()
+    );
+
+    // further epochs are empty
+    let ep5 = scheduler.add_epoch();
+    assert!(scheduler.get_ready_at(&ep5).is_empty());
+}

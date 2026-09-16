@@ -103,6 +103,16 @@ pub const INPUT_NODE: ItemID = 3;
 /// "assets"
 pub const ASSETS_NODE: ItemID = 4;
 
+/// The nodes that are part of the graph model but aren't real "nodes" per se,
+/// but meta-constructs that constrain scheduling
+pub const META_NODES: [ItemID; 5] = [
+    PREVIOUS_EPOCH,
+    META_NODE,
+    TUBE_NODE,
+    INPUT_NODE,
+    ASSETS_NODE,
+];
+
 /// Interns [`Item`]s to dense `ItemID` ids shared by all sorters in a scheduler,
 /// so that all graph algorithms operate on integers rather than strings.
 #[derive(Clone, Debug)]

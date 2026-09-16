@@ -89,26 +89,25 @@ class AsyncRunner(TubeRunner):
                 "Use `process()` directly, providing required inputs to each call."
             ) from e
 
-        await self.init()
+        if not self.running:
+            await self.init()
         current_iter = 0
         has_return = any(isinstance(node, Return) for node in self.tube.nodes.values())
-        try:
-            while n is None or current_iter < n:
-                ret = None
-                loop = 0
-                if not has_return:
-                    ret = await self.process()
-                else:
-                    while ret is None:
-                        ret = await self.process()
-                        loop += 1
-                        if loop > self.max_iter_loops:
-                            raise RuntimeError("Reached maximum process calls per iteration")
 
-                yield ret
-                current_iter += 1
-        finally:
-            await self.deinit()
+        while n is None or current_iter < n:
+            ret = None
+            loop = 0
+            if not has_return:
+                ret = await self.process()
+            else:
+                while ret is None:
+                    ret = await self.process()
+                    loop += 1
+                    if loop > self.max_iter_loops:
+                        raise RuntimeError("Reached maximum process calls per iteration")
+
+            yield ret
+            current_iter += 1
 
     async def init(self) -> None:
         """
