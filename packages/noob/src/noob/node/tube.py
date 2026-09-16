@@ -1,6 +1,6 @@
 import warnings
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Union, cast
 
 from pydantic import ConfigDict
 
@@ -97,6 +97,11 @@ class TubeNode(Node):
         res = self._runner.process(**kwargs)
         if isinstance(res, dict):
             now = datetime.now(UTC)
+            # fill in any missing events with NoEvents
+            for sig in self.signals:
+                if sig not in res:
+                    res[sig] = MetaSignal.NoEvent
+
             return [
                 self._event_maker.new_event(
                     signal=key,
@@ -106,12 +111,14 @@ class TubeNode(Node):
                 )
                 for key, value in res.items()
             ]
+
         elif res is None:
             now = datetime.now(UTC)
+            self._tube = cast(Tube, self._tube)
+            signal = MetaSignal.Exhausted if self._tube.scheduler.exhausted else MetaSignal.NoEvent
+
             return [
-                self._event_maker.new_event(
-                    signal=key, epoch=epoch, value=MetaSignal.NoEvent, timestamp=now
-                )
+                self._event_maker.new_event(signal=key, epoch=epoch, value=signal, timestamp=now)
                 for key in self.signals
             ]
         else:

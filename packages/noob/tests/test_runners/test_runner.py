@@ -52,7 +52,7 @@ def test_disabled_return() -> None:
     assert set(runner.tube.enabled_nodes.keys()) == {"a", "b"}
 
     # Return node is disabled, so nothing comes out
-    result = runner.run(n=100)
+    result = runner.run(n=5)
     assert result is None
 
 

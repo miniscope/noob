@@ -2,7 +2,7 @@
 
 from noob.config import config as cfg
 from noob.logging import init_logger
-from noob.node import process_method, Node, NodeSpecification
+from noob.node import init_method, deinit_method, process_method, Node, NodeSpecification
 from noob.asset import Asset, AssetSpecification
 from noob.state import State
 from noob.input import InputCollection, InputScope, InputSpecification
@@ -31,6 +31,8 @@ __all__ = [
     "TubeClassicEdition",
     "TubeSpecification",
     "cfg",
+    "deinit_method",
     "init_logger",
+    "init_method",
     "process_method",
 ]

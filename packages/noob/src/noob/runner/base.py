@@ -15,6 +15,8 @@ from functools import partial
 from logging import Logger
 from typing import TYPE_CHECKING, Any, ParamSpec, Self, TypeVar, overload
 
+from noob_core.exceptions import SchedulerExhaustedError
+
 from noob import Tube, init_logger
 from noob.asset import AssetScope
 from noob.edge import Edge
@@ -216,11 +218,10 @@ class TubeRunner(ABC):
                 if out is not None:
                     outputs.append(out)
                 current_iter += 1
-        except (KeyboardInterrupt, StopIteration):
+        except (KeyboardInterrupt, StopIteration, SchedulerExhaustedError) as e:
+            self._logger.debug("Quitting run due to %s", e)
             # fine, just return
             pass
-        finally:
-            self.deinit()
 
         return outputs if outputs else None
 

@@ -27,6 +27,8 @@ trivially_copy_pass_by_ref = "warn"
 let_underscore_must_use = "warn"
 unused_result_ok = "warn"
 len_zero = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
 
 [lints.rust]
 unused_must_use = "deny"
