@@ -606,10 +606,9 @@ fn is_exhausted(sorter: Sorter, interner: &Interner) -> bool {
     let meta_nodes: FxHashSet<ItemID> = META_NODES.into_iter().collect();
     generations.is_empty() ||
         // one generation that's all meta
-        (generations.len() == 1 && generations[0].iter().all(|item| {
-            println!("item: {:?}, is_meta: {:?}, meta_nodes: {:?}", item, meta_nodes.contains(item), meta_nodes);
-            meta_nodes.contains(item)
-        }))
+        (generations.len() == 1 &&
+            generations[0].iter().all(|item| meta_nodes.contains(item))
+        )
 }
 
 /// graph coloring for cycle detection: a node absent from the color map
