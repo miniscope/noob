@@ -97,6 +97,11 @@ class TubeNode(Node):
         res = self._runner.process(**kwargs)
         if isinstance(res, dict):
             now = datetime.now(UTC)
+            # fill in any missing events with NoEvents
+            for sig in self.signals:
+                if sig not in res:
+                    res[sig] = MetaSignal.NoEvent
+
             return [
                 self._event_maker.new_event(
                     signal=key,

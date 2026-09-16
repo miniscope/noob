@@ -2,7 +2,7 @@ from noob.node.spec import (  # noqa: I001 - needs to be defined before Node is
     NodeInfo,
     NodeSpecification,
 )
-from noob.node.base import Node, process_method
+from noob.node.base import Node, process_method, init_method, deinit_method
 from noob.node.gather import Gather
 from noob.node.map import Map
 from noob.node.return_ import Return
@@ -21,5 +21,7 @@ __all__ = [
     "NodeInfo",
     "NodeSpecification",
     "Return",
+    "deinit_method",
+    "init_method",
     "process_method",
 ]

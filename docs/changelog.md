@@ -23,6 +23,8 @@
   and then further calls to iterate nodes will raise a `SchedulerExhaustedError`.
   Exhaustion is node-specific: if there are other source nodes that can still run,
   then the scheduler will continue to do that.
+- [`#261`](https://github.com/miniscope/noob/pull/261) - 
+  added `@init_method` and `@deinit_method` decorators
 
 **Changed**
 
@@ -58,6 +60,9 @@
   {class}`.TubeSpecification`s are serialized by alias so that e.g. `type_` comes out as `type`
 - [`#256`](https://github.com/miniscope/noob/pull/256) -
   `deinit` on wrapped generator nodes actually deinitializes them, and `init` recreates them.
+- [`#262`](https://github.com/miniscope/noob/pull/262) - 
+  When a return node excludes keys that were not emitted when used in a Tube Node,
+  fill in `NoEvent`s.
 
 ## v1002.*
 

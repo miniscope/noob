@@ -43,7 +43,15 @@ events - see EventMap
 """
 
 _PROCESS_METHOD_SENTINEL = "__is_process_method__"
+_INIT_METHOD_SENTINEL = "__is_init_method__"
+_DEINIT_METHOD_SENTINEL = "__is_deinit_method__"
 _GENERATOR_METHOD_SENTINEL = "__is_generator_method__"
+
+_NODE_SENTINELS = {
+    "process": _PROCESS_METHOD_SENTINEL,
+    "init": _INIT_METHOD_SENTINEL,
+    "deinit": _DEINIT_METHOD_SENTINEL,
+}
 
 _TProcess = TypeVar("_TProcess", bound=Callable | Generator)
 
@@ -53,6 +61,22 @@ def process_method(func: _TProcess) -> _TProcess:
     Decorator to mark a method as the designated 'process' method for a class.
     """
     setattr(func, _PROCESS_METHOD_SENTINEL, True)
+    return func
+
+
+def init_method(func: _TProcess) -> _TProcess:
+    """
+    Decorator to mark a method as the designated 'init' method for a class.
+    """
+    setattr(func, _INIT_METHOD_SENTINEL, True)
+    return func
+
+
+def deinit_method(func: _TProcess) -> _TProcess:
+    """
+    Decorator to mark a method as the designated 'process' method for a class.
+    """
+    setattr(func, _DEINIT_METHOD_SENTINEL, True)
     return func
 
 
@@ -103,7 +127,9 @@ class Node(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context: Any) -> None:
-        """See docstring of :meth:`.process` for description of post init wrapping of generators"""
+        """
+        See docstring of :meth:`.Node.process` for description of post init wrapping of generators
+        """
         if inspect.isgeneratorfunction(self.process):
             self._wrap_generator(self.process)
         self._event_maker.node_id = self.id
@@ -400,7 +426,7 @@ class WrapClassNode(Node):
     instance: type | None = None
     _gen: Generator | None = PrivateAttr(default=None)
 
-    def model_post_init(self, context: Any, /) -> None:
+    def init(self) -> None:
         """
         Get the method decorated with :func:`.process_method`,
         assign it to `process`, see class docstring.
@@ -409,9 +435,16 @@ class WrapClassNode(Node):
         fn_name = self._get_process_method(self.cls)
         fn = getattr(self.instance, fn_name)
         self.__dict__["process"] = fn
-        super().model_post_init(context)
+        if inspect.isgeneratorfunction(self.process):
+            self._wrap_generator(self.process)
+
+        if init_name := self._get_sentinel_method(self.cls, "init"):
+            getattr(self.instance, init_name)()
 
     def deinit(self) -> None:
+        if deinit_name := self._get_sentinel_method(self.cls, "deinit"):
+            getattr(self.instance, deinit_name)()
+
         self.instance = None
 
     @classmethod
@@ -434,21 +467,30 @@ class WrapClassNode(Node):
 
     @staticmethod
     def _get_process_method(cls: type) -> str:
+        process_method = WrapClassNode._get_sentinel_method(cls, "process")
+        if process_method is None:
+            raise TypeError(
+                "Class must have 'process' method or decorate a method with @process_method."
+            )
+        return process_method
+
+    @staticmethod
+    def _get_sentinel_method(cls: type, method: str) -> str | None:
         process_func = None
         for name, member in inspect.getmembers(cls, predicate=inspect.isfunction):
-            if hasattr(member, _PROCESS_METHOD_SENTINEL):
+            if hasattr(member, _NODE_SENTINELS[method]):
                 if process_func:
                     raise TypeError(
-                        f"Class {cls.__name__} has multiple 'process' methods. Only one is allowed."
+                        f"Class {cls.__name__} has multiple '{method}' methods. "
+                        "Only one is allowed."
                     )
                 process_func = name
-        if process_func is None:
-            if hasattr(cls, "process") and inspect.isfunction(cls.process):
-                process_func = "process"
-            else:
-                raise TypeError(
-                    "Class must have 'process' method or decorate a method with @process_method."
-                )
+        if (
+            process_func is None
+            and hasattr(cls, method)
+            and inspect.isfunction(getattr(cls, method))
+        ):
+            process_func = method
 
         return process_func
 
