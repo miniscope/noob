@@ -89,7 +89,6 @@ impl Item {
 
 impl From<ItemID> for Item {
     fn from(id: ItemID) -> Self {
-        println!("In Epoch From ItemID");
         let interner = interner();
         interner.resolve(id).to_owned()
     }

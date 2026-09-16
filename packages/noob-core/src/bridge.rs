@@ -341,7 +341,7 @@ struct PyNodeRec {
     nqueue: i64,
     successors: FxHashSet<Item>,
     predecessors: FxHashSet<Item>,
-    optional_predecessors: FxHashSet<Item>,
+    optional_predecessors: FxHashMap<Item, Item>,
     optional_successors: FxHashSet<Item>,
 }
 
@@ -365,8 +365,12 @@ impl From<NodeRec> for PyNodeRec {
             optional_predecessors: node_rec
                 .optional_predecessors
                 .iter()
-                .map(|id| interner.resolve(*id))
-                .cloned()
+                .map(|(signal, slot)| {
+                    (
+                        interner.resolve(*signal).clone(),
+                        interner.resolve(*slot).clone(),
+                    )
+                })
                 .collect(),
             optional_successors: node_rec
                 .optional_successors
