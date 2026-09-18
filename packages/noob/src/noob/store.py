@@ -11,7 +11,7 @@ from threading import Condition
 from typing import Any, Literal, TypeAlias, overload
 
 from noob.edge import Edge, Signal
-from noob.event import Event, EventMaker, is_event
+from noob.event import Event, EventMaker, MetaSignal, is_event
 from noob.types import Epoch, EventMap, NodeID, SignalName
 
 EventDict: TypeAlias = dict[Epoch, dict[NodeID, dict[SignalName, list[Event]]]]
@@ -262,6 +262,11 @@ class EventStore:
                 e
                 for e in events
                 if e["node_id"] == edge.source_node and e["signal"] == edge.source_signal
+                # filter NoEvent here (rather than in collect_events)
+                # since this is where raw events are turned into inputs for other nodes.
+                # when we `collect_events`, we may want all the events, including NoEvents,
+                # however we *never* want to pass NoEvents as inputs to nodes.
+                and e["value"] is not MetaSignal.NoEvent
             ]
             if not evts:
                 continue

@@ -60,6 +60,9 @@
   {class}`.TubeSpecification`s are serialized by alias so that e.g. `type_` comes out as `type`
 - [`#256`](https://github.com/miniscope/noob/pull/256) -
   `deinit` on wrapped generator nodes actually deinitializes them, and `init` recreates them.
+- [`#260`](https://github.com/miniscope/noob/pull/260) - 
+  The `EventStore` no longer returns `NoEvent`s from `collect()`. 
+  NoEvents are never intended to be given to a node as arguments, and `collect` is only used to make node args/kwargs. 
 - [`#262`](https://github.com/miniscope/noob/pull/262) - 
   When a return node excludes keys that were not emitted when used in a Tube Node,
   fill in `NoEvent`s.

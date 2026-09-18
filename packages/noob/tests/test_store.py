@@ -2,7 +2,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from noob.edge import Signal
+from noob import MetaSignal
+from noob.edge import Edge, Signal
 from noob.event import Event
 from noob.store import EventStore
 from noob.types import Epoch
@@ -73,3 +74,38 @@ def test_store_handles_empty_sequences():
     )
     assert isinstance(e[0]["value"], list)
     assert e[0]["value"] == []
+
+
+def test_store_doesnt_collect_noevents():
+    """
+    The store stores NoEvents, and can return them when we are collecting events,
+    but it should never return NoEvents from collect,
+    which are then fed directly into another node as input.
+    """
+    store = EventStore()
+    e = store.add_value(
+        {
+            "something": Signal(name="something", annotation=str),
+            "something_else": Signal(name="something_else", annotation=str),
+        },
+        value=["hey", MetaSignal.NoEvent],
+        node_id="a",
+        epoch=Epoch(0),
+    )
+    vals = store.collect(
+        edges=[
+            Edge(
+                source_node="a", source_signal="something", target_node="b", target_slot="an_event"
+            ),
+            Edge(
+                source_node="a",
+                source_signal="something_else",
+                target_node="b",
+                target_slot="no_event",
+            ),
+        ],
+        epoch=Epoch(0),
+    )
+    assert vals
+    assert len(vals) == 1
+    assert vals == {"an_event": "hey"}
