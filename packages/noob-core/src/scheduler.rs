@@ -648,7 +648,12 @@ impl Scheduler {
                 .template
                 .info
                 .iter()
-                .filter(|(_, node_info)| node_info.optional_successors.contains(&node))
+                .filter(|(_, node_info)| {
+                    node_info
+                        .optional_successors
+                        .iter()
+                        .any(|successor| interner.node_part(*successor) == node)
+                })
                 .map(|(id, _)| id)
                 .chain(info.predecessors.iter())
                 .copied()
