@@ -524,7 +524,7 @@ fn test_update_optionals_is_constrained_to_direct_paths() {
     ];
 
     let mut interner = Interner::default();
-    let mut sorter = Sorter::from_graph(&mut interner, &FxIndexMap::default(), &graph).unwrap();
+    let sorter = Sorter::from_graph(&mut interner, &FxIndexMap::default(), &graph).unwrap();
 
     let a = interner.intern_signal("switch", "a");
     let b = interner.intern_signal("switch", "b");
