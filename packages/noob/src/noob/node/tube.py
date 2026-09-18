@@ -114,7 +114,7 @@ class TubeNode(Node):
 
         elif res is None:
             now = datetime.now(UTC)
-            self._tube = cast(Tube, self._tube)
+            self._tube = cast("Tube", self._tube)
             signal = MetaSignal.Exhausted if self._tube.scheduler.exhausted else MetaSignal.NoEvent
 
             return [
