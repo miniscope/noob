@@ -32,11 +32,13 @@ fn random_graph_edges(layers: u64, width: u64, seed: u64) -> Vec<EdgeRec> {
                 let span = 1 + rng.below(layer.min(4));
                 let src_col = rng.below(width);
                 let sig = rng.below(3);
+                let slot = rng.below(3);
                 let required = rng.below(4) != 0;
                 edges.push(EdgeRec {
                     source_node: format!("n{}_{}", layer - span, src_col),
                     source_signal: format!("s{sig}"),
                     target_node: format!("n{layer}_{col}"),
+                    target_slot: format!("s{slot}"),
                     required,
                 });
             }
@@ -46,6 +48,7 @@ fn random_graph_edges(layers: u64, width: u64, seed: u64) -> Vec<EdgeRec> {
                     source_node: format!("n{}_0", layer - 1),
                     source_signal: "s0".to_string(),
                     target_node: format!("n{layer}_0"),
+                    target_slot: "s4".to_string(),
                     required: false,
                 });
             }

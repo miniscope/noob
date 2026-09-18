@@ -23,7 +23,7 @@ impl PyScheduler {
     #[new]
     fn new(
         nodes: Vec<(String, bool, Option<bool>)>,
-        edges: Vec<(String, String, String, bool)>,
+        edges: Vec<(String, String, String, String, bool)>,
     ) -> PyResult<Self> {
         let nodes: FxIndexMap<String, NodeFlags> = nodes
             .into_iter()
@@ -32,10 +32,11 @@ impl PyScheduler {
         let edges: Vec<EdgeRec> = edges
             .into_iter()
             .map(
-                |(source_node, source_signal, target_node, required)| EdgeRec {
+                |(source_node, source_signal, target_node, target_slot, required)| EdgeRec {
                     source_node,
                     source_signal,
                     target_node,
+                    target_slot,
                     required,
                 },
             )
@@ -340,7 +341,7 @@ struct PyNodeRec {
     nqueue: i64,
     successors: FxHashSet<Item>,
     predecessors: FxHashSet<Item>,
-    optional_predecessors: FxHashSet<Item>,
+    optional_predecessors: FxHashMap<Item, Item>,
     optional_successors: FxHashSet<Item>,
 }
 
@@ -364,8 +365,12 @@ impl From<NodeRec> for PyNodeRec {
             optional_predecessors: node_rec
                 .optional_predecessors
                 .iter()
-                .map(|id| interner.resolve(*id))
-                .cloned()
+                .map(|(signal, slot)| {
+                    (
+                        interner.resolve(*signal).clone(),
+                        interner.resolve(*slot).clone(),
+                    )
+                })
                 .collect(),
             optional_successors: node_rec
                 .optional_successors

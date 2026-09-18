@@ -38,8 +38,8 @@ const DEFAULT_EPOCH_LOG_LEN: u32 = 1000;
 /// let mut scheduler = Scheduler::from_graph(
 ///     FxIndexMap::default(),
 ///     vec![
-///         EdgeRec::from(("a", "a1", "b")),
-///         EdgeRec::from(("b", "b1", "c")),
+///         EdgeRec::from(("a", "a1", "b", "bslot")),
+///         EdgeRec::from(("b", "b1", "c", "cslot")),
 ///     ]
 /// )?;
 ///
@@ -272,7 +272,8 @@ impl Scheduler {
                 let interner = interner();
                 subgraph.done(&interner, &[parent_dep])?;
             } else if parent.done.contains(&parent_dep) && !exclude_current.contains(&parent_dep) {
-                subgraph.mark_expired(&[parent_dep], false);
+                let interner = interner();
+                subgraph.mark_expired(&interner, &[parent_dep], false);
             } else if parent.out.contains(&parent_dep) {
                 subgraph.mark_out(&FxIndexSet::from_iter([parent_dep]));
             }
@@ -306,7 +307,7 @@ impl Scheduler {
                 let interner = interner();
                 let node_name = match interner.resolve(node_id) {
                     Item::Node(node_name) => node_name,
-                    Item::Signal(_, _) => {
+                    Item::Signal(_, _) | Item::Slot(_, _) => {
                         return Err(CoreError::Value(
                             "Subgraphs can only be created by nodes".to_string(),
                         ));
@@ -514,7 +515,7 @@ impl Scheduler {
                 .epochs
                 .get_mut(&parent)
                 .expect("Subepoch parents should always be active while subepochs are");
-            parent_graph.mark_expired(&[item], false);
+            parent_graph.mark_expired(&interner(), &[item], false);
         }
 
         // Eagerly add the next epoch whenever the source nodes in a root epoch are done -
@@ -592,7 +593,7 @@ impl Scheduler {
                     )
                 });
 
-            sorter.mark_expired(exclusive_subgraph, true);
+            sorter.mark_expired(&interner, exclusive_subgraph, true);
         }
         Ok(())
     }
@@ -647,7 +648,12 @@ impl Scheduler {
                 .template
                 .info
                 .iter()
-                .filter(|(_, node_info)| node_info.optional_successors.contains(&node))
+                .filter(|(_, node_info)| {
+                    node_info
+                        .optional_successors
+                        .iter()
+                        .any(|successor| interner.node_part(*successor) == node)
+                })
                 .map(|(id, _)| id)
                 .chain(info.predecessors.iter())
                 .copied()
@@ -681,7 +687,7 @@ impl Scheduler {
         }
 
         let graph = self.epochs.get_mut(epoch).expect("Epoch was just added");
-        graph.mark_expired(&[item], unlock_optionals);
+        graph.mark_expired(&interner, &[item], unlock_optionals);
 
         if !interner.is_signal(item)
             && with_signals
@@ -934,8 +940,8 @@ impl Scheduler {
 /// let mut scheduler = Scheduler::from_graph(
 ///     FxIndexMap::default(),
 ///     vec![
-///         EdgeRec::from(("a", "a1", "b")),
-///         EdgeRec::from(("b", "b1", "c")),
+///         EdgeRec::from(("a", "a1", "b", "bslot")),
+///         EdgeRec::from(("b", "b1", "c", "cslot")),
 ///     ]
 /// )?;
 ///

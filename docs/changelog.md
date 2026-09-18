@@ -60,6 +60,16 @@
   {class}`.TubeSpecification`s are serialized by alias so that e.g. `type_` comes out as `type`
 - [`#256`](https://github.com/miniscope/noob/pull/256) -
   `deinit` on wrapped generator nodes actually deinitializes them, and `init` recreates them.
+- [`#260`](https://github.com/miniscope/noob/pull/260) -
+  Optional propagation now honors slots. 
+  Previously, only the node was considered when detecting and propagating `NoEvent`s through chains of required edges to optional edges.
+  This is a performance measure that lets us avoid needing to iterate through chains of nodes that would otherwise be expired by a NoEvent
+  to reach a node that has an optional edge (and can thus run even though the preceding chain was expired).
+  However a lack of proper slot-level bookeeping double-counted `NoEvents` and prematurely marked nodes as being ready,
+  and `optional_successors` was overbroad and notified any downstream *node* ignoring whether the specific *slot* was downstream.
+- [`#260`](https://github.com/miniscope/noob/pull/260) - 
+  The `EventStore` no longer returns `NoEvent`s from `collect()`. 
+  NoEvents are never intended to be given to a node as arguments, and `collect` is only used to make node args/kwargs. 
 - [`#262`](https://github.com/miniscope/noob/pull/262) - 
   When a return node excludes keys that were not emitted when used in a Tube Node,
   fill in `NoEvent`s.

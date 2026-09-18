@@ -336,7 +336,10 @@ class Scheduler:
     def _rebuild_core(self) -> None:
         self._core = _RustScheduler(
             [(id_, bool(spec.enabled), spec.stateful) for id_, spec in self.nodes.items()],
-            [(e.source_node, e.source_signal, e.target_node, e.required) for e in self.edges],
+            [
+                (e.source_node, e.source_signal, e.target_node, str(e.target_slot), e.required)
+                for e in self.edges
+            ],
         )
         self.source_nodes = self._core.source_nodes()
 

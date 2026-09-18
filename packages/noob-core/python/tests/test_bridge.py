@@ -10,10 +10,10 @@ def diamond() -> Scheduler:
     """
     nodes = [(node, True, True) for node in ("a", "b", "c", "d")]
     edges = [
-        ("a", "a1", "b", True),
-        ("a", "a2", "c", True),
-        ("b", "b1", "d", True),
-        ("c", "c1", "d", True),
+        ("a", "a1", "b", "x", True),
+        ("a", "a2", "c", "x", True),
+        ("b", "b1", "d", "x", True),
+        ("c", "c1", "d", "y", True),
     ]
     return Scheduler(nodes, edges)
 

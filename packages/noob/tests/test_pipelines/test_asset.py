@@ -143,8 +143,8 @@ async def test_asset_depends_post_gather(loaded_tube, all_runners):
         else:
             result = runner.process()
         if (i + 1) % 5 != 0 or i == 0:
-            if not isinstance(runner, ZMQRunner):
-                assert result is None
+            # set to `b` whenever it gathers, then increments until next gather (mod 5) offset by 1
+            assert result == {"a_value": last_b + (i % 5) + 1}
         else:
             # should have incremented by (n_gather) + (sum(gathered values)) and NOT by that + 1
             assert result["b_value"] == 5 + result["sum"] + last_b
