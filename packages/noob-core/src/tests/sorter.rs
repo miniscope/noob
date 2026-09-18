@@ -510,6 +510,43 @@ fn test_unlock_optionals_bookkeeping() {
     assert_eq!(vec![target] as Vec<ItemID>, ready);
 }
 
+/// Optional dependencies should only propagate to signal paths that are directly upstream,
+/// rather than leaking to other signals when propagated through a branch and merge
+#[test]
+fn test_update_optionals_is_constrained_to_direct_paths() {
+    let graph = vec![
+        edge("switch", "a", "branch_a", "value", true),
+        edge("switch", "b", "branch_b", "value", true),
+        edge("switch", "c", "branch_c", "value", true),
+        edge("branch_a", "value", "merge", "slot_a", false),
+        edge("branch_b", "value", "merge", "slot_b", false),
+        edge("branch_c", "value", "merge", "slot_c", false),
+    ];
+
+    let mut interner = Interner::default();
+    let mut sorter = Sorter::from_graph(&mut interner, &FxIndexMap::default(), &graph).unwrap();
+
+    let a = interner.intern_signal("switch", "a");
+    let b = interner.intern_signal("switch", "b");
+    let c = interner.intern_signal("switch", "c");
+    let slot_a = interner.intern_slot("merge", "slot_a");
+    let slot_b = interner.intern_slot("merge", "slot_b");
+    let slot_c = interner.intern_slot("merge", "slot_c");
+
+    assert_eq!(
+        sorter.info.get(&a).unwrap().optional_successors,
+        IndexSet::from([slot_a])
+    );
+    assert_eq!(
+        sorter.info.get(&b).unwrap().optional_successors,
+        IndexSet::from([slot_b])
+    );
+    assert_eq!(
+        sorter.info.get(&c).unwrap().optional_successors,
+        IndexSet::from([slot_c])
+    );
+}
+
 /// Regression - ensure that nodes that are disabled are not added to the graph even when stateful
 #[test]
 fn test_disabled_stateful_not_added() {

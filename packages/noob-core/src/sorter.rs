@@ -320,8 +320,7 @@ impl Sorter {
         // we do this in two passes - first clearing all optionals and re-adding
         // first pass - remove optionals
         let info = self.get_nodeinfo(node);
-        let mut to_visit: FxIndexSet<ItemID> = info
-            .predecessors
+        let mut to_visit: FxIndexSet<ItemID> = predecessors
             .iter()
             .filter(|p| !info.optional_predecessors.contains_key(p))
             .copied()
@@ -339,7 +338,7 @@ impl Sorter {
         // second pass - re-add optionals
         let info = self.get_nodeinfo(node);
         let our_optional_successors = info.optional_successors.clone();
-        let mut to_visit: FxIndexSet<ItemID> = info.predecessors.clone();
+        let mut to_visit: FxIndexSet<ItemID> = predecessors.iter().cloned().collect();
         let mut seen: FxIndexSet<ItemID> = FxIndexSet::default();
         while let Some(current) = to_visit.pop() {
             let current_info = self.get_nodeinfo(current);
