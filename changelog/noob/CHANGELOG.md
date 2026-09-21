@@ -373,5 +373,5 @@ Recent changes
 ### v0.0.9999999
 
 ```{raw} html
-:file: assets/important.html
+:file: ../assets/important.html
 ```
