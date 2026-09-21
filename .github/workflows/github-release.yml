@@ -34,11 +34,13 @@ jobs:
       with:
         pattern: ${{ inputs.artifacts }}
         merge-multiple: true
-        path: assets
+        # outside the workspace - the repo has its own `assets/` to not collide with
+        path: ${{ runner.temp }}/release-assets
     - name: Create release
       env:
         PACKAGE: ${{ inputs.package }}
         TAG_PREFIX: ${{ inputs.tag-prefix }}
+        ASSETS: ${{ runner.temp }}/release-assets
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
@@ -71,7 +73,7 @@ jobs:
         while IFS= read -r -d '' file; do
           args+=("$file")
           attached+="- \`$(basename "$file")\`"$'\n'
-        done < <(find assets -type f -print0 2>/dev/null | sort -z)
+        done < <(find "$ASSETS" -type f -print0 2>/dev/null | sort -z)
 
         gh release create "$GITHUB_REF_NAME" "${args[@]}"
 
