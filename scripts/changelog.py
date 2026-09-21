@@ -21,6 +21,8 @@ PACKAGES_DIR = REPO_ROOT / "packages"
 DOCS_DIR = REPO_ROOT / "docs"
 # must match `start_string` in [tool.towncrier]
 START_STRING = "<!-- towncrier release notes start -->"
+# packages that don't follow the `<package>-v` tag convention
+TAG_PREFIXES = {"noob": "v", "noob-core": "core-v"}
 
 
 def packages() -> list[str]:
@@ -87,6 +89,82 @@ def draft(package: str | None) -> int:
 def _fragments(package: str) -> list[Path]:
     directory = CHANGELOG_DIR / package
     return [p for p in directory.glob("*.md") if p.name != "CHANGELOG.md"]
+
+
+def _git(*args: str, capture: bool = False, check: bool = True) -> str:
+    """Run git in the repo, exiting on failure"""
+    result = subprocess.run(
+        ["git", *args], cwd=REPO_ROOT, check=False, capture_output=capture, text=True
+    )
+    if result.returncode and check:
+        sys.exit(f"`git {' '.join(args)}` failed")
+    return result.stdout.strip() if capture else ""
+
+
+def _tag_prefix(package: str) -> str:
+    return TAG_PREFIXES.get(package, f"{package}-v")
+
+
+def _released_version(package: str) -> str:
+    """The version a package was last released at, per the newest tag we can reach."""
+    prefix = _tag_prefix(package)
+    tag = _git(
+        "describe", "--tags", "--abbrev=0", "--match", f"{prefix}*", capture=True, check=False
+    )
+    return tag.removeprefix(prefix) if tag else "0.0.0"
+
+
+def _bump(version: str, part: str) -> str:
+    """Raise one part of an `x.y.z` version, zeroing the parts under it."""
+    parts = version.split(".")
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        sys.exit(f"can't bump {version!r} on its own - pass the next version explicitly")
+    index = ["major", "minor", "patch"].index(part)
+    numbers = [int(p) for p in parts]
+    numbers[index] += 1
+    numbers[index + 1 :] = [0] * (2 - index)
+    return ".".join(str(n) for n in numbers)
+
+
+def release(package: str, version: str | None, part: str | None, dry_run: bool) -> int:
+    """
+    Create a release - generate changelog, commit, tag, and push both.
+    """
+    _require(package)
+    previous = _released_version(package)
+    if version is not None and part is not None:
+        sys.exit("give a version or one of --major/--minor/--patch, not both")
+    if version is not None:
+        version = version.removeprefix("v")
+    elif part is not None:
+        version = _bump(previous, part)
+    else:
+        sys.exit("give a version, or one of --major/--minor/--patch to work one out")
+    tag = f"{_tag_prefix(package)}{version}"
+
+    if dry_run:
+        print(f"{package} {previous} -> {version}, tagged {tag}")
+        return towncrier("build", package, "--version", version, "--date", _today(), "--draft")
+
+    if _git("status", "--porcelain", capture=True):
+        sys.exit("working tree is dirty - commit or stash first")
+    # the release sits on top of main, and reads the fragments from the worktree
+    _git("fetch", "origin", "main")
+    if _git("rev-parse", "HEAD", capture=True) != _git("rev-parse", "origin/main", capture=True):
+        sys.exit("HEAD is not at origin/main - switch to an up-to-date main first")
+    if not _fragments(package):
+        sys.exit(f"nothing to release: {package} has no pending entries")
+
+    if build(package, version):
+        sys.exit("towncrier failed")
+    _git("add", "-A", f"changelog/{package}")
+    _git("commit", "-m", f"release: {package} {version}")
+    _git("tag", "-a", tag, "-m", f"{package} {version}")
+    # main first - the tag starts the publish workflow, and should already be on it
+    _git("push", "origin", "HEAD:main")
+    _git("push", "origin", tag)
+    print(f"\nreleased {package} {version}, pushed {tag} - publishing from here")
+    return 0
 
 
 def changed_packages(compare_with: str) -> list[str]:
@@ -183,6 +261,16 @@ def main() -> int:
     p_draft = sub.add_parser("draft", help="preview pending fragments")
     p_draft.add_argument("package", nargs="?", choices=packages())
 
+    p_release = sub.add_parser("release", help="build, commit, tag and push a release")
+    p_release.add_argument("package", choices=packages())
+    p_release.add_argument(
+        "version", nargs="?", help="release version, e.g. 0.2.0 - or bump with --major etc"
+    )
+    p_release.add_argument("--dry-run", action="store_true", help="show it, change nothing")
+    part = p_release.add_mutually_exclusive_group()
+    for name in ("major", "minor", "patch"):
+        part.add_argument(f"--{name}", dest="part", action="store_const", const=name)
+
     p_check = sub.add_parser("check", help="require an entry per changed package")
     p_check.add_argument("--compare-with", default="origin/main")
 
@@ -194,6 +282,8 @@ def main() -> int:
         return build(args.package, args.version)
     if args.command == "draft":
         return draft(args.package)
+    if args.command == "release":
+        return release(args.package, args.version, args.part, args.dry_run)
     if args.command == "check":
         return check(args.compare_with)
     return init(args.package)

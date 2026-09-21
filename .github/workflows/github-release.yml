@@ -1,0 +1,85 @@
+name: GitHub release
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: "Package being released, e.g. noob"
+        required: true
+        type: string
+      tag-prefix:
+        description: "Tag prefix to strip to get the version, e.g. core-v"
+        required: true
+        type: string
+      artifacts:
+        description: "Name pattern of this run's artifacts to attach, e.g. dist-*"
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  github-release:
+    name: ${{ inputs.package }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+    # same workflow run as the build jobs, so their artifacts are still here
+    - uses: actions/download-artifact@v6
+      if: inputs.artifacts != ''
+      with:
+        pattern: ${{ inputs.artifacts }}
+        merge-multiple: true
+        path: assets
+    - name: Create release
+      env:
+        PACKAGE: ${{ inputs.package }}
+        TAG_PREFIX: ${{ inputs.tag-prefix }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+
+        version="${GITHUB_REF_NAME#$TAG_PREFIX}"
+        changelog="changelog/${PACKAGE}/CHANGELOG.md"
+
+        # the section towncrier wrote for this version, up to wherever the next
+        # one starts
+        awk -v want="## v${version} " '
+          index($0, want) == 1 { seen = 1; next }
+          seen && /^## / { exit }
+          seen
+        ' "$changelog" > notes.md
+
+        args=(--title "${PACKAGE} ${version}" --verify-tag)
+
+        if [[ -s notes.md ]]; then
+          args+=(--notes-file notes.md)
+        else
+          echo "::warning::no \`## v${version}\` section in ${changelog}, using commits instead"
+          args+=(--generate-notes)
+        fi
+        # anything not purely numeric - rc1, b2, dev0 - is a prerelease
+        if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+          args+=(--prerelease)
+        fi
+
+        attached=""
+        while IFS= read -r -d '' file; do
+          args+=("$file")
+          attached+="- \`$(basename "$file")\`"$'\n'
+        done < <(find assets -type f -print0 2>/dev/null | sort -z)
+
+        gh release create "$GITHUB_REF_NAME" "${args[@]}"
+
+        {
+          echo "Released \`${PACKAGE}\` ${version}"
+          if [[ -n "$attached" ]]; then
+            printf '%s' "$attached"
+          else
+            echo "- no artifacts attached"
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
