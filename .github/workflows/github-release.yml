@@ -1,18 +1,5 @@
 name: GitHub release
 
-# Cut the GitHub Release for a tag, with that version's changelog section as the
-# body. Called by each package's publish workflow once PyPI has the artifacts:
-#
-#   github-release:
-#     needs: [publish]
-#     if: github.event_name == 'push'
-#     uses: ./.github/workflows/github-release.yml
-#     permissions:
-#       contents: write
-#     with:
-#       package: noob
-#       tag-prefix: v
-
 on:
   workflow_call:
     inputs:
@@ -60,14 +47,13 @@ jobs:
         changelog="changelog/${PACKAGE}/CHANGELOG.md"
 
         # the section towncrier wrote for this version, up to wherever the next
-        # one starts - `## v{version} - {date}` is the configured title_format
+        # one starts
         awk -v want="## v${version} " '
           index($0, want) == 1 { seen = 1; next }
           seen && /^## / { exit }
           seen
         ' "$changelog" > notes.md
 
-        # one array, never empty, so `set -u` has nothing to trip over
         args=(--title "${PACKAGE} ${version}" --verify-tag)
 
         if [[ -s notes.md ]]; then

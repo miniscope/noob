@@ -92,7 +92,7 @@ def _fragments(package: str) -> list[Path]:
 
 
 def _git(*args: str, capture: bool = False, check: bool = True) -> str:
-    """Run git in the repo, exiting on failure - it has already said why itself."""
+    """Run git in the repo, exiting on failure"""
     result = subprocess.run(
         ["git", *args], cwd=REPO_ROOT, check=False, capture_output=capture, text=True
     )
@@ -128,13 +128,7 @@ def _bump(version: str, part: str) -> str:
 
 def release(package: str, version: str | None, part: str | None, dry_run: bool) -> int:
     """
-    Cut a release - fold in the pending entries, commit, tag, and push both.
-
-    The changelog goes in ahead of the tag rather than being amended into it
-    afterwards, because `main` takes no force pushes and the amend needed one.
-    Pushing to `main` at all needs the bypass repo admins have on the branch
-    rules; this commit only ever touches `changelog/<package>/`, on top of a
-    commit that already passed its checks on the way in.
+    Create a release - generate changelog, commit, tag, and push both.
     """
     _require(package)
     previous = _released_version(package)
