@@ -25,6 +25,27 @@ jobs:
       - uses: actions/checkout@v3
       - uses: psf/black@stable
 
+  changelog:
+    name: changelog entry
+    runs-on: ubuntu-latest
+    # the `no changelog` label is the escape hatch for PRs that don't warrant an entry
+    if: >
+      github.event_name == 'pull_request' &&
+      !contains(github.event.pull_request.labels.*.name, 'no changelog')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # the check diffs against the base branch, so it needs its history
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: install towncrier
+        run: python -m pip install towncrier
+      # one entry per package the PR touches; changes outside packages/ need none
+      - name: check for changelog entries
+        run: python scripts/changelog.py check --compare-with origin/${{ github.base_ref }}
+
   lock:
     name: lockfile current
     runs-on: ubuntu-latest

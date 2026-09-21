@@ -1,0 +1,105 @@
+name: Build changelog
+
+# Fold a package's pending changelog fragments into its CHANGELOG.md and amend
+# them into the tagged commit. Called by each package's publish workflow:
+#
+#   changelog:
+#     uses: ./.github/workflows/changelog-release.yml
+#     permissions:
+#       contents: write
+#     with:
+#       package: noob
+#       tag-prefix: v
+#
+# No-ops on anything that isn't a tag push, so a publish workflow's
+# workflow_dispatch path can still depend on it.
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: "Package to build the changelog for, e.g. noob"
+        required: true
+        type: string
+      tag-prefix:
+        description: "Tag prefix to strip to get the version, e.g. core-v"
+        required: true
+        type: string
+
+jobs:
+  changelog:
+    name: ${{ inputs.package }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    # credentials are persisted on purpose here - we push back.
+    # pushes made with the default GITHUB_TOKEN don't trigger workflows,
+    # so moving the tag below doesn't re-run the calling workflow.
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.13"
+    - name: Install towncrier
+      run: python -m pip install towncrier
+    - name: Build changelog
+      id: build
+      env:
+        PACKAGE: ${{ inputs.package }}
+        TAG_PREFIX: ${{ inputs.tag-prefix }}
+      run: |
+        set -euo pipefail
+        echo "changed=false" >> "$GITHUB_OUTPUT"
+
+        if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+          echo "Not a tag push - no changelog to release." >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        version="${GITHUB_REF_NAME#$TAG_PREFIX}"
+        if [[ ! "$version" =~ ^[0-9] ]]; then
+          echo "::error::no usable version in ${GITHUB_REF_NAME} after stripping '${TAG_PREFIX}'"
+          exit 1
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        if python scripts/changelog.py draft "$PACKAGE" | grep -q "No significant changes"; then
+          echo "No changelog entries for ${PACKAGE}." >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        # the branch the tag sits on top of - amending would orphan the release
+        # commit if the tag isn't a branch tip
+        candidates="$(git for-each-ref --format='%(refname:lstrip=3)' \
+          --points-at "$GITHUB_SHA" 'refs/remotes/origin/*' | grep -vx HEAD || true)"
+        if printf '%s\n' "$candidates" | grep -qx main; then
+          branch=main
+        else
+          branch="$(printf '%s\n' "$candidates" | grep -m1 . || true)"
+        fi
+        if [[ -z "$branch" ]]; then
+          echo "::error::${GITHUB_REF_NAME} is not at the tip of any branch, refusing to amend"
+          exit 1
+        fi
+
+        python scripts/changelog.py build "$PACKAGE" "$version"
+        git add -A "changelog/${PACKAGE}"
+        git commit --amend --no-edit
+
+        {
+          echo "branch=${branch}"
+          echo "changed=true"
+        } >> "$GITHUB_OUTPUT"
+        echo "Released \`${PACKAGE}\` ${version} changelog onto \`${branch}\`." >> "$GITHUB_STEP_SUMMARY"
+    - name: Push amended commit and tag
+      if: steps.build.outputs.changed == 'true'
+      run: |
+        set -euo pipefail
+        git push --force-with-lease origin "HEAD:refs/heads/${{ steps.build.outputs.branch }}"
+        git push --force origin "HEAD:refs/tags/${GITHUB_REF_NAME}"

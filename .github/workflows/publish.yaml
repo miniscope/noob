@@ -6,8 +6,18 @@ on:
       - "v*"
 
 jobs:
+  changelog:
+    uses: ./.github/workflows/changelog-release.yml
+    permissions:
+      contents: write
+    with:
+      package: noob
+      tag-prefix: v
+
   build:
     name: Build
+    needs:
+    - changelog
     runs-on: ubuntu-latest
 
     steps:

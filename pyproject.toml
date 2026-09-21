@@ -18,6 +18,7 @@ core = [
 ]
 dev = [
     "copier>=9.12.0",
+    "towncrier>=24.8.0",
 ]
 docs = [
     "sphinxcontrib-rust>=1.2.1",
@@ -80,7 +81,72 @@ benchmark.cmd = "pytest tests/bench.py --codspeed --timeout=15"
 benchmark.working_dir = "packages/noob"
 new_nobes = "copier copy templates/nobes packages"
 render_schema = "python scripts/render_schema.py"
+changelog = "python scripts/changelog.py"
 
+
+[tool.towncrier]
+# One config for every package in the monorepo. Each package's fragments and
+# rendered changelog live together in `changelog/<package>/`, and the package is
+# selected per-invocation with `--dir`:
+#
+#   towncrier build --config pyproject.toml --dir changelog/noob --version 1003.0.0
+#
+# Use `scripts/changelog.py` (`pdm run changelog`) rather than calling towncrier
+# directly, so neither can be forgotten.
+#
+# `package`/`name` are empty because there is more than one of each.
+package = ""
+name = ""
+# relative to `--dir`, i.e. `changelog/<package>/`
+directory = "."
+filename = "CHANGELOG.md"
+template = "../_template.md"
+ignore = ["CHANGELOG.md"]
+start_string = "<!-- towncrier release notes start -->\n"
+title_format = "## v{version} - {project_date}"
+issue_format = "[`#{issue}`](https://github.com/miniscope/noob/pull/{issue})"
+underlines = ["", "", ""]
+wrap = false
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "changed"
+name = "Changed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "deprecated"
+name = "Deprecated"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "removed"
+name = "Removed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fixed"
+name = "Fixed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "perf"
+name = "Perf"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "docs"
+name = "Docs"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "ci"
+name = "CI"
+showcontent = true
 
 [tool.black]
 target-version = ["py311", "py312", "py313"]
