@@ -33,7 +33,16 @@ jobs:
         grep -qx 'readme = "README.md"' packages/noob/pyproject.toml
     - name: Build
       working-directory: packages/noob
-      run: pdm build
+      # editing pyproject.toml above leaves the tree dirty, which pdm-backend
+      # would otherwise stamp onto the version as `+d<date>`
+      # also remove this once the fix in PR 309 above is released
+      env:
+        PDM_BUILD_SCM_VERSION: ${{ github.ref_name }}
+      run: |
+        PDM_BUILD_SCM_VERSION="${PDM_BUILD_SCM_VERSION#v}"
+        export PDM_BUILD_SCM_VERSION
+        echo "building noob ${PDM_BUILD_SCM_VERSION}"
+        pdm build
     - name: Store the distribution packages
       uses: actions/upload-artifact@v5
       with:
