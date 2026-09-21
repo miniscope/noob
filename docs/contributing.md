@@ -57,32 +57,37 @@ orphan entry: `+some-slug.changed.md` renders without a link.
 ### Releasing
 
 Each package is released by pushing its own tag - `v*` for `noob`, `core-v*`
-for `noob-core`, `nobes-video-v*` for `nobes-video`, and so on.
+for `noob-core`, `nobes-video-v*` for `nobes-video`, and so on. The tag is the
+only place the version is written; nothing in the tree is bumped.
 
-For the packages that have a publish workflow, the changelog is built for you.
-[`changelog-release.yml`](https://github.com/miniscope/noob/blob/main/.github/workflows/changelog-release.yml)
-consumes that package's entries into its `CHANGELOG.md`, amends them into the
-tagged commit, and moves the tag and the branch to the amended commit before
-the package is built and uploaded to PyPI. So tag the tip of `main` - it
-refuses to amend a tag that isn't a branch tip, since that would orphan the
-release commit.
+From an up-to-date `main`, one command cuts a release:
 
-A package without a publish workflow yet builds its changelog by hand:
+```shell
+pdm run release noob-core --minor   # 0.2.0 -> 0.3.0
+pdm run release noob-core 0.3.0rc1  # or say it outright
+pdm run release noob-core --minor --dry-run
+```
+
+It works out the next version from the package's newest tag, consumes its
+pending entries into its `CHANGELOG.md`, commits, tags, and pushes the commit
+and the tag. Pushing the tag is what starts the publish workflow, which stamps
+the version from the tag and uploads to PyPI.
+Once PyPI has it,
+[`github-release.yml`](https://github.com/miniscope/noob/blob/main/.github/workflows/github-release.yml)
+creates the GitHub Release: that version's changelog section as the body, the same
+wheels and sdists that went to PyPI attached to it, and anything that isn't a
+plain `x.y.z` marked as a prerelease.
+
+The changelog goes in ahead of the tag rather than being amended into it
+afterwards, because `main` takes no force pushes. Pushing to `main` at all
+relies on the bypass repo admins have on the branch rules, so releasing is
+maintainer-only; the commit it pushes touches nothing but `changelog/`.
+
+`release` works for any package, including ones with no publish workflow yet.
+To render a changelog and nothing else:
 
 ```shell
 pdm run changelog build nobes-video 0.1.0
-```
-
-and adds the job to its publish workflow when it gets one:
-
-```yaml
-changelog:
-  uses: ./.github/workflows/changelog-release.yml
-  permissions:
-    contents: write
-  with:
-    package: nobes-video
-    tag-prefix: nobes-video-v
 ```
 
 ## `noob-core`

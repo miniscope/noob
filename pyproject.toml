@@ -82,6 +82,7 @@ benchmark.working_dir = "packages/noob"
 new_nobes = "copier copy templates/nobes packages"
 render_schema = "python scripts/render_schema.py"
 changelog = "python scripts/changelog.py"
+release = "python scripts/changelog.py release"
 
 
 [tool.towncrier]
