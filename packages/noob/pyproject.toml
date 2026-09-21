@@ -16,7 +16,7 @@ dependencies = [
     "ruamel-yaml>=0.18.16",
 ]
 requires-python = ">=3.11"
-readme = "../../README.md"
+readme = "README.md"
 repository = "https://github.com/miniscope/noob"
 license = {text = "MIT"}
 keywords = [
@@ -114,6 +114,9 @@ build-backend = "pdm.backend"
 
 [tool.pdm]
 distribution = true
+
+[tool.pdm.build]
+source-includes = ["README.md"]
 
 [tool.pdm.version]
 # versions from tags like "v0.1.2"

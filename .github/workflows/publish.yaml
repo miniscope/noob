@@ -24,6 +24,8 @@ jobs:
       run: pdm install
     - name: Install JS deps
       run: npm --prefix js/ ci
+    - name: Copy readme (until pdm-backend update is released)
+      run: cp README.md ./packages/noob/
     - name: Build
       working-directory: packages/noob
       run: pdm build
