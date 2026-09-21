@@ -22,10 +22,19 @@ jobs:
   test-rust:
     uses: ./.github/workflows/tests-rust.yml
 
+  # no-ops on the workflow_dispatch path, where there's no tag to amend
+  changelog:
+    uses: ./.github/workflows/changelog-release.yml
+    permissions:
+      contents: write
+    with:
+      package: noob-core
+      tag-prefix: core-v
+
   build:
     name: wheel (${{ matrix.platform.os }} ${{ matrix.platform.target }} ${{ matrix.python-version.name }})
     runs-on: ${{ matrix.platform.os }}
-    needs: [test-rust]
+    needs: [test-rust, changelog]
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +83,7 @@ jobs:
   build-wasm:
     name: wheel (pyodide wasm32)
     runs-on: ubuntu-latest
-    needs: [test-rust]
+    needs: [test-rust, changelog]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -119,7 +128,7 @@ jobs:
   build-sdist:
     name: sdist
     runs-on: ubuntu-latest
-    needs: [test-rust]
+    needs: [test-rust, changelog]
     steps:
       - uses: actions/checkout@v6
         with:
