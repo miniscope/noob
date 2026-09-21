@@ -144,6 +144,8 @@ def release(package: str, version: str | None, part: str | None, dry_run: bool) 
 
     if dry_run:
         print(f"{package} {previous} -> {version}, tagged {tag}")
+        if not _fragments(package):
+            print(f"no pending entries - {tag} would carry no changelog")
         return towncrier("build", package, "--version", version, "--date", _today(), "--draft")
 
     if _git("status", "--porcelain", capture=True):
@@ -152,16 +154,22 @@ def release(package: str, version: str | None, part: str | None, dry_run: bool) 
     _git("fetch", "origin", "main")
     if _git("rev-parse", "HEAD", capture=True) != _git("rev-parse", "origin/main", capture=True):
         sys.exit("HEAD is not at origin/main - switch to an up-to-date main first")
-    if not _fragments(package):
-        sys.exit(f"nothing to release: {package} has no pending entries")
 
-    if build(package, version):
-        sys.exit("towncrier failed")
-    _git("add", "-A", f"changelog/{package}")
-    _git("commit", "-m", f"release: {package} {version}")
+    # with nothing pending towncrier would write an empty version section, so
+    # tag where we stand instead and let the release notes fall back to commits
+    entries = _fragments(package)
+    if entries:
+        if build(package, version):
+            sys.exit("towncrier failed")
+        _git("add", "-A", f"changelog/{package}")
+        _git("commit", "-m", f"release: {package} {version}")
+    else:
+        print(f"no pending entries for {package} - releasing without a changelog")
+
     _git("tag", "-a", tag, "-m", f"{package} {version}")
     # main first - the tag starts the publish workflow, and should already be on it
-    _git("push", "origin", "HEAD:main")
+    if entries:
+        _git("push", "origin", "HEAD:main")
     _git("push", "origin", tag)
     print(f"\nreleased {package} {version}, pushed {tag} - publishing from here")
     return 0
