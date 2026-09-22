@@ -278,8 +278,10 @@ class Tube(BaseModel):
     @classmethod
     def _create_scheduler(cls, value: Scheduler | None, info: ValidationInfo) -> Scheduler:
         if value is None:
-            if info.data.get('spec', False):
-                scheduler = cls._init_scheduler(info.data['spec'].nodes, info.data["nodes"], info.data["edges"])
+            if info.data.get("spec", False):
+                scheduler = cls._init_scheduler(
+                    info.data["spec"].nodes, info.data["nodes"], info.data["edges"]
+                )
             else:
                 raise ValueError("Must pass a tube specification or instantiate scheduler manually")
         else:
