@@ -2,6 +2,12 @@
 
 <!-- towncrier release notes start -->
 
+## v1003.0.1 - 26-09-21
+
+**Fixed**
+
+- [`#266`](https://github.com/miniscope/noob/pull/266) - Correctly propagate enabled state determined by tube-scoped input through to the scheduler
+
 ## v1003.0.0 - 26-09-21
 
 **Added**
