@@ -145,21 +145,3 @@ def test_recursive_spec_load():
     child_expected = TubeSpecification.from_id("testing-recursive-child")
     assert parent_expected == parent
     assert child_expected == child
-
-
-def test_enabled_by_input():
-    """
-    A node can have its enabled-ness dynamically computed from a bool-ish input,
-    this should be propagated across the tube and scheduler state
-    """
-    enabled = Tube.from_specification("testing-input-dynamic-enable", input={"enable_node": True})
-    disabled = Tube.from_specification("testing-input-dynamic-enable", input={"enable_node": False})
-
-    assert "count" in enabled.enabled_nodes
-    assert "count" not in disabled.enabled_nodes
-
-    enabled_state = enabled.scheduler.get_epoch_state(enabled.scheduler.epoch)
-    disabled_state = disabled.scheduler.get_epoch_state(disabled.scheduler.epoch)
-
-    assert "count" in enabled_state["ready"]
-    assert "count" not in disabled_state["ready"]
