@@ -40,8 +40,21 @@ def test_input_optional():
 
 
 def test_enabled_by_input():
-    """Nodes can have whether they are enabled or not controlled by an input"""
-    tube = Tube.from_specification("testing-input-optional")
-    assert tube.nodes["d"].enabled
-    tube = Tube.from_specification("testing-input-optional", input={"return_enabled": False})
-    assert not tube.nodes["d"].enabled
+    """
+    Nodes can have whether they are enabled or not controlled by an input.
+    this should be propagated across the tube and scheduler state.
+    """
+    enabled = Tube.from_specification("testing-input-dynamic-enable", input={"enable_node": True})
+    disabled = Tube.from_specification("testing-input-dynamic-enable", input={"enable_node": False})
+
+    assert enabled.nodes["count"].enabled
+    assert not disabled.nodes["count"].enabled
+
+    assert "count" in enabled.enabled_nodes
+    assert "count" not in disabled.enabled_nodes
+
+    enabled_state = enabled.scheduler.get_epoch_state(enabled.scheduler.epoch)
+    disabled_state = disabled.scheduler.get_epoch_state(disabled.scheduler.epoch)
+
+    assert "count" in enabled_state["ready"]
+    assert "count" not in disabled_state["ready"]

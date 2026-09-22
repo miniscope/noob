@@ -278,7 +278,12 @@ class Tube(BaseModel):
     @classmethod
     def _create_scheduler(cls, value: Scheduler | None, info: ValidationInfo) -> Scheduler:
         if value is None:
-            scheduler = cls._init_scheduler(info.data["nodes"], info.data["edges"])
+            if info.data.get("spec", False):
+                scheduler = cls._init_scheduler(
+                    info.data["spec"].nodes, info.data["nodes"], info.data["edges"]
+                )
+            else:
+                raise ValueError("Must pass a tube specification or instantiate scheduler manually")
         else:
             scheduler = value
 
@@ -338,8 +343,8 @@ class Tube(BaseModel):
         input_collection.add_input(InputScope.tube, input)
 
         nodes = cls._init_nodes(spec, input_collection)
-        edges = cls._init_edges(spec.nodes, nodes)
-        scheduler = cls._init_scheduler(spec.nodes, edges)
+        edges = cls._init_edges(nodes)
+        scheduler = cls._init_scheduler(spec.nodes, nodes, edges)
 
         state = cls._init_state(spec, edges, input_collection)
 
@@ -373,17 +378,25 @@ class Tube(BaseModel):
         return nodes
 
     @classmethod
-    def _init_edges(
-        cls, node_spec: dict[str, NodeSpecification], nodes: dict[str, Node]
-    ) -> list[Edge]:
+    def _init_edges(cls, nodes: dict[str, Node]) -> list[Edge]:
         edges = []
         for node in nodes.values():
             edges.extend(node.edges)
         return edges
 
     @classmethod
-    def _init_scheduler(cls, nodes: dict[str, NodeSpecification], edges: list[Edge]) -> Scheduler:
-        node_specs = {id_: node for id_, node in nodes.items()}
+    def _init_scheduler(
+        cls, specs: dict[str, NodeSpecification], nodes: dict[str, Node], edges: list[Edge]
+    ) -> Scheduler:
+        node_specs = {id_: spec.model_copy() for id_, spec in specs.items()}
+        # get enabledness from the node object -
+        # the spec is a reflection of the yaml, not the instantiated values.
+        # (i.e. we want to keep the spec round-trippable)
+        # this is a cheap way pending any fuller need to cleanly differentiate
+        # "live node" vs. "loaded spec" vs. "spec on paper" in the type system.
+        for id_, node in nodes.items():
+            if id_ in node_specs:
+                node_specs[id_].enabled = node.enabled
         return Scheduler.from_specification(node_specs, edges)
 
     @classmethod

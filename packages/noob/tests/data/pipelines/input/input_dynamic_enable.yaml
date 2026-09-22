@@ -1,0 +1,16 @@
+noob_id: testing-input-dynamic-enable
+noob_model: noob.tube.TubeSpecification
+noob_version: 0.0.1
+description: |
+  Nodes can have their enabledness toggled by a bool-like input
+
+input:
+  enable_node:
+    type: bool
+    default: false
+
+nodes:
+  count:
+    type: noob.testing.counter
+    enabled: input.enable_node
+
