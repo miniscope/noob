@@ -31,7 +31,8 @@ fn test_from_graph() {
 
 #[test]
 fn test_add_epoch() {
-    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), Vec::new()).unwrap();
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let epoch = scheduler.add_epoch();
     assert_eq!(epoch.root(), 0);
     assert!(scheduler.epochs.contains_key(&epoch));
@@ -42,7 +43,8 @@ fn test_add_epoch() {
 
 #[test]
 fn test_add_epoch_at() {
-    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), Vec::new()).unwrap();
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     let expected = Epoch::from(10);
     let epoch = scheduler.add_epoch_at(expected.clone()).unwrap();
     assert_eq!(epoch, expected);
@@ -80,7 +82,8 @@ fn test_add_epoch_at_below_log() {
 
 #[test]
 fn test_add_epoch_at_out_of_order() {
-    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), Vec::new()).unwrap();
+    let edges = diamond();
+    let mut scheduler = Scheduler::from_graph(FxIndexMap::default(), edges).unwrap();
     scheduler.add_epoch_at(Epoch::from(10)).unwrap();
     scheduler.add_epoch_at(Epoch::from(7)).unwrap();
     let epoch = scheduler.add_epoch();
@@ -1260,4 +1263,23 @@ fn test_update_exhaust_node() {
     // further epochs are empty
     let ep5 = scheduler.add_epoch();
     assert!(scheduler.get_ready_at(&ep5).is_empty());
+}
+
+/// Trivial graphs that never have anything to do shouldn't even enter into the epoch map
+#[test]
+fn test_trivial_graphs_arent_stored() {
+    let mut nodes = FxIndexMap::default();
+    nodes.insert(
+        "a".to_string(),
+        NodeFlags {
+            enabled: false,
+            stateful: Some(false),
+        },
+    );
+    let edges = Vec::default();
+    let mut scheduler = Scheduler::from_graph(nodes, edges).unwrap();
+    let ep = scheduler.add_epoch();
+    assert!(scheduler.epoch_completed(&ep));
+    assert!(!scheduler.epochs.contains_key(&ep));
+    assert!(scheduler.epoch_log.contains(&ep.root));
 }

@@ -85,9 +85,21 @@ class Scheduler:
                     "Scheduler is exhausted and cannot run until re-initialized"
                 )
             epoch = first if first is not None else self.add_epoch()
+            # handle trivial graphs that never have anything ready
+            # trivial graphs never experience an event, so they never get ended,
+            # so they build forever in the epoch mapping
+            # making first_active_epoch take longer and longer
+            # this is a different state than exhaustion - nested tubes can have trivial subtubes
+            # where it is valid to just never run anything based on e.g. configuration/inputs.
+            # this is the intuitive but not most performant way of doing this -
+            # if there are ever any perf needs in this codepath, this is the place to optimize
+            if self._core.epoch_completed(epoch):
+                yield []
+                return
         else:
             with contextlib.suppress(EpochExistsError):
                 self._core.add_epoch_at(epoch)
+
         if self._core.epoch_completed(epoch):
             raise EpochCompletedError(f"Epoch {epoch} has already been completed")
         if not self._core.is_active_at(epoch) and self._core.exhausted:
