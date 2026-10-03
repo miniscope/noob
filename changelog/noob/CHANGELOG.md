@@ -2,6 +2,12 @@
 
 <!-- towncrier release notes start -->
 
+## v1003.0.2 - 26-10-02
+
+**Fixed**
+
+- [`#267`](https://github.com/miniscope/noob/pull/267) - Fixed infinitely growing runtime with trivial graphs and subgraphx
+
 ## v1003.0.1 - 26-09-21
 
 **Fixed**
