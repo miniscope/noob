@@ -224,7 +224,15 @@ impl Scheduler {
             }
         }
 
-        self.epochs.insert(epoch, graph);
+        if graph.is_active() {
+            self.epochs.insert(epoch, graph);
+        } else if epoch.is_root() {
+            // right in the trash.
+            // could be optimized since we can know in advance if the template is trivial,
+            // but avoiding overengineering until a real perf need arises
+            self.epoch_log.insert(epoch.root);
+        }
+
         Ok(())
     }
 
