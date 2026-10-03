@@ -1,6 +1,7 @@
 import pytest
 
 from noob import Tube
+from noob.exceptions import NotAddedError
 from noob.input import InputCollection, InputScope, InputSpecification
 
 pytestmark = pytest.mark.input
@@ -54,7 +55,8 @@ def test_enabled_by_input():
     assert "count" not in disabled.enabled_nodes
 
     enabled_state = enabled.scheduler.get_epoch_state(enabled.scheduler.epoch)
-    disabled_state = disabled.scheduler.get_epoch_state(disabled.scheduler.epoch)
-
     assert "count" in enabled_state["ready"]
-    assert "count" not in disabled_state["ready"]
+
+    # the epoch isn't stored when everything is disabled -> tube is trivial
+    with pytest.raises(NotAddedError):
+        disabled.scheduler.get_epoch_state(disabled.scheduler.epoch)
